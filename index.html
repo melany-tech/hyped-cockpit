@@ -34,6 +34,13 @@ input:focus{outline:none;border-color:var(--teal)}
 .filterbar{display:flex;align-items:center;gap:10px;margin-bottom:20px}
 .filterbar label{margin:0;font-size:12px;color:var(--gray);font-weight:600}
 .filterbar select{font-family:inherit;font-size:13px;color:var(--navy);background:var(--bg);border:1px solid #CFDADA;border-radius:8px;padding:7px 12px;font-weight:500}
+.alertsbox{margin-bottom:22px}
+.alerthdr{font-size:11px;font-weight:600;color:var(--gray);letter-spacing:1.5px;text-transform:uppercase;margin:0 0 8px}
+.alert{display:flex;align-items:center;gap:10px;border-radius:11px;padding:11px 15px;margin-bottom:8px;font-size:13px;border:1px solid}
+.alert.vide{background:#FCEBEB;border-color:#F0AFAF;color:#8A2B2B}
+.alert.faible{background:#FBF0DA;border-color:#EFCB86;color:#8A5A10}
+.alert.inconnu{background:#F1EFE8;border-color:#D9D6CC;color:#5F5E5A}
+.alert b{font-weight:600}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
 .card{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
 .card .lbl{font-size:12px;color:var(--gray);font-weight:500;display:flex;align-items:center;gap:7px}
@@ -85,6 +92,7 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
     </div>
   </div>
   <div class="filterbar hidden" id="filterbar"><label for="cpfilter">Vue</label><select id="cpfilter"></select></div>
+  <div class="alertsbox hidden" id="alertsbox"></div>
   <div class="cards" id="cards"></div>
   <h2>À faire aujourd'hui</h2>
   <div id="list"><div class="state">Chargement…</div></div>
@@ -126,7 +134,23 @@ async function load(){
     $('cpfilter').innerHTML='<option value="ALL">Toute l\'équipe</option>'+cps.map(c=>`<option value="${c}">${c}</option>`).join('');
     $('cpfilter').onchange=render;show($('filterbar'),true);
   }else show($('filterbar'),false);
+  if(isSup)loadAlerts();else show($('alertsbox'),false);
   render();
+}
+async function loadAlerts(){
+  try{
+    const r=await api('/api/alerts');const d=await r.json();
+    const al=d.alerts||[];
+    if(!al.length){show($('alertsbox'),false);return;}
+    const line=(a)=>{
+      if(a.status==='vide')return `<div class="alert vide">⚠️ <b>${a.brand}</b> — calendrier vide pour ${a.monthLabel} (0 contenu prévu)</div>`;
+      if(a.status==='faible')return `<div class="alert faible"><b>${a.brand}</b> — seulement ${a.count}/${a.target} contenus prévus pour ${a.monthLabel}</div>`;
+      if(a.status==='inconnu')return `<div class="alert inconnu"><b>${a.brand}</b> — structure par mois, remplissage non vérifiable automatiquement</div>`;
+      return `<div class="alert inconnu"><b>${a.brand}</b> — vérification impossible</div>`;
+    };
+    $('alertsbox').innerHTML='<div class="alerthdr">Remplissage des calendriers · '+(d.monthLabel||'')+' · règle : 1 mois d\'avance</div>'+al.map(line).join('');
+    show($('alertsbox'),true);
+  }catch(e){show($('alertsbox'),false);}
 }
 function render(){
   const isSup=VIEWER.role==='supervisor';

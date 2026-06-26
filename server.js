@@ -40,6 +40,41 @@ const ACTIVE = [
   // Doucéa : calendrier vide pour l'instant
 ];
 
+// === ALERTE REMPLISSAGE ================================================
+// Règle Hyped : du contenu planifié au moins un mois à l'avance.
+const MIN_PER_MONTH = 4; // seuil "assez de contenu" pour le mois à venir (ajustable)
+const FILL_CHECK = [
+  { brand: "In Haircare", dbId: "380f8ac3-c3ae-80ce-ba4c-e8e82490edc6", dateProp: "Date" },
+  { brand: "Doucéa",      dbId: "37bf8ac3-c3ae-81d6-9dbd-d7f4a64165a8", dateProp: "Date" },
+  { brand: "Curls Matter", unverifiable: true }, // structure par mois -> non vérifiable auto
+];
+async function countInMonth(dbId, dateProp, startISO, endISO) {
+  let n = 0, cursor;
+  do {
+    const r = await notion.databases.query({ database_id: dbId, start_cursor: cursor, page_size: 100,
+      filter: { property: dateProp, date: { on_or_after: startISO, on_or_before: endISO } } });
+    n += r.results.length; cursor = r.has_more ? r.next_cursor : null;
+  } while (cursor);
+  return n;
+}
+async function buildAlerts() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+  const iso = (d) => d.toISOString().slice(0, 10);
+  const monthLabel = start.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+  const alerts = [];
+  for (const c of FILL_CHECK) {
+    if (c.unverifiable) { alerts.push({ brand: c.brand, status: "inconnu", monthLabel }); continue; }
+    let count;
+    try { count = await countInMonth(c.dbId, c.dateProp, iso(start), iso(end)); }
+    catch (e) { alerts.push({ brand: c.brand, status: "erreur", monthLabel }); continue; }
+    if (count === 0) alerts.push({ brand: c.brand, status: "vide", count, target: MIN_PER_MONTH, monthLabel });
+    else if (count < MIN_PER_MONTH) alerts.push({ brand: c.brand, status: "faible", count, target: MIN_PER_MONTH, monthLabel });
+  }
+  return { monthLabel, minPerMonth: MIN_PER_MONTH, alerts };
+}
+
 // id utilisateur Notion -> prénom (pour les champs "personne")
 let USERMAP = {};
 async function resolveUsers() {
@@ -130,6 +165,14 @@ app.get("/api/collabs", auth, async (req, res) => {
     if (req.user.role !== "supervisor") rows = rows.filter((r) => r.cp === req.user.name);
     res.json({ rows, demo: DEMO, viewer: { name: req.user.name, role: req.user.role } });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.get("/api/alerts", auth, async (req, res) => {
+  if (req.user.role !== "supervisor") return res.json({ alerts: [] });
+  if (DEMO) return res.json({ monthLabel: "juillet 2026", minPerMonth: MIN_PER_MONTH, alerts: [
+    { brand: "Doucéa", status: "vide", count: 0, target: MIN_PER_MONTH, monthLabel: "juillet 2026" },
+    { brand: "In Haircare", status: "faible", count: 2, target: MIN_PER_MONTH, monthLabel: "juillet 2026" },
+    { brand: "Curls Matter", status: "inconnu", monthLabel: "juillet 2026" } ] });
+  try { res.json(await buildAlerts()); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.get("*", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.listen(PORT, () => console.log(`Cockpit ${DEMO ? "(DÉMO)" : "(Notion live, clients actifs)"} → http://localhost:${PORT}`));
