@@ -56,6 +56,7 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
 .row .s{font-size:12px;color:var(--gray);margin-top:2px}
 .brand{font-size:11px;color:var(--navy);font-weight:600;background:#EEF2F2;padding:2px 9px;border-radius:10px;white-space:nowrap}
 .owner{font-size:11px;color:var(--teal);font-weight:600;background:#EAF3F1;padding:2px 9px;border-radius:10px;white-space:nowrap}
+.owner.none{color:#8A8780;background:#EFF1F1;font-weight:500}
 .row a{font-size:12.5px;font-weight:600;color:var(--navy);background:var(--bg);text-decoration:none;border:1px solid #CFDADA;border-radius:8px;padding:7px 12px;white-space:nowrap}
 .row a:hover{background:var(--soft)}
 .chip{background:#EAF3F1;color:var(--teal);font-weight:600;font-size:12px;padding:6px 14px;border-radius:20px;white-space:nowrap;height:fit-content}
@@ -101,7 +102,7 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
   <div class="filterbar hidden" id="filterbar"><label for="cpfilter">Vue</label><select id="cpfilter"></select></div>
   <div class="alertsbox hidden" id="alertsbox"></div>
   <div class="cards" id="cards"></div>
-  <h2>À faire aujourd'hui</h2>
+  <h2>À traiter</h2>
   <div id="list"><div class="state">Chargement…</div></div>
   <h2 id="mailhdr" class="hidden" style="margin-top:28px">Mes mails créateurs</h2>
   <div id="mailbox" class="hidden"></div>
@@ -219,16 +220,16 @@ function render(){
   $('totalchip').textContent=total+' action'+(total>1?'s':'');
   const dstr=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
   if(isSup&&(!f||f==='ALL')){$('greeting').textContent='Vue pilote — toute l\'équipe';$('subtitle').textContent=total+' actions · clients actifs · '+dstr;}
-  else{const who=isSup?f:VIEWER.name;$('greeting').textContent='Bonjour '+who+' 👋';$('subtitle').textContent=total+' chose'+(total>1?'s':'')+' à faire aujourd\'hui · '+dstr;}
+  else{const who=isSup?f:VIEWER.name;$('greeting').textContent='Bonjour '+who+' 👋';$('subtitle').textContent=total+' chose'+(total>1?'s':'')+' à traiter · '+dstr;}
   if(!total){$('list').innerHTML='<div class="state">Rien en attente — tout est à jour 🎉</div>';return;}
   $('list').innerHTML=list.map(a=>{
     const extra=[a.label];if(a.date)extra.push(fmtDate(a.date));
-    const owner=(isSup&&(!f||f==='ALL')&&a.cp)?`<span class="owner">${a.cp}</span>`:'';
+    const owner=(isSup&&a.cp)?`<span class="owner" title="Cheffe de projet">${a.cp}</span>`:(isSup?`<span class="owner none" title="Personne assignée">— non assigné</span>`:'');
     const link=a.url?`<a href="${a.url}" target="_blank" rel="noopener">Ouvrir</a>`:'';
     return `<div class="row">
       <span class="rdot" style="background:${a.color}"></span>
       <div class="info"><div class="t">${a.name}</div><div class="s">${extra.join(' · ')}</div></div>
-      <span class="brand">${a.brand}</span>${owner}${link}</div>`;
+      ${owner}<span class="brand">${a.brand}</span>${link}</div>`;
   }).join('');
 }
 init();

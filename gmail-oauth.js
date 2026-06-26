@@ -25,6 +25,7 @@ function saveStore(s) { try { fs.writeFileSync(STORE, JSON.stringify(s)); } catc
 function setToken(email, tokens) { const s = loadStore(); s[email] = { ...(s[email] || {}), ...tokens }; saveStore(s); }
 function getToken(email) { return loadStore()[email] || null; }
 function isConnected(email) { return !!(getToken(email) && getToken(email).refresh_token); }
+function connectedEmails() { const s = loadStore(); return Object.keys(s).filter((e) => s[e] && s[e].refresh_token); }
 
 // --- Flux OAuth ---------------------------------------------------------
 function getAuthUrl(stateEmail) {
@@ -67,4 +68,4 @@ async function analyzeFor(email, collabs, brandProducts = {}) {
   return { connected: true, ...analyzeMailbox(emails, collabs, brandProducts) };
 }
 
-module.exports = { ENABLED, isConnected, getAuthUrl, handleCallback, analyzeFor, SCOPES };
+module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, analyzeFor, SCOPES };

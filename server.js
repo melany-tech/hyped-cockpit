@@ -26,6 +26,45 @@ function loadUsers() {
 }
 const USERS = loadUsers();
 
+// === Assignation créateur -> CP (HYBRIDE) ================================
+// Manuel : champ "Interlocuteur" dans Notion (prioritaire si renseigné).
+// Auto   : on déduit qui gère un créateur d'après QUI échange avec lui par mail.
+const ASSIGN_STORE = path.join(__dirname, "assignments.json");
+let ASSIGN = {}; // { creatorNorm: "Prénom CP" }
+try { ASSIGN = JSON.parse(fs.readFileSync(ASSIGN_STORE, "utf8")); } catch (e) { ASSIGN = {}; }
+function normName(s) {
+  return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/^@/, "").trim();
+}
+function saveAssign() { try { fs.writeFileSync(ASSIGN_STORE, JSON.stringify(ASSIGN)); } catch (e) {} }
+function learnAssignments(cpName, analysis) {
+  if (!cpName || !analysis) return;
+  const creators = new Set();
+  (analysis.creatorReplies || []).forEach((m) => { if (m["créateur"]) creators.add(m["créateur"]); });
+  Object.values(analysis.byBrand || {}).forEach((arr) => arr.forEach((m) => { if (m["créateur"]) creators.add(m["créateur"]); }));
+  let changed = false;
+  creators.forEach((c) => { const k = normName(c); if (k && ASSIGN[k] !== cpName) { ASSIGN[k] = cpName; changed = true; } });
+  if (changed) saveAssign();
+}
+let ASSIGN_AT = 0, ASSIGN_ONE = {};
+async function refreshOneBox(email, cpName) {
+  if (!gm.ENABLED || !email) return;
+  if (Date.now() - (ASSIGN_ONE[email] || 0) < 5 * 60000) return;
+  ASSIGN_ONE[email] = Date.now();
+  const collabs = await fetchRows();
+  try { const r = await gm.analyzeFor(email, collabs); learnAssignments(cpName, r); } catch (e) {}
+}
+async function refreshAssignmentsFromBoxes() {
+  if (!gm.ENABLED || typeof gm.connectedEmails !== "function") return;
+  if (Date.now() - ASSIGN_AT < 5 * 60000) return;
+  ASSIGN_AT = Date.now();
+  const collabs = await fetchRows();
+  for (const email of gm.connectedEmails()) {
+    const u = USERS.find((x) => x.email.toLowerCase() === email.toLowerCase());
+    if (!u) continue;
+    try { const r = await gm.analyzeFor(email, collabs); learnAssignments(u.name, r); } catch (e) {}
+  }
+}
+
 let notion = null;
 if (!DEMO) {
   const { Client } = require("@notionhq/client");
@@ -165,7 +204,14 @@ app.post("/api/logout", (req, res) => { res.clearCookie("hc_token"); res.json({ 
 app.get("/api/me", auth, (req, res) => res.json({ name: req.user.name, role: req.user.role, demo: DEMO }));
 app.get("/api/collabs", auth, async (req, res) => {
   try {
+    // apprentissage des assignations via mails (best-effort, caché 5 min)
+    try {
+      if (req.user.role === "supervisor") await refreshAssignmentsFromBoxes();
+      else await refreshOneBox(req.user.email, req.user.name);
+    } catch (e) {}
     let rows = await fetchRows();
+    // HYBRIDE : l'Interlocuteur Notion (manuel) prime ; sinon rattachement auto par mail.
+    rows = rows.map((r) => (r.cp ? r : { ...r, cp: ASSIGN[normName(r.name)] || null }));
     if (req.user.role !== "supervisor") rows = rows.filter((r) => r.cp === req.user.name);
     const team = USERS.filter((u) => u.role === "cp").map((u) => u.name);
     res.json({ rows, demo: DEMO, viewer: { name: req.user.name, role: req.user.role }, team });
@@ -195,6 +241,7 @@ app.get("/api/gmail/inbox", auth, async (req, res) => {
   try {
     const collabs = await fetchRows(); // marques + créateurs des calendriers
     const r = await gm.analyzeFor(req.user.email, collabs);
+    learnAssignments(req.user.name, r); // apprend qui gère quel créateur
     res.json({ enabled: true, ...r });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
