@@ -1,0 +1,32 @@
+[
+  {
+    "email": "najem@hyped-agency.fr",
+    "name": "Najem",
+    "role": "cp",
+    "passwordHash": "$2a$10$Q7OBm6oJQZDCwjZb13TkjuZlUshQyRVBScwI5TiXZFts1aAIddiZK"
+  },
+  {
+    "email": "manel@hyped-agency.fr",
+    "name": "Manel",
+    "role": "cp",
+    "passwordHash": "$2a$10$Q7OBm6oJQZDCwjZb13TkjuZlUshQyRVBScwI5TiXZFts1aAIddiZK"
+  },
+  {
+    "email": "kendia@hyped-agency.fr",
+    "name": "Kendia",
+    "role": "cp",
+    "passwordHash": "$2a$10$Q7OBm6oJQZDCwjZb13TkjuZlUshQyRVBScwI5TiXZFts1aAIddiZK"
+  },
+  {
+    "email": "rozenn@hyped-agency.fr",
+    "name": "Rozenn",
+    "role": "supervisor",
+    "passwordHash": "$2a$10$Q7OBm6oJQZDCwjZb13TkjuZlUshQyRVBScwI5TiXZFts1aAIddiZK"
+  },
+  {
+    "email": "melany@hyped-agency.fr",
+    "name": "Mélany",
+    "role": "supervisor",
+    "passwordHash": "$2a$10$Q7OBm6oJQZDCwjZb13TkjuZlUshQyRVBScwI5TiXZFts1aAIddiZK"
+  }
+]
