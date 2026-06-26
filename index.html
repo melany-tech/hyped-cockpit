@@ -39,10 +39,8 @@ input:focus{outline:none;border-color:var(--teal)}
 .card .lbl{font-size:12px;color:var(--gray);font-weight:500;display:flex;align-items:center;gap:7px}
 .card .dot{width:8px;height:8px;border-radius:50%;flex:none}
 .card .num{font-size:27px;font-weight:700;margin-top:6px}
-.card.urgent .num{color:var(--red)}
 h2{font-size:15px;font-weight:600;margin-bottom:12px}
 .row{display:flex;align-items:center;gap:13px;background:var(--bg);border:1px solid var(--line);border-radius:11px;padding:12px 15px;margin-bottom:9px}
-.row.urgent{border-color:#E7C3B8}
 .row .rdot{width:9px;height:9px;border-radius:50%;flex:none}
 .row .info{flex:1;min-width:0}
 .row .t{font-size:14px;font-weight:600}
@@ -90,34 +88,16 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
   <div class="cards" id="cards"></div>
   <h2>À faire aujourd'hui</h2>
   <div id="list"><div class="state">Chargement…</div></div>
-  <div class="foot">Agrège en direct tous tes calendriers clients « COLLABORATIONS », filtré par Interlocuteur.</div>
+  <div class="foot">Clients actifs uniquement · filtré par interlocutrice.</div>
 </div>
 
 <script>
-const ORDER=['À transmettre','Négo','Previews','À cadrer'];
-const GCOL={'À transmettre':'#C77F2A','Négo':'#7A5AA8','Previews':'#C2553B','À cadrer':'#2C9087'};
+const PREF=['À lancer','À transmettre','Négo','À valider','En production','Previews','À cadrer','À facturer'];
 let ROWS=[], VIEWER=null;
 const $=(id)=>document.getElementById(id);
-function today(){return new Date().toISOString().slice(0,10);}
 function fmtDate(s){if(!s)return'';return new Date(s).toLocaleDateString('fr-FR',{day:'numeric',month:'short'});}
-function within(date,days){if(!date)return false;return new Date(date)<=new Date(new Date(today()).getTime()+days*864e5);}
 function show(el,v){el.classList[v?'remove':'add']('hidden');}
 async function api(p,o){return fetch(p,Object.assign({headers:{'Content-Type':'application/json'}},o));}
-
-function toAction(r){
-  if(r.statut==='Transmis'){
-    if(r.preview==='Non')return {grp:'Previews',label:'Preview à relancer',color:'#C2553B',urgent:within(r.date,3),...r};
-    return null;
-  }
-  const M={
-   'Pas encore transmis':{grp:'À transmettre',label:'Brief à transmettre au créateur',color:'#C77F2A'},
-   'En cours de négociation':{grp:'Négo',label:'Négociation à suivre',color:'#7A5AA8'},
-   
-   'En projet':{grp:'À cadrer',label:'À cadrer / sourcer',color:'#2C9087'}
-  };
-  const m=M[r.statut];if(!m)return null;
-  return {grp:m.grp,label:m.label,color:m.color,urgent:false,...r};
-}
 
 async function init(){
   const r=await api('/api/me');
@@ -142,7 +122,7 @@ async function load(){
   ROWS=d.rows||[];VIEWER=d.viewer;show($('demobadge'),!!d.demo);
   const isSup=VIEWER.role==='supervisor';
   if(isSup){
-    const cps=[...new Set(ROWS.map(x=>x.interlocuteur).filter(Boolean))].sort();
+    const cps=[...new Set(ROWS.map(x=>x.cp).filter(Boolean))].sort();
     $('cpfilter').innerHTML='<option value="ALL">Toute l\'équipe</option>'+cps.map(c=>`<option value="${c}">${c}</option>`).join('');
     $('cpfilter').onchange=render;show($('filterbar'),true);
   }else show($('filterbar'),false);
@@ -151,25 +131,28 @@ async function load(){
 function render(){
   const isSup=VIEWER.role==='supervisor';
   const f=isSup?$('cpfilter').value:null;
-  let src=ROWS;if(isSup&&f&&f!=='ALL')src=ROWS.filter(r=>r.interlocuteur===f);
-  const list=src.map(toAction).filter(Boolean);
-  const counts={};ORDER.forEach(g=>counts[g]=0);list.forEach(a=>counts[a.grp]++);
+  let list=ROWS.slice();
+  if(isSup&&f&&f!=='ALL')list=list.filter(r=>r.cp===f);
+  // groupes présents, ordonnés
+  const present=[...new Set(list.map(r=>r.grp))];
+  const ORDER=PREF.filter(g=>present.includes(g)).concat(present.filter(g=>!PREF.includes(g)));
+  const colorOf={}; list.forEach(r=>{if(!colorOf[r.grp])colorOf[r.grp]=r.color;});
+  const counts={}; ORDER.forEach(g=>counts[g]=0); list.forEach(r=>counts[r.grp]++);
   $('cards').innerHTML=ORDER.map(g=>
-    `<div class="card${g==='Previews'&&list.some(a=>a.grp==='Previews'&&a.urgent)?' urgent':''}">
-       <div class="lbl"><span class="dot" style="background:${GCOL[g]}"></span>${g}</div>
+    `<div class="card"><div class="lbl"><span class="dot" style="background:${colorOf[g]||'#888'}"></span>${g}</div>
        <div class="num">${counts[g]}</div></div>`).join('');
   list.sort((a,b)=>(b.urgent-a.urgent)||(ORDER.indexOf(a.grp)-ORDER.indexOf(b.grp)));
   const total=list.length;
   $('totalchip').textContent=total+' action'+(total>1?'s':'');
   const dstr=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
-  if(isSup&&(!f||f==='ALL')){$('greeting').textContent='Vue pilote — toute l\'équipe';$('subtitle').textContent=ROWS.length+' collaborations · tous clients · '+dstr;}
+  if(isSup&&(!f||f==='ALL')){$('greeting').textContent='Vue pilote — toute l\'équipe';$('subtitle').textContent=total+' actions · clients actifs · '+dstr;}
   else{const who=isSup?f:VIEWER.name;$('greeting').textContent='Bonjour '+who+' 👋';$('subtitle').textContent=total+' chose'+(total>1?'s':'')+' à faire aujourd\'hui · '+dstr;}
   if(!total){$('list').innerHTML='<div class="state">Rien en attente — tout est à jour 🎉</div>';return;}
   $('list').innerHTML=list.map(a=>{
-    const extra=[a.label];if(a.date)extra.push('publication '+fmtDate(a.date));
-    const owner=(isSup&&(!f||f==='ALL')&&a.interlocuteur)?`<span class="owner">${a.interlocuteur}</span>`:'';
+    const extra=[a.label];if(a.date)extra.push(fmtDate(a.date));
+    const owner=(isSup&&(!f||f==='ALL')&&a.cp)?`<span class="owner">${a.cp}</span>`:'';
     const link=a.url?`<a href="${a.url}" target="_blank" rel="noopener">Ouvrir</a>`:'';
-    return `<div class="row${a.urgent?' urgent':''}">
+    return `<div class="row">
       <span class="rdot" style="background:${a.color}"></span>
       <div class="info"><div class="t">${a.name}</div><div class="s">${extra.join(' · ')}</div></div>
       <span class="brand">${a.brand}</span>${owner}${link}</div>`;

@@ -1,7 +1,7 @@
 /* Cockpit des chefs de projet — Hyped Agency
- * Lit la RÉALITÉ : auto-détecte chaque base Notion « COLLABORATIONS [CLIENT] »,
- * les agrège, et filtre par Interlocuteur (= la cheffe de projet).
- * Login par personne (JWT). Sans NOTION_TOKEN → MODE DÉMO (sample-data.json, format réel).
+ * Lecture des calendriers clients ACTIFS via adaptateurs par client
+ * (chaque client a sa propre structure Notion). Login par personne (JWT).
+ * Sans NOTION_TOKEN → MODE DÉMO (sample-data.json).
  */
 require("dotenv").config();
 const fs = require("fs");
@@ -23,7 +23,7 @@ function loadUsers() {
   }
   return [];
 }
-const USERS = loadUsers(); // [{email, name (= Interlocuteur), role, passwordHash}]
+const USERS = loadUsers();
 
 let notion = null;
 if (!DEMO) {
@@ -31,55 +31,68 @@ if (!DEMO) {
   notion = new Client({ auth: process.env.NOTION_TOKEN });
 }
 
-// --- Découverte + agrégation des calendriers clients --------------------
-let CACHE = { at: 0, rows: [] };
-async function discoverCollabDatabases() {
-  const dbs = [];
+// === CLIENTS ACTIFS (liste blanche) =====================================
+// Pour ajouter/retirer un client : édite ce tableau. databaseId = la base du
+// calendrier du client. adapter = sa fonction de lecture (sa structure propre).
+const ACTIVE = [
+  { brand: "In Haircare", databaseId: "380f8ac3-c3ae-80ce-ba4c-e8e82490edc6", adapter: "inhaircare" },
+  // Curls Matter : structure par mois, à traiter séparément
+  // Doucéa : calendrier vide pour l'instant
+];
+
+// id utilisateur Notion -> prénom (pour les champs "personne")
+let USERMAP = {};
+async function resolveUsers() {
   let cursor;
   do {
-    const r = await notion.search({
-      query: "COLLABORATIONS",
-      filter: { property: "object", value: "database" },
-      start_cursor: cursor,
-      page_size: 100,
-    });
-    for (const db of r.results) {
-      const title = (db.title || []).map((t) => t.plain_text).join("").trim();
-      if (/^COLLABORATIONS/i.test(title)) dbs.push({ id: db.id, title });
-    }
+    const r = await notion.users.list({ start_cursor: cursor, page_size: 100 });
+    r.results.forEach((u) => { USERMAP[u.id] = (u.name || "").replace(/ Hyped Agency$/i, "").trim(); });
     cursor = r.has_more ? r.next_cursor : null;
   } while (cursor);
-  return dbs;
 }
-function P(props, name) { return props && props[name] ? props[name] : null; }
-function normalize(page, brand) {
-  const p = page.properties || {};
-  return {
-    brand,
-    name: (P(p, "Name")?.title || []).map((t) => t.plain_text).join("") || "(sans nom)",
-    interlocuteur: P(p, "Interlocuteur")?.select?.name || null,
-    statut: P(p, "Statut")?.select?.name || null,
-    date: P(p, "Date")?.date?.start || null,
-    preview: P(p, "Preview reçue ?")?.select?.name || null,
-    tarif: P(p, "Tarif")?.number ?? null,
-    type: P(p, "Type")?.select?.name || null,
-    url: page.url,
-  };
-}
+function title(p) { return (p?.title || []).map((t) => t.plain_text).join(""); }
+function firstPerson(p) { const a = p?.people || []; return a.length ? (USERMAP[a[0].id] || a[0].name || null) : null; }
+
+// --- Adaptateurs par client --------------------------------------------
+const ADAPTERS = {
+  inhaircare(page, brand) {
+    const p = page.properties || {};
+    const statut = p["Statut"]?.select?.name;
+    const M = {
+      "En validation": { grp: "À valider", label: "Contenu à valider", color: "#C2553B" },
+      "En production": { grp: "En production", label: "En cours de production", color: "#7A5AA8" },
+      "Non posté":     { grp: "À lancer", label: "À lancer", color: "#C77F2A" },
+      // "Posté" -> rien (terminé)
+    };
+    const m = M[statut];
+    if (!m) return null;
+    return {
+      brand,
+      name: title(p["Nom"]) || "(sans nom)",
+      cp: firstPerson(p["Interlocuteur"]),
+      grp: m.grp, label: m.label, color: m.color, urgent: false,
+      date: p["Date"]?.date?.start || null,
+      url: page.url,
+    };
+  },
+};
+
+let CACHE = { at: 0, rows: [] };
 async function fetchAllReal() {
   if (Date.now() - CACHE.at < 60000 && CACHE.rows.length) return CACHE.rows;
-  const dbs = await discoverCollabDatabases();
+  if (!Object.keys(USERMAP).length) { try { await resolveUsers(); } catch (e) { console.warn("users", e.message); } }
   const rows = [];
-  for (const db of dbs) {
-    const brand = db.title.replace(/^COLLABORATIONS\s*/i, "").trim() || db.title;
+  for (const src of ACTIVE) {
+    const adapt = ADAPTERS[src.adapter];
+    if (!adapt) continue;
     let cursor;
     try {
       do {
-        const r = await notion.databases.query({ database_id: db.id, start_cursor: cursor, page_size: 100 });
-        r.results.forEach((pg) => rows.push(normalize(pg, brand)));
+        const r = await notion.databases.query({ database_id: src.databaseId, start_cursor: cursor, page_size: 100 });
+        r.results.forEach((pg) => { const row = adapt(pg, src.brand); if (row) rows.push(row); });
         cursor = r.has_more ? r.next_cursor : null;
       } while (cursor);
-    } catch (e) { console.warn("query", brand, e.message); }
+    } catch (e) { console.warn("query", src.brand, e.message); }
   }
   CACHE = { at: Date.now(), rows };
   return rows;
@@ -89,11 +102,10 @@ async function fetchRows() {
   return fetchAllReal();
 }
 
-// --- App ----------------------------------------------------------------
+// === App ================================================================
 const app = express();
 app.use(express.json());
 app.use(cookieParser());
-
 function setAuthCookie(res, payload) {
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "30d" });
   res.cookie("hc_token", token, { httpOnly: true, sameSite: PROD ? "none" : "lax", secure: PROD, maxAge: 30 * 864e5 * 1000 });
@@ -115,10 +127,9 @@ app.get("/api/me", auth, (req, res) => res.json({ name: req.user.name, role: req
 app.get("/api/collabs", auth, async (req, res) => {
   try {
     let rows = await fetchRows();
-    if (req.user.role !== "supervisor") rows = rows.filter((r) => r.interlocuteur === req.user.name);
+    if (req.user.role !== "supervisor") rows = rows.filter((r) => r.cp === req.user.name);
     res.json({ rows, demo: DEMO, viewer: { name: req.user.name, role: req.user.role } });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-
 app.get("*", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
-app.listen(PORT, () => console.log(`Cockpit ${DEMO ? "(DÉMO)" : "(Notion live, auto-agrégation)"} → http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`Cockpit ${DEMO ? "(DÉMO)" : "(Notion live, clients actifs)"} → http://localhost:${PORT}`));
