@@ -132,7 +132,8 @@ async function load(){
   ROWS=d.rows||[];VIEWER=d.viewer;show($('demobadge'),!!d.demo);
   const isSup=VIEWER.role==='supervisor';
   if(isSup){
-    const cps=[...new Set(ROWS.map(x=>x.cp).filter(Boolean))].sort();
+    const present=ROWS.map(x=>x.cp).filter(Boolean);
+    const cps=[...new Set([...(d.team||[]),...present])].sort();
     $('cpfilter').innerHTML='<option value="ALL">Toute l\'équipe</option>'+cps.map(c=>`<option value="${c}">${c}</option>`).join('');
     $('cpfilter').onchange=render;show($('filterbar'),true);
   }else show($('filterbar'),false);

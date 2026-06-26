@@ -166,7 +166,8 @@ app.get("/api/collabs", auth, async (req, res) => {
   try {
     let rows = await fetchRows();
     if (req.user.role !== "supervisor") rows = rows.filter((r) => r.cp === req.user.name);
-    res.json({ rows, demo: DEMO, viewer: { name: req.user.name, role: req.user.role } });
+    const team = USERS.filter((u) => u.role === "cp").map((u) => u.name);
+    res.json({ rows, demo: DEMO, viewer: { name: req.user.name, role: req.user.role }, team });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.get("/api/alerts", auth, async (req, res) => {
