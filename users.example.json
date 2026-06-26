@@ -1,32 +1,32 @@
 [
   {
-    "email": "najem@hyped-agency.fr",
-    "name": "Najem",
+    "email": "amena@hyped-agency.fr",
+    "name": "Amena",
     "role": "cp",
-    "passwordHash": "$2a$10$Q7OBm6oJQZDCwjZb13TkjuZlUshQyRVBScwI5TiXZFts1aAIddiZK"
-  },
-  {
-    "email": "manel@hyped-agency.fr",
-    "name": "Manel",
-    "role": "cp",
-    "passwordHash": "$2a$10$Q7OBm6oJQZDCwjZb13TkjuZlUshQyRVBScwI5TiXZFts1aAIddiZK"
+    "passwordHash": "$2a$10$G8JtUwoql3NIdE2vHqNLCeXoLV8/OvQQrRJ2rH9zbpB1Tw3RSefSa"
   },
   {
     "email": "kendia@hyped-agency.fr",
     "name": "Kendia",
     "role": "cp",
-    "passwordHash": "$2a$10$Q7OBm6oJQZDCwjZb13TkjuZlUshQyRVBScwI5TiXZFts1aAIddiZK"
+    "passwordHash": "$2a$10$G8JtUwoql3NIdE2vHqNLCeXoLV8/OvQQrRJ2rH9zbpB1Tw3RSefSa"
+  },
+  {
+    "email": "prunelle@hyped-agency.fr",
+    "name": "Prunelle",
+    "role": "cp",
+    "passwordHash": "$2a$10$G8JtUwoql3NIdE2vHqNLCeXoLV8/OvQQrRJ2rH9zbpB1Tw3RSefSa"
   },
   {
     "email": "rozenn@hyped-agency.fr",
     "name": "Rozenn",
     "role": "supervisor",
-    "passwordHash": "$2a$10$Q7OBm6oJQZDCwjZb13TkjuZlUshQyRVBScwI5TiXZFts1aAIddiZK"
+    "passwordHash": "$2a$10$G8JtUwoql3NIdE2vHqNLCeXoLV8/OvQQrRJ2rH9zbpB1Tw3RSefSa"
   },
   {
     "email": "melany@hyped-agency.fr",
     "name": "Mélany",
     "role": "supervisor",
-    "passwordHash": "$2a$10$Q7OBm6oJQZDCwjZb13TkjuZlUshQyRVBScwI5TiXZFts1aAIddiZK"
+    "passwordHash": "$2a$10$G8JtUwoql3NIdE2vHqNLCeXoLV8/OvQQrRJ2rH9zbpB1Tw3RSefSa"
   }
 ]
