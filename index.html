@@ -94,8 +94,8 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
 </div>
 
 <script>
-const ORDER=['À transmettre','Négo','Previews','À facturer','À cadrer'];
-const GCOL={'À transmettre':'#C77F2A','Négo':'#7A5AA8','Previews':'#C2553B','À facturer':'#1C3A44','À cadrer':'#2C9087'};
+const ORDER=['À transmettre','Négo','Previews','À cadrer'];
+const GCOL={'À transmettre':'#C77F2A','Négo':'#7A5AA8','Previews':'#C2553B','À cadrer':'#2C9087'};
 let ROWS=[], VIEWER=null;
 const $=(id)=>document.getElementById(id);
 function today(){return new Date().toISOString().slice(0,10);}
@@ -112,7 +112,7 @@ function toAction(r){
   const M={
    'Pas encore transmis':{grp:'À transmettre',label:'Brief à transmettre au créateur',color:'#C77F2A'},
    'En cours de négociation':{grp:'Négo',label:'Négociation à suivre',color:'#7A5AA8'},
-   'Posté':{grp:'À facturer',label:'Postée — à facturer',color:'#1C3A44'},
+   
    'En projet':{grp:'À cadrer',label:'À cadrer / sourcer',color:'#2C9087'}
   };
   const m=M[r.statut];if(!m)return null;
