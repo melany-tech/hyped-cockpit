@@ -34,13 +34,15 @@ input:focus{outline:none;border-color:var(--teal)}
 .filterbar{display:flex;align-items:center;gap:10px;margin-bottom:20px}
 .filterbar label{margin:0;font-size:12px;color:var(--gray);font-weight:600}
 .filterbar select{font-family:inherit;font-size:13px;color:var(--navy);background:var(--bg);border:1px solid #CFDADA;border-radius:8px;padding:7px 12px;font-weight:500}
-.alertsbox{margin-bottom:22px}
-.alerthdr{font-size:11px;font-weight:600;color:var(--gray);letter-spacing:1.5px;text-transform:uppercase;margin:0 0 8px}
-.alert{display:flex;align-items:center;gap:10px;border-radius:11px;padding:11px 15px;margin-bottom:8px;font-size:13px;border:1px solid}
-.alert.vide{background:#FCEBEB;border-color:#F0AFAF;color:#8A2B2B}
-.alert.faible{background:#FBF0DA;border-color:#EFCB86;color:#8A5A10}
-.alert.inconnu{background:#F1EFE8;border-color:#D9D6CC;color:#5F5E5A}
-.alert b{font-weight:600}
+.alertsbox{margin-bottom:22px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:15px 17px}
+.alerthdr{font-size:11px;font-weight:600;color:var(--gray);letter-spacing:1.5px;text-transform:uppercase;margin:0 0 13px}
+.fillrow{display:flex;align-items:center;gap:12px;margin-bottom:11px}
+.fillrow:last-child{margin-bottom:2px}
+.fillrow .fb{font-size:13px;font-weight:600;color:var(--navy);width:108px;flex:none}
+.fillrow .track{flex:1;height:13px;background:#EEF1F1;border-radius:7px;overflow:hidden}
+.fillrow .track.unk{background:repeating-linear-gradient(45deg,#EEF1F1,#EEF1F1 5px,#E3E7E7 5px,#E3E7E7 10px)}
+.fillrow .bar{height:100%;border-radius:7px}
+.fillrow .fn{font-size:12px;font-weight:600;width:72px;text-align:right;flex:none}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
 .card{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
 .card .lbl{font-size:12px;color:var(--gray);font-weight:500;display:flex;align-items:center;gap:7px}
@@ -140,15 +142,18 @@ async function load(){
 async function loadAlerts(){
   try{
     const r=await api('/api/alerts');const d=await r.json();
-    const al=d.alerts||[];
-    if(!al.length){show($('alertsbox'),false);return;}
-    const line=(a)=>{
-      if(a.status==='vide')return `<div class="alert vide">⚠️ <b>${a.brand}</b> — calendrier vide pour ${a.monthLabel} (0 contenu prévu)</div>`;
-      if(a.status==='faible')return `<div class="alert faible"><b>${a.brand}</b> — seulement ${a.count}/${a.target} contenus prévus pour ${a.monthLabel}</div>`;
-      if(a.status==='inconnu')return `<div class="alert inconnu"><b>${a.brand}</b> — structure par mois, remplissage non vérifiable automatiquement</div>`;
-      return `<div class="alert inconnu"><b>${a.brand}</b> — vérification impossible</div>`;
+    const fill=d.fill||[];
+    if(!fill.length){show($('alertsbox'),false);return;}
+    const bar=(c)=>{
+      const t=c.target||12;
+      if(c.status==='inconnu'||c.status==='erreur')
+        return `<div class="fillrow"><span class="fb">${c.brand}</span><div class="track unk"></div><span class="fn" style="color:#8A8780">non vérif.</span></div>`;
+      const pct=Math.min(100,Math.round((c.count||0)/t*100));
+      const col=c.status==='vide'?'#C2553B':(c.status==='faible'?'#C77F2A':'#2C9087');
+      const num=c.status==='vide'?'#C2553B':(c.status==='faible'?'#9A6B12':'#0F6E56');
+      return `<div class="fillrow"><span class="fb">${c.brand}</span><div class="track"><div class="bar" style="width:${pct}%;background:${col}"></div></div><span class="fn" style="color:${num}">${(c.count||0)}/${t}</span></div>`;
     };
-    $('alertsbox').innerHTML='<div class="alerthdr">Remplissage des calendriers · '+(d.monthLabel||'')+' · règle : au moins 3 collabs/semaine, un mois à l\'avance</div>'+al.map(line).join('');
+    $('alertsbox').innerHTML='<div class="alerthdr">Remplissage des calendriers · '+(d.monthLabel||'')+' · objectif 3 collabs/semaine</div>'+fill.map(bar).join('');
     show($('alertsbox'),true);
   }catch(e){show($('alertsbox'),false);}
 }

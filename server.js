@@ -66,16 +66,16 @@ async function buildAlerts() {
   const days = Math.round((end - start) / 864e5) + 1;
   const weeks = Math.max(1, Math.round(days / 7));
   const target = MIN_PER_WEEK * weeks; // ex. ~13 pour un mois (3/semaine)
-  const alerts = [];
+  const fill = [];
   for (const c of FILL_CHECK) {
-    if (c.unverifiable) { alerts.push({ brand: c.brand, status: "inconnu", monthLabel }); continue; }
+    if (c.unverifiable) { fill.push({ brand: c.brand, status: "inconnu", target }); continue; }
     let count;
     try { count = await countInMonth(c.dbId, c.dateProp, iso(start), iso(end)); }
-    catch (e) { alerts.push({ brand: c.brand, status: "erreur", monthLabel }); continue; }
-    if (count === 0) alerts.push({ brand: c.brand, status: "vide", count, target, monthLabel });
-    else if (count < target) alerts.push({ brand: c.brand, status: "faible", count, target, monthLabel });
+    catch (e) { fill.push({ brand: c.brand, status: "erreur", target }); continue; }
+    const status = count === 0 ? "vide" : (count < target ? "faible" : "ok");
+    fill.push({ brand: c.brand, count, target, status });
   }
-  return { monthLabel, minPerWeek: MIN_PER_WEEK, target, alerts };
+  return { monthLabel, minPerWeek: MIN_PER_WEEK, target, fill };
 }
 
 // id utilisateur Notion -> prénom (pour les champs "personne")
@@ -170,11 +170,11 @@ app.get("/api/collabs", auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.get("/api/alerts", auth, async (req, res) => {
-  if (req.user.role !== "supervisor") return res.json({ alerts: [] });
-  if (DEMO) return res.json({ monthLabel: "juillet 2026", minPerWeek: MIN_PER_WEEK, target: 12, alerts: [
-    { brand: "Doucéa", status: "vide", count: 0, target: 12, monthLabel: "juillet 2026" },
-    { brand: "In Haircare", status: "faible", count: 5, target: 12, monthLabel: "juillet 2026" },
-    { brand: "Curls Matter", status: "inconnu", monthLabel: "juillet 2026" } ] });
+  if (req.user.role !== "supervisor") return res.json({ fill: [] });
+  if (DEMO) return res.json({ monthLabel: "juillet 2026", minPerWeek: MIN_PER_WEEK, target: 12, fill: [
+    { brand: "Doucéa", status: "vide", count: 0, target: 12 },
+    { brand: "In Haircare", status: "faible", count: 5, target: 12 },
+    { brand: "Curls Matter", status: "inconnu", target: 12 } ] });
   try { res.json(await buildAlerts()); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.get("*", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
