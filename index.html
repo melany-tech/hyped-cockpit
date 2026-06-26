@@ -148,7 +148,7 @@ async function loadAlerts(){
       if(a.status==='inconnu')return `<div class="alert inconnu"><b>${a.brand}</b> — structure par mois, remplissage non vérifiable automatiquement</div>`;
       return `<div class="alert inconnu"><b>${a.brand}</b> — vérification impossible</div>`;
     };
-    $('alertsbox').innerHTML='<div class="alerthdr">Remplissage des calendriers · '+(d.monthLabel||'')+' · règle : 1 mois d\'avance</div>'+al.map(line).join('');
+    $('alertsbox').innerHTML='<div class="alerthdr">Remplissage des calendriers · '+(d.monthLabel||'')+' · règle : au moins 3 collabs/semaine, un mois à l\'avance</div>'+al.map(line).join('');
     show($('alertsbox'),true);
   }catch(e){show($('alertsbox'),false);}
 }

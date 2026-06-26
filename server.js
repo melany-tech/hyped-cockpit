@@ -42,7 +42,7 @@ const ACTIVE = [
 
 // === ALERTE REMPLISSAGE ================================================
 // Règle Hyped : du contenu planifié au moins un mois à l'avance.
-const MIN_PER_MONTH = 4; // seuil "assez de contenu" pour le mois à venir (ajustable)
+const MIN_PER_WEEK = 3; // règle Hyped : au moins 3 collabs par semaine
 const FILL_CHECK = [
   { brand: "In Haircare", dbId: "380f8ac3-c3ae-80ce-ba4c-e8e82490edc6", dateProp: "Date" },
   { brand: "Doucéa",      dbId: "37bf8ac3-c3ae-81d6-9dbd-d7f4a64165a8", dateProp: "Date" },
@@ -63,16 +63,19 @@ async function buildAlerts() {
   const end = new Date(now.getFullYear(), now.getMonth() + 2, 0);
   const iso = (d) => d.toISOString().slice(0, 10);
   const monthLabel = start.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+  const days = Math.round((end - start) / 864e5) + 1;
+  const weeks = Math.max(1, Math.round(days / 7));
+  const target = MIN_PER_WEEK * weeks; // ex. ~13 pour un mois (3/semaine)
   const alerts = [];
   for (const c of FILL_CHECK) {
     if (c.unverifiable) { alerts.push({ brand: c.brand, status: "inconnu", monthLabel }); continue; }
     let count;
     try { count = await countInMonth(c.dbId, c.dateProp, iso(start), iso(end)); }
     catch (e) { alerts.push({ brand: c.brand, status: "erreur", monthLabel }); continue; }
-    if (count === 0) alerts.push({ brand: c.brand, status: "vide", count, target: MIN_PER_MONTH, monthLabel });
-    else if (count < MIN_PER_MONTH) alerts.push({ brand: c.brand, status: "faible", count, target: MIN_PER_MONTH, monthLabel });
+    if (count === 0) alerts.push({ brand: c.brand, status: "vide", count, target, monthLabel });
+    else if (count < target) alerts.push({ brand: c.brand, status: "faible", count, target, monthLabel });
   }
-  return { monthLabel, minPerMonth: MIN_PER_MONTH, alerts };
+  return { monthLabel, minPerWeek: MIN_PER_WEEK, target, alerts };
 }
 
 // id utilisateur Notion -> prénom (pour les champs "personne")
@@ -168,9 +171,9 @@ app.get("/api/collabs", auth, async (req, res) => {
 });
 app.get("/api/alerts", auth, async (req, res) => {
   if (req.user.role !== "supervisor") return res.json({ alerts: [] });
-  if (DEMO) return res.json({ monthLabel: "juillet 2026", minPerMonth: MIN_PER_MONTH, alerts: [
-    { brand: "Doucéa", status: "vide", count: 0, target: MIN_PER_MONTH, monthLabel: "juillet 2026" },
-    { brand: "In Haircare", status: "faible", count: 2, target: MIN_PER_MONTH, monthLabel: "juillet 2026" },
+  if (DEMO) return res.json({ monthLabel: "juillet 2026", minPerWeek: MIN_PER_WEEK, target: 12, alerts: [
+    { brand: "Doucéa", status: "vide", count: 0, target: 12, monthLabel: "juillet 2026" },
+    { brand: "In Haircare", status: "faible", count: 5, target: 12, monthLabel: "juillet 2026" },
     { brand: "Curls Matter", status: "inconnu", monthLabel: "juillet 2026" } ] });
   try { res.json(await buildAlerts()); } catch (e) { res.status(500).json({ error: e.message }); }
 });
