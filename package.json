@@ -1,20 +1,23 @@
 {
   "name": "hyped-cockpit",
   "version": "1.0.0",
-  "description": "Cockpit des chefs de projet — Hyped Agency. Appli web branchée sur Notion, login par personne.",
+  "description": "Cockpit des chefs de projet \u2014 Hyped Agency. Appli web branch\u00e9e sur Notion, login par personne.",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
     "hash": "node tools/hash.js"
   },
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "@notionhq/client": "^2.2.15",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.6",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "googleapis": "^140.0.0"
   }
 }

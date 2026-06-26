@@ -10,6 +10,7 @@ const express = require("express");
 const cookieParser = require("cookie-parser");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const gm = require("./gmail-oauth"); // connexion Gmail par personne (inerte si Google non configuré)
 
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
@@ -178,5 +179,25 @@ app.get("/api/alerts", auth, async (req, res) => {
     { brand: "Curls Matter", status: "inconnu", target: 12 } ] });
   try { res.json(await buildAlerts()); } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// --- Connexion Gmail par personne (réponses créateurs) ------------------
+app.get("/api/gmail/status", auth, (req, res) =>
+  res.json({ enabled: gm.ENABLED, connected: gm.ENABLED ? gm.isConnected(req.user.email) : false }));
+app.get("/api/gmail/connect", auth, (req, res) => {
+  if (!gm.ENABLED) return res.status(400).json({ error: "Connexion Gmail non configurée." });
+  res.json({ url: gm.getAuthUrl(req.user.email) });
+});
+app.get("/api/gmail/callback", async (req, res) => {
+  try { await gm.handleCallback(req.query.code, req.query.state); res.redirect("/?gmail=ok"); }
+  catch (e) { res.redirect("/?gmail=err"); }
+});
+app.get("/api/gmail/inbox", auth, async (req, res) => {
+  if (!gm.ENABLED) return res.json({ enabled: false });
+  try {
+    const collabs = await fetchRows(); // marques + créateurs des calendriers
+    const r = await gm.analyzeFor(req.user.email, collabs);
+    res.json({ enabled: true, ...r });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get("*", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.listen(PORT, () => console.log(`Cockpit ${DEMO ? "(DÉMO)" : "(Notion live, clients actifs)"} → http://localhost:${PORT}`));
