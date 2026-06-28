@@ -101,13 +101,19 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
 .calbar .lab{font-size:12px;color:var(--gray);font-weight:600}
 .calbar a{font-size:12.5px;font-weight:600;color:var(--navy);background:var(--bg);border:1px solid #CFDADA;border-radius:8px;padding:7px 12px;text-decoration:none}
 .calbar a:hover{background:var(--soft)}
+.brandlogo{display:flex;align-items:baseline;gap:9px;margin-bottom:5px}
+.brandlogo .hyped{font-size:23px;font-weight:800;letter-spacing:-0.5px;color:var(--navy);line-height:1}
+.brandlogo .hyped .dot{color:var(--teal)}
+.brandlogo .agency{font-size:10px;font-weight:700;letter-spacing:3px;color:var(--gray)}
+.brandlogo .ckp{font-size:10px;font-weight:600;letter-spacing:1.5px;color:#A9B4B8;text-transform:uppercase}
+.logincard .brandlogo{justify-content:center;margin-bottom:14px}
 </style>
 </head>
 <body>
 
 <div id="login" class="login hidden">
   <form class="logincard" id="loginform">
-    <div class="eyebrow">Hyped Agency</div>
+    <div class="brandlogo"><span class="hyped">Hyped<span class="dot">.</span></span><span class="agency">AGENCY</span></div>
     <h1>Cockpit</h1>
     <p>Connecte-toi pour voir ta journée.</p>
     <label for="email">Email</label>
@@ -122,7 +128,7 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
 <div id="app" class="wrap hidden">
   <div class="head">
     <div>
-      <div class="eyebrow">Hyped Agency · Cockpit</div>
+      <div class="brandlogo"><span class="hyped">Hyped<span class="dot">.</span></span><span class="agency">AGENCY</span><span class="ckp">· Cockpit</span></div>
       <h1 id="greeting">…</h1>
       <div class="sub" id="subtitle"></div>
     </div>
@@ -273,7 +279,7 @@ function render(){
        <div class="num">${counts[g]}</div></div>`).join('');
   list.sort((a,b)=>(b.urgent-a.urgent)||(ORDER.indexOf(a.grp)-ORDER.indexOf(b.grp)));
   const total=list.length;
-  $('totalchip').textContent=total+' action'+(total>1?'s':'');
+  $('totalchip').textContent=total?(total+' à traiter'):'Tout est à jour ✅';
   const dstr=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
   if(isSup&&(!f||f==='ALL')){$('greeting').textContent='Vue pilote — toute l\'équipe';$('subtitle').textContent=total+' actions · clients actifs · '+dstr;}
   else{const who=isSup?f:VIEWER.name;$('greeting').textContent='Bonjour '+who+' 👋';$('subtitle').textContent=total+' chose'+(total>1?'s':'')+' à traiter · '+dstr;}
