@@ -119,12 +119,16 @@ async function buildAlerts() {
 }
 
 // id utilisateur Notion -> prénom (pour les champs "personne")
-let USERMAP = {};
+let USERMAP = {};      // id Notion -> prénom
+let EMAIL2ID = {};     // email -> id Notion (mapping fiable)
 async function resolveUsers() {
   let cursor;
   do {
     const r = await notion.users.list({ start_cursor: cursor, page_size: 100 });
-    r.results.forEach((u) => { USERMAP[u.id] = (u.name || "").replace(/ Hyped Agency$/i, "").trim(); });
+    r.results.forEach((u) => {
+      USERMAP[u.id] = (u.name || "").replace(/ Hyped Agency$/i, "").trim();
+      const em = u.person?.email; if (em) EMAIL2ID[em.toLowerCase()] = u.id;
+    });
     cursor = r.has_more ? r.next_cursor : null;
   } while (cursor);
 }
@@ -269,9 +273,16 @@ function mapTask(pg) {
 }
 // id Notion d'une personne d'après son prénom (pour le champ Interlocuteur)
 async function userIdByName(name) {
-  if (!Object.keys(USERMAP).length) { try { await resolveUsers(); } catch (e) {} }
+  if (!Object.keys(EMAIL2ID).length) { try { await resolveUsers(); } catch (e) {} }
   const n = normName(name);
-  for (const [id, nm] of Object.entries(USERMAP)) { if (normName(nm) === n) return id; }
+  if (!n) return null;
+  // 1) via les comptes cockpit : nom -> email -> id Notion (fiable)
+  const u = USERS.find((x) => normName(x.name) === n);
+  if (u && EMAIL2ID[u.email.toLowerCase()]) return EMAIL2ID[u.email.toLowerCase()];
+  // 2) fallback : match sur le prénom du nom Notion
+  for (const [id, nm] of Object.entries(USERMAP)) {
+    const m = normName(nm); if (m && (m === n || m.split(" ")[0] === n)) return id;
+  }
   return null;
 }
 app.get("/api/todos", auth, async (req, res) => {
