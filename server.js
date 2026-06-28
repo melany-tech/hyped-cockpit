@@ -384,5 +384,61 @@ app.post("/api/sourcing/:id/contacted", auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// --- Rappel preview J-72h : crée "Valider la preview de X" dans la to-do --
+async function ensurePreviewTasks() {
+  if (DEMO || !notion) return;
+  try {
+    if (!Object.keys(USERMAP).length) { try { await resolveUsers(); } catch (e) {} }
+    const iso = (d) => d.toISOString().slice(0, 10);
+    const now = new Date();
+    const start = iso(now);
+    const end = iso(new Date(now.getTime() + 2 * 864e5)); // aujourd'hui -> +2 jours
+    // 1) previews à venir dans In Haircare (non postées)
+    const due = []; let cursor;
+    do {
+      const r = await notion.databases.query({
+        database_id: INHAIRCARE_DB, start_cursor: cursor, page_size: 100,
+        filter: { and: [
+          { property: "Date preview", date: { on_or_after: start, on_or_before: end } },
+          { property: "Statut", select: { does_not_equal: "Posté" } },
+        ] },
+      });
+      r.results.forEach((pg) => {
+        const p = pg.properties || {};
+        const nom = title(p["Nom"]) || "(sans nom)";
+        due.push({ nom, prev: p["Date preview"]?.date?.start || null, cp: firstPerson(p["Interlocuteur"]) });
+      });
+      cursor = r.has_more ? r.next_cursor : null;
+    } while (cursor);
+    if (!due.length) return;
+    // 2) tâches preview déjà existantes (dédup)
+    const existing = new Set(); let c2;
+    do {
+      const r = await notion.databases.query({
+        database_id: TASKS_DB, start_cursor: c2, page_size: 100,
+        filter: { property: "Tâche", title: { contains: "Valider la preview" } },
+      });
+      r.results.forEach((pg) => { const t = mapTask(pg); if (t.statut !== "Fait") existing.add(t.task.trim()); });
+      c2 = r.has_more ? r.next_cursor : null;
+    } while (c2);
+    // 3) création des manquantes
+    for (const d of due) {
+      const ttl = `Valider la preview de ${d.nom} (In Haircare)`;
+      if (existing.has(ttl)) continue;
+      const props = {
+        "Tâche": { title: [{ text: { content: ttl } }] },
+        "Statut": { select: { name: "À faire" } },
+        "Projet": { select: { name: "In Haircare" } },
+      };
+      if (d.cp) props["Responsable"] = { select: { name: d.cp } };
+      if (d.prev) props["Échéance"] = { date: { start: d.prev } };
+      try { await notion.pages.create({ parent: { database_id: TASKS_DB }, properties: props }); existing.add(ttl); console.log("preview task créée:", ttl); }
+      catch (e) { console.warn("preview task", e.message); }
+    }
+  } catch (e) { console.warn("ensurePreviewTasks", e.message); }
+}
+ensurePreviewTasks();
+setInterval(ensurePreviewTasks, 6 * 3600 * 1000); // re-vérifie ~4x/jour (dédup -> pas de doublon)
+
 app.get("*", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.listen(PORT, () => console.log(`Cockpit ${DEMO ? "(DÉMO)" : "(Notion live, clients actifs)"} → http://localhost:${PORT}`));
