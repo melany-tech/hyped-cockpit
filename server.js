@@ -402,24 +402,32 @@ async function ensurePreviewTasks() {
   if (DEMO || !notion) return;
   try {
     if (!Object.keys(USERMAP).length) { try { await resolveUsers(); } catch (e) {} }
+    try { await refreshAssignmentsFromBoxes(); } catch (e) {} // rafraîchit l'assignation auto (mails)
     const iso = (d) => d.toISOString().slice(0, 10);
     const now = new Date();
     const start = iso(now);
-    const end = iso(new Date(now.getTime() + 2 * 864e5)); // aujourd'hui -> +2 jours
-    // 1) previews à venir dans In Haircare (non postées)
+    const end = iso(new Date(now.getTime() + 4 * 864e5)); // collabs qui sortent dans les 4 jours (~J-72h)
+    // 1) collabs en cours dont la mise en ligne est proche (preview à valider sous 72h)
     const due = []; let cursor;
     do {
       const r = await notion.databases.query({
         database_id: INHAIRCARE_DB, start_cursor: cursor, page_size: 100,
         filter: { and: [
-          { property: "Date preview", date: { on_or_after: start, on_or_before: end } },
-          { property: "Statut", select: { does_not_equal: "Posté" } },
+          { property: "Date", date: { on_or_after: start, on_or_before: end } },
+          { or: [
+            { property: "Statut", select: { equals: "En production" } },
+            { property: "Statut", select: { equals: "En validation" } },
+          ] },
         ] },
       });
       r.results.forEach((pg) => {
         const p = pg.properties || {};
         const nom = title(p["Nom"]) || "(sans nom)";
-        due.push({ nom, prev: p["Date preview"]?.date?.start || null, cp: firstPerson(p["Interlocuteur"]) });
+        const liveD = p["Date"]?.date?.start || null;
+        let prev = p["Date preview"]?.date?.start || null;
+        if (!prev && liveD) prev = iso(new Date(new Date(liveD).getTime() - 3 * 864e5)); // J-72h calculé
+        const cp = firstPerson(p["Interlocuteur"]) || ASSIGN[normName(nom)] || null; // Notion manuel, sinon auto par mail
+        due.push({ nom, prev, cp });
       });
       cursor = r.has_more ? r.next_cursor : null;
     } while (cursor);
