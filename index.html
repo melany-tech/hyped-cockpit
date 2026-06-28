@@ -83,6 +83,17 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
 .srcadd input{flex:1;min-width:150px}
 .srcadd select{font-family:inherit;font-size:13px;color:var(--navy);background:var(--bg);border:1px solid #CFDADA;border-radius:8px;padding:7px 10px}
 .srcdone{white-space:nowrap;cursor:pointer;color:var(--teal);border-color:#BfE0D9}
+.srcmsg{white-space:nowrap;cursor:pointer}
+.msgpanel{background:var(--bg);border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin:-2px 0 10px}
+.msgbar{display:flex;gap:10px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+.seg{display:inline-flex}
+.seg button{font-family:inherit;font-size:12px;font-weight:600;border:1px solid #CFDADA;background:var(--bg);color:var(--gray);padding:6px 12px;cursor:pointer}
+.seg button:first-child{border-radius:8px 0 0 8px}
+.seg button:last-child{border-radius:0 8px 8px 0;border-left:none}
+.seg button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.msgdisp{flex:1;min-width:160px}
+.msgtxt{width:100%;font-family:inherit;font-size:13px;color:var(--navy);background:var(--bg);border:1px solid #CFDADA;border-radius:9px;padding:11px;line-height:1.55;resize:vertical}
+.msgcopy{margin-top:8px}
 </style>
 </head>
 <body>
@@ -321,6 +332,48 @@ async function doneTask(btn){
 }
 // --- Veille : profils à contacter ---------------------------------------
 const BRANDS=['In Haircare','Curls Matter','Doucéa','LIVA','Toki Bona',"FND'HER",'Hyped Agency','Autres'];
+let SRC_PROFILS=[];
+// Pitchs marque (calés sur tes vrais messages) pour le générateur de message d'approche
+const BRAND_INFO={
+ 'In Haircare':{produits:"la routine complète In Haircare (Milk'In, Curl n'Go et le nouveau Final Touch)",
+   fr:"In Haircare est une marque française spécialisée dans les soins capillaires pensés pour les cheveux texturés — bouclés, frisés, crépus — avec des formules clean, naturelles et efficaces, fabriquées en France et primées (Beauty Shortlist Awards 2025).",
+   en:"In Haircare is a French haircare brand made for textured hair (curly, coily), with clean, natural and effective formulas, made in France and award-winning."},
+ 'Doucéa':{produits:"les soins Doucéa",
+   fr:"Doucéa est une marque de soins dermo-pédiatriques pensée pour les enfants à peau sensible ou atopique. L'idée : réconcilier le besoin du parent et le plaisir de l'enfant, avec des soins efficaces, sensoriels et concentrés en madécassoside (actif apaisant).",
+   en:"Doucéa is a dermo-pediatric skincare brand for children with sensitive or atopic skin — effective, sensory care that kids actually enjoy."},
+ 'LIVA':{produits:"the full LIVA range",
+   fr:"LIVA est une marque de soins capillaires cliniquement testée, en lancement national chez Walmart (US) : lors d'une étude de 3 semaines, 85% des participantes ont trouvé leurs cheveux plus denses et plus sains.",
+   en:"LIVA is a clinically tested hair regrowth brand launching nationwide at Walmart. In a 3-week study, 85% of participants said their hair looked fuller and healthier."},
+ 'Curls Matter':{produits:"les produits Curls Matter",
+   fr:"Curls Matter est une marque dédiée au soin des cheveux bouclés et texturés.",
+   en:"Curls Matter is a brand dedicated to curly and textured hair care."}
+};
+function genMessage(brand,inf,cp,disp,lang){
+  const b=BRAND_INFO[brand]||{produits:(lang==='en'?'our products':'nos produits'),fr:brand+" est une marque que nous accompagnons chez Hyped Agency.",en:brand+" is a brand we work with at Hyped Agency."};
+  const who=inf||(lang==='en'?'there':'');
+  if(lang==='en') return `Hi ${who} ✨\n\nI'm ${cp} from Hyped Agency, and we're currently working with ${brand}.\n\n${b.en}\n\nI'm reaching out because we really love your content — we find it so qualitative and a great fit with the brand's universe. ✨\n\nWe'd love to send you ${b.produits} and explore a partnership around ${disp}.\n\nWould you be open to discovering the products and featuring them on your socials with ${brand}? If so, feel free to send me your full name, postal address and phone number so I can add you to our shipment.\n\nLooking forward to hearing from you,\n${cp}`;
+  return `Hello ${who} ✨\n\nJe suis ${cp}, cheffe de projet chez Hyped Agency, et je représente la marque ${brand}.\n\n${b.fr}\n\nJe te contacte car nous aimons beaucoup ton contenu, que nous trouvons très qualitatif et en parfaite adéquation avec l'univers de la marque. ✨\n\nL'idée serait de te faire découvrir ${b.produits} et de mettre en avant ${disp} dans le cadre d'un partenariat avec ${brand}.\n\nSerais-tu partante ? Je reste bien sûr disponible pour la moindre question et serais ravie d'échanger avec toi. 🤍\n\nAu plaisir de te lire,\n${cp}`;
+}
+function openMessage(btn){
+  const row=btn.closest('.row'); const id=row.dataset.id;
+  const nx=row.nextElementSibling;
+  if(nx&&nx.classList.contains('msgpanel')){nx.remove();return;}
+  const p=SRC_PROFILS.find(x=>x.id===id)||{};
+  const inf=String(p.task||'').replace(/^@/,'').split(/[ (]/)[0]||'';
+  const cp=p.responsable||(VIEWER&&VIEWER.name)||'';
+  const brand=p.projet||'';
+  const panel=document.createElement('div'); panel.className='msgpanel';
+  panel.innerHTML='<div class="msgbar"><span class="seg"><button data-l="fr" class="on">FR</button><button data-l="en">EN</button></span><input class="msgdisp" value="1 Reel + 1 set de stories"></div><textarea class="msgtxt" rows="12"></textarea><button class="lk msgcopy">Copier</button>';
+  row.after(panel);
+  let lang='fr';
+  const ta=panel.querySelector('.msgtxt'), disp=panel.querySelector('.msgdisp');
+  const regen=()=>{ta.value=genMessage(brand,inf,cp,disp.value,lang);};
+  panel.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{lang=b.dataset.l;panel.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x===b));regen();});
+  disp.oninput=regen;
+  const cpbtn=panel.querySelector('.msgcopy');
+  cpbtn.onclick=()=>{ta.select();try{document.execCommand('copy');}catch(e){}cpbtn.textContent='Copié ✓';setTimeout(()=>cpbtn.textContent='Copier',1500);};
+  regen();
+}
 async function loadSourcing(){
   try{
     const r=await api('/api/sourcing');const d=await r.json();
@@ -330,6 +383,7 @@ async function loadSourcing(){
   }catch(e){show($('srchdr'),false);show($('srcbox'),false);}
 }
 function renderSourcing(profils){
+  SRC_PROFILS=profils;
   const isSup=VIEWER&&VIEWER.role==='supervisor';
   const opts=BRANDS.map(b=>`<option value="${b}">${b}</option>`).join('');
   const cpopts='<option value="">CP : à attribuer</option>'+(TEAM||[]).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
@@ -344,12 +398,13 @@ function renderSourcing(profils){
     return `<div class="row" data-id="${p.id}"><span class="rdot" style="background:#C77F2A"></span>
       <div class="info"><div class="t">${esc(p.task)}</div><div class="s">${sub}</div></div>
       ${p.projet?`<span class="brand">${esc(p.projet)}</span>`:''}${who}${link}
-      <button class="lk srcdone">Contacté ✓</button></div>`;
+      <button class="lk srcmsg">✍️ Message</button><button class="lk srcdone">Contacté ✓</button></div>`;
   }).join('');
   $('srcbox').innerHTML=add+rows;
   $('srcbtn').onclick=addProfil;
   $('srcprofil').onkeydown=(e)=>{if(e.key==='Enter')addProfil();};
   document.querySelectorAll('#srcbox .srcdone').forEach(b=>b.onclick=()=>markContacted(b));
+  document.querySelectorAll('#srcbox .srcmsg').forEach(b=>b.onclick=()=>openMessage(b));
 }
 async function addProfil(){
   const profil=$('srcprofil').value.trim(); if(!profil)return;
