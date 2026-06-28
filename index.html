@@ -133,7 +133,7 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
 
 <script>
 const PREF=['À lancer','À transmettre','Négo','À valider','En production','Previews','À cadrer','À facturer'];
-let ROWS=[], VIEWER=null;
+let ROWS=[], VIEWER=null, TEAM=[];
 const $=(id)=>document.getElementById(id);
 function fmtDate(s){if(!s)return'';return new Date(s).toLocaleDateString('fr-FR',{day:'numeric',month:'short'});}
 function show(el,v){el.classList[v?'remove':'add']('hidden');}
@@ -159,7 +159,7 @@ async function load(){
   if(r.status===401){location.reload();return;}
   const d=await r.json();
   if(!r.ok){$('list').innerHTML='<div class="state" style="color:var(--red)">Erreur : '+(d.error||'')+'</div>';return;}
-  ROWS=d.rows||[];VIEWER=d.viewer;show($('demobadge'),!!d.demo);
+  ROWS=d.rows||[];VIEWER=d.viewer;TEAM=d.team||[];show($('demobadge'),!!d.demo);
   const isSup=VIEWER.role==='supervisor';
   if(isSup){
     const present=ROWS.map(x=>x.cp).filter(Boolean);
@@ -330,8 +330,11 @@ async function loadSourcing(){
   }catch(e){show($('srchdr'),false);show($('srcbox'),false);}
 }
 function renderSourcing(profils){
+  const isSup=VIEWER&&VIEWER.role==='supervisor';
   const opts=BRANDS.map(b=>`<option value="${b}">${b}</option>`).join('');
-  const add='<div class="srcadd"><input id="srcprofil" placeholder="@profil ou lien"><select id="srcmarque">'+opts+'</select><button class="lk" id="srcbtn">+ Ajouter</button></div>';
+  const cpopts='<option value="">CP : à attribuer</option>'+(TEAM||[]).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  const cpsel=isSup?('<select id="srccp" title="Chef de projet à allouer">'+cpopts+'</select>'):'';
+  const add='<div class="srcadd"><input id="srcprofil" placeholder="@profil ou lien"><select id="srcmarque">'+opts+'</select>'+cpsel+'<button class="lk" id="srcbtn">+ Ajouter</button></div>';
   let rows;
   if(!profils.length) rows='<div class="state" style="padding:14px">Aucun profil à contacter — ajoute-en un, ou ils arriveront via la veille. 🔎</div>';
   else rows=profils.map(p=>{
@@ -351,8 +354,10 @@ function renderSourcing(profils){
 async function addProfil(){
   const profil=$('srcprofil').value.trim(); if(!profil)return;
   const marque=$('srcmarque').value;
+  const cp=($('srccp')&&$('srccp').value)?$('srccp').value:null;
   $('srcprofil').value='';
-  await api('/api/sourcing',{method:'POST',body:JSON.stringify({profil,marque})});
+  const body={profil,marque}; if(cp)body.responsable=cp;
+  await api('/api/sourcing',{method:'POST',body:JSON.stringify(body)});
   loadSourcing();
 }
 async function markContacted(btn){
