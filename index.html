@@ -79,6 +79,10 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
 .todo .s{font-size:12px;color:var(--gray);margin-top:2px}
 .prio{font-size:10px;font-weight:700;padding:2px 7px;border-radius:9px;white-space:nowrap}
 .prio.Haute{color:#C2553B;background:#F7E7E2}.prio.Moyenne{color:#9A6B12;background:#FBEFD9}.prio.Basse{color:#0F6E56;background:#E4F1ED}
+.srcadd{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.srcadd input{flex:1;min-width:150px}
+.srcadd select{font-family:inherit;font-size:13px;color:var(--navy);background:var(--bg);border:1px solid #CFDADA;border-radius:8px;padding:7px 10px}
+.srcdone{white-space:nowrap;cursor:pointer;color:var(--teal);border-color:#BfE0D9}
 </style>
 </head>
 <body>
@@ -118,6 +122,8 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
   <div id="visiobox" class="hidden"></div>
   <h2 id="todohdr" class="hidden">Ma to-do</h2>
   <div id="todobox" class="hidden"></div>
+  <h2 id="srchdr" class="hidden">Profils à contacter</h2>
+  <div id="srcbox" class="hidden"></div>
   <h2>À traiter</h2>
   <div id="list"><div class="state">Chargement…</div></div>
   <h2 id="mailhdr" class="hidden" style="margin-top:28px">Mes mails créateurs</h2>
@@ -165,6 +171,7 @@ async function load(){
   render();
   loadVisios();
   loadTodo();
+  loadSourcing();
   loadMail();
 }
 function esc(s){return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
@@ -311,6 +318,47 @@ async function doneTask(btn){
   btn.classList.add('on'); const id=btn.closest('.todo').dataset.id;
   await api('/api/todos/'+encodeURIComponent(id)+'/done',{method:'POST'});
   setTimeout(loadTodo,250);
+}
+// --- Veille : profils à contacter ---------------------------------------
+const BRANDS=['In Haircare','Curls Matter','Doucéa','LIVA','Toki Bona',"FND'HER",'Hyped Agency','Autres'];
+async function loadSourcing(){
+  try{
+    const r=await api('/api/sourcing');const d=await r.json();
+    if(!d.enabled){show($('srchdr'),false);show($('srcbox'),false);return;}
+    show($('srchdr'),true);show($('srcbox'),true);
+    renderSourcing(d.profils||[]);
+  }catch(e){show($('srchdr'),false);show($('srcbox'),false);}
+}
+function renderSourcing(profils){
+  const opts=BRANDS.map(b=>`<option value="${b}">${b}</option>`).join('');
+  const add='<div class="srcadd"><input id="srcprofil" placeholder="@profil ou lien"><select id="srcmarque">'+opts+'</select><button class="lk" id="srcbtn">+ Ajouter</button></div>';
+  let rows;
+  if(!profils.length) rows='<div class="state" style="padding:14px">Aucun profil à contacter — ajoute-en un, ou ils arriveront via la veille. 🔎</div>';
+  else rows=profils.map(p=>{
+    const link=p.lien?`<a href="${esc(p.lien)}" target="_blank" rel="noopener">Profil</a>`:'';
+    const who=p.responsable?`<span class="owner">${esc(p.responsable)}</span>`:'<span class="owner none">à attribuer</span>';
+    const sub=p.commentaire?esc(p.commentaire):'à contacter';
+    return `<div class="row" data-id="${p.id}"><span class="rdot" style="background:#C77F2A"></span>
+      <div class="info"><div class="t">${esc(p.task)}</div><div class="s">${sub}</div></div>
+      ${p.projet?`<span class="brand">${esc(p.projet)}</span>`:''}${who}${link}
+      <button class="lk srcdone">Contacté ✓</button></div>`;
+  }).join('');
+  $('srcbox').innerHTML=add+rows;
+  $('srcbtn').onclick=addProfil;
+  $('srcprofil').onkeydown=(e)=>{if(e.key==='Enter')addProfil();};
+  document.querySelectorAll('#srcbox .srcdone').forEach(b=>b.onclick=()=>markContacted(b));
+}
+async function addProfil(){
+  const profil=$('srcprofil').value.trim(); if(!profil)return;
+  const marque=$('srcmarque').value;
+  $('srcprofil').value='';
+  await api('/api/sourcing',{method:'POST',body:JSON.stringify({profil,marque})});
+  loadSourcing();
+}
+async function markContacted(btn){
+  btn.textContent='…'; const id=btn.closest('.row').dataset.id;
+  await api('/api/sourcing/'+encodeURIComponent(id)+'/contacted',{method:'POST'});
+  loadSourcing(); setTimeout(load,400);
 }
 init();
 </script>

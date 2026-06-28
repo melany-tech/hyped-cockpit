@@ -259,10 +259,20 @@ function mapTask(pg) {
   const p = pg.properties || {};
   const sel = (x) => p[x]?.select?.name || null;
   const ttl = (p["Tâche"]?.title || []).map((t) => t.plain_text).join("");
+  const rich = (x) => (p[x]?.rich_text || []).map((t) => t.plain_text).join("");
   return {
     id: pg.id, task: ttl || "(sans titre)", statut: sel("Statut"), responsable: sel("Responsable"),
-    priorite: sel("Priorité"), projet: sel("Projet"), echeance: p["Échéance"]?.date?.start || null, url: pg.url,
+    priorite: sel("Priorité"), projet: sel("Projet"), type: sel("Type"),
+    lien: p["Lien profil"]?.url || null, commentaire: rich("Commentaire veille"),
+    echeance: p["Échéance"]?.date?.start || null, url: pg.url,
   };
+}
+// id Notion d'une personne d'après son prénom (pour le champ Interlocuteur)
+async function userIdByName(name) {
+  if (!Object.keys(USERMAP).length) { try { await resolveUsers(); } catch (e) {} }
+  const n = normName(name);
+  for (const [id, nm] of Object.entries(USERMAP)) { if (normName(nm) === n) return id; }
+  return null;
 }
 app.get("/api/todos", auth, async (req, res) => {
   if (DEMO || !notion) return res.json({ enabled: false, tasks: [] });
@@ -302,6 +312,65 @@ app.post("/api/todos/:id/done", auth, async (req, res) => {
   if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
   try { await notion.pages.update({ page_id: req.params.id, properties: { "Statut": { select: { name: "Fait" } } } }); res.json({ ok: true }); }
   catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// --- Veille / Sourcing : profils à contacter (board Tâches, Type=Prise de contact) ---
+const INHAIRCARE_DB = "380f8ac3-c3ae-80ce-ba4c-e8e82490edc6";
+app.get("/api/sourcing", auth, async (req, res) => {
+  if (DEMO || !notion) return res.json({ enabled: false, profils: [] });
+  try {
+    const all = []; let cursor;
+    do {
+      const r = await notion.databases.query({
+        database_id: TASKS_DB, start_cursor: cursor, page_size: 100,
+        filter: { property: "Type", select: { equals: "Prise de contact" } },
+      });
+      r.results.forEach((pg) => all.push(mapTask(pg))); cursor = r.has_more ? r.next_cursor : null;
+    } while (cursor);
+    const me = normName(req.user.name);
+    const sup = req.user.role === "supervisor";
+    const profils = all
+      .filter((t) => t.statut !== "Fait" && (sup || !t.responsable || normName(t.responsable) === me))
+      .sort((a, b) => (a.echeance || "9999").localeCompare(b.echeance || "9999"));
+    res.json({ enabled: true, profils });
+  } catch (e) { res.json({ enabled: false, error: e.message, profils: [] }); }
+});
+app.post("/api/sourcing", auth, async (req, res) => {
+  if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
+  const profil = String(req.body?.profil || "").trim();
+  if (!profil) return res.status(400).json({ error: "profil vide" });
+  const props = {
+    "Tâche": { title: [{ text: { content: profil } }] },
+    "Type": { select: { name: "Prise de contact" } },
+    "Statut": { select: { name: "À faire" } },
+  };
+  if (req.body?.marque) props["Projet"] = { select: { name: String(req.body.marque) } };
+  const resp = req.body?.responsable || (req.user.role !== "supervisor" ? req.user.name : null);
+  if (resp) props["Responsable"] = { select: { name: String(resp) } };
+  const lien = req.body?.lien || (/^https?:\/\//i.test(profil) ? profil : null);
+  if (lien) props["Lien profil"] = { url: String(lien) };
+  if (req.body?.commentaire) props["Commentaire veille"] = { rich_text: [{ text: { content: String(req.body.commentaire) } }] };
+  try { const pg = await notion.pages.create({ parent: { database_id: TASKS_DB }, properties: props }); res.json({ ok: true, id: pg.id }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post("/api/sourcing/:id/contacted", auth, async (req, res) => {
+  if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
+  try {
+    const pg = await notion.pages.retrieve({ page_id: req.params.id });
+    const t = mapTask(pg);
+    // 1) sort de la liste veille
+    await notion.pages.update({ page_id: req.params.id, properties: { "Statut": { select: { name: "Fait" } } } });
+    // 2) bascule en collab "à lancer" dans le calendrier de la marque (In Haircare géré)
+    let moved = false;
+    if (t.projet === "In Haircare") {
+      const props = { "Nom": { title: [{ text: { content: t.task } }] }, "Statut": { select: { name: "Non posté" } } };
+      const uid = await userIdByName(t.responsable || req.user.name);
+      if (uid) props["Interlocuteur"] = { people: [{ id: uid }] };
+      try { await notion.pages.create({ parent: { database_id: INHAIRCARE_DB }, properties: props }); moved = true; CACHE.at = 0; }
+      catch (e) { console.warn("create collab", e.message); }
+    }
+    res.json({ ok: true, moved, brand: t.projet });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get("*", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
