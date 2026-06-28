@@ -94,6 +94,9 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
 .msgdisp{flex:1;min-width:160px}
 .msgtxt{width:100%;font-family:inherit;font-size:13px;color:var(--navy);background:var(--bg);border:1px solid #CFDADA;border-radius:9px;padding:11px;line-height:1.55;resize:vertical}
 .msgcopy{margin-top:8px}
+.msgdraft{margin-top:8px}
+.draftbanner{display:block;background:#FBEFD9;color:#9A6B12;border:1px solid #F0E0C0;border-radius:11px;padding:12px 16px;margin-bottom:18px;font-weight:600;font-size:13.5px;text-decoration:none}
+.draftbanner:hover{background:#F6E6C8}
 </style>
 </head>
 <body>
@@ -126,6 +129,7 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
       <button class="lk" id="logout">Déconnexion</button>
     </div>
   </div>
+  <a id="draftbanner" class="draftbanner hidden" href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noopener"></a>
   <div class="filterbar hidden" id="filterbar"><label for="cpfilter">Vue</label><select id="cpfilter"></select></div>
   <div class="alertsbox hidden" id="alertsbox"></div>
   <div class="cards" id="cards"></div>
@@ -184,6 +188,16 @@ async function load(){
   loadTodo();
   loadSourcing();
   loadMail();
+  loadDrafts();
+}
+async function loadDrafts(){
+  try{
+    const r=await api('/api/gmail/drafts');const d=await r.json();
+    if(d&&d.count>0){
+      $('draftbanner').textContent='📧 '+d.count+' brouillon'+(d.count>1?'s':'')+' à valider — clique pour les relire et les envoyer depuis Gmail';
+      show($('draftbanner'),true);
+    } else show($('draftbanner'),false);
+  }catch(e){show($('draftbanner'),false);}
 }
 function esc(s){return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 async function loadMail(){
@@ -363,7 +377,7 @@ function openMessage(btn){
   const cp=p.responsable||(VIEWER&&VIEWER.name)||'';
   const brand=p.projet||'';
   const panel=document.createElement('div'); panel.className='msgpanel';
-  panel.innerHTML='<div class="msgbar"><span class="seg"><button data-l="fr" class="on">FR</button><button data-l="en">EN</button></span><input class="msgdisp" value="1 Reel + 1 set de stories"></div><textarea class="msgtxt" rows="12"></textarea><button class="lk msgcopy">Copier</button>';
+  panel.innerHTML='<div class="msgbar"><span class="seg"><button data-l="fr" class="on">FR</button><button data-l="en">EN</button></span><input class="msgdisp" value="1 Reel + 1 set de stories"></div><textarea class="msgtxt" rows="12"></textarea><button class="lk msgcopy">Copier</button> <button class="lk msgdraft">📧 Créer le brouillon</button>';
   row.after(panel);
   let lang='fr';
   const ta=panel.querySelector('.msgtxt'), disp=panel.querySelector('.msgdisp');
@@ -372,6 +386,16 @@ function openMessage(btn){
   disp.oninput=regen;
   const cpbtn=panel.querySelector('.msgcopy');
   cpbtn.onclick=()=>{ta.select();try{document.execCommand('copy');}catch(e){}cpbtn.textContent='Copié ✓';setTimeout(()=>cpbtn.textContent='Copier',1500);};
+  const dbtn=panel.querySelector('.msgdraft');
+  dbtn.onclick=async()=>{
+    dbtn.textContent='…';
+    const subject=(lang==='en'?'Partnership with ':'Partenariat ')+brand+' — Hyped Agency';
+    const r=await api('/api/gmail/draft',{method:'POST',body:JSON.stringify({subject,body:ta.value})});
+    const d=await r.json().catch(()=>({}));
+    if(d&&d.ok){dbtn.textContent='Brouillon créé ✓';loadDrafts();}
+    else dbtn.textContent='↻ Reconnecte ton Gmail';
+    setTimeout(()=>{dbtn.textContent='📧 Créer le brouillon';},2600);
+  };
   regen();
 }
 async function loadSourcing(){

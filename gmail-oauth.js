@@ -13,6 +13,7 @@ const ENABLED = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SEC
 const SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/calendar.readonly", // visios du jour (lecture seule)
+  "https://www.googleapis.com/auth/gmail.compose",     // créer des brouillons (jamais d'envoi auto)
 ];
 const DATA_DIR = process.env.DATA_DIR || __dirname; // disque persistant en prod (ex. /var/data)
 const STORE = path.join(DATA_DIR, "gmail-tokens.json"); // jeton de rafraîchissement par email (survit aux redéploiements si DATA_DIR = disque)
@@ -102,4 +103,42 @@ async function calendarToday(email) {
   return { connected: true, events };
 }
 
-module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, analyzeFor, calendarToday, SCOPES };
+// --- Brouillons : le cockpit prépare, la CP relit et envoie depuis Gmail ---
+const DRAFTS_STORE = path.join(DATA_DIR, "gmail-drafts.json");
+function loadDrafts() { try { return JSON.parse(fs.readFileSync(DRAFTS_STORE, "utf8")); } catch (e) { return {}; } }
+function saveDrafts(s) { try { fs.writeFileSync(DRAFTS_STORE, JSON.stringify(s)); } catch (e) {} }
+function b64url(s) { return Buffer.from(s, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
+function encSubject(s) { return "=?UTF-8?B?" + Buffer.from(s || "", "utf8").toString("base64") + "?="; }
+function mime({ to, subject, body }) {
+  return [
+    "To: " + (to || ""),
+    "Subject: " + encSubject(subject || ""),
+    "MIME-Version: 1.0",
+    "Content-Type: text/plain; charset=UTF-8",
+    "",
+    body || "",
+  ].join("\r\n");
+}
+/** Crée un brouillon dans la boîte de `email`. N'envoie rien. */
+async function createDraft(email, { to, subject, body }) {
+  const gmail = gmailFor(email);
+  if (!gmail) return { ok: false, error: "non connecté" };
+  const raw = b64url(mime({ to, subject, body }));
+  const r = await gmail.users.drafts.create({ userId: "me", requestBody: { message: { raw } } });
+  const s = loadDrafts(); (s[email] = s[email] || []).push(r.data.id); saveDrafts(s);
+  return { ok: true, id: r.data.id };
+}
+/** Compte nos brouillons encore présents (= pas encore envoyés). Élague ceux envoyés. */
+async function draftsToValidate(email) {
+  const gmail = gmailFor(email);
+  if (!gmail) return { count: 0 };
+  const store = loadDrafts(); const ours = store[email] || [];
+  if (!ours.length) return { count: 0 };
+  const list = await gmail.users.drafts.list({ userId: "me", maxResults: 200 });
+  const present = new Set((list.data.drafts || []).map((d) => d.id));
+  const keep = ours.filter((id) => present.has(id));
+  store[email] = keep; saveDrafts(store);
+  return { count: keep.length };
+}
+
+module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, analyzeFor, calendarToday, createDraft, draftsToValidate, SCOPES };

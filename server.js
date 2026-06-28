@@ -249,6 +249,19 @@ app.get("/api/gmail/inbox", auth, async (req, res) => {
     res.json({ enabled: true, ...r });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// --- Brouillons mail (le cockpit prépare, la CP relit et envoie) ---------
+app.post("/api/gmail/draft", auth, async (req, res) => {
+  if (!gm.ENABLED) return res.status(400).json({ error: "Gmail non configuré" });
+  const { to, subject, body } = req.body || {};
+  if (!subject && !body) return res.status(400).json({ error: "message vide" });
+  try { res.json(await gm.createDraft(req.user.email, { to, subject, body })); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.get("/api/gmail/drafts", auth, async (req, res) => {
+  if (!gm.ENABLED) return res.json({ count: 0 });
+  try { res.json(await gm.draftsToValidate(req.user.email)); }
+  catch (e) { res.json({ count: 0 }); }
+});
 
 // --- Visios du jour (Google Agenda de la personne) ----------------------
 app.get("/api/calendar", auth, async (req, res) => {
