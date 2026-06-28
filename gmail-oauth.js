@@ -10,7 +10,10 @@ const path = require("path");
 const { analyzeMailbox } = require("./mail-analyzer");
 
 const ENABLED = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REDIRECT_URI);
-const SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"];
+const SCOPES = [
+  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/calendar.readonly", // visios du jour (lecture seule)
+];
 const DATA_DIR = process.env.DATA_DIR || __dirname; // disque persistant en prod (ex. /var/data)
 const STORE = path.join(DATA_DIR, "gmail-tokens.json"); // jeton de rafraîchissement par email (survit aux redéploiements si DATA_DIR = disque)
 
@@ -69,4 +72,34 @@ async function analyzeFor(email, collabs, brandProducts = {}) {
   return { connected: true, ...analyzeMailbox(emails, collabs, brandProducts) };
 }
 
-module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, analyzeFor, SCOPES };
+// --- Visios du jour : agenda Google de cette personne -------------------
+async function calendarToday(email) {
+  const tok = getToken(email);
+  if (!tok) return { connected: false };
+  const c = client(); c.setCredentials(tok);
+  const cal = google.calendar({ version: "v3", auth: c });
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+  const r = await cal.events.list({
+    calendarId: "primary", timeMin: start.toISOString(), timeMax: end.toISOString(),
+    singleEvents: true, orderBy: "startTime", maxResults: 25,
+  });
+  const events = (r.data.items || [])
+    .filter((e) => e.status !== "cancelled")
+    .map((e) => {
+      const video = (e.conferenceData?.entryPoints || []).find((p) => p.entryPointType === "video");
+      return {
+        id: e.id, title: e.summary || "(sans titre)",
+        start: e.start?.dateTime || e.start?.date || null,
+        end: e.end?.dateTime || e.end?.date || null,
+        allDay: !e.start?.dateTime,
+        meet: e.hangoutLink || video?.uri || null,
+        location: e.location || null,
+        htmlLink: e.htmlLink || null,
+      };
+    });
+  return { connected: true, events };
+}
+
+module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, analyzeFor, calendarToday, SCOPES };

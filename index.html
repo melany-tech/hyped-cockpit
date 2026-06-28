@@ -114,6 +114,8 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
   <div class="filterbar hidden" id="filterbar"><label for="cpfilter">Vue</label><select id="cpfilter"></select></div>
   <div class="alertsbox hidden" id="alertsbox"></div>
   <div class="cards" id="cards"></div>
+  <h2 id="visiohdr" class="hidden">Visios du jour</h2>
+  <div id="visiobox" class="hidden"></div>
   <h2 id="todohdr" class="hidden">Ma to-do</h2>
   <div id="todobox" class="hidden"></div>
   <h2>À traiter</h2>
@@ -157,10 +159,11 @@ async function load(){
     const present=ROWS.map(x=>x.cp).filter(Boolean);
     const cps=[...new Set([...(d.team||[]),...present])].sort();
     $('cpfilter').innerHTML='<option value="ALL">Toute l\'équipe</option>'+cps.map(c=>`<option value="${c}">${c}</option>`).join('');
-    $('cpfilter').onchange=render;show($('filterbar'),true);
+    $('cpfilter').onchange=()=>{render();loadTodo();};show($('filterbar'),true);
   }else show($('filterbar'),false);
   if(isSup)loadAlerts();else show($('alertsbox'),false);
   render();
+  loadVisios();
   loadTodo();
   loadMail();
 }
@@ -247,26 +250,48 @@ function render(){
       ${owner}<span class="brand">${a.brand}</span>${link}</div>`;
   }).join('');
 }
+// --- Visios du jour (Google Agenda) -------------------------------------
+function fmtTime(s){if(!s)return'';const d=new Date(s);return d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
+async function loadVisios(){
+  try{
+    const r=await api('/api/calendar');const d=await r.json();
+    if(!d.enabled||!d.connected||!(d.events&&d.events.length)){show($('visiohdr'),false);show($('visiobox'),false);return;}
+    show($('visiohdr'),true);show($('visiobox'),true);
+    $('visiobox').innerHTML=d.events.map(e=>{
+      const when=e.allDay?'journée':fmtTime(e.start)+(e.end?(' – '+fmtTime(e.end)):'');
+      const link=e.meet?`<a href="${esc(e.meet)}" target="_blank" rel="noopener">Rejoindre</a>`:(e.htmlLink?`<a href="${esc(e.htmlLink)}" target="_blank" rel="noopener">Ouvrir</a>`:'');
+      const dot=e.meet?'#2C9087':'#7A5AA8';
+      const sub=[when]; if(e.location)sub.push(esc(e.location));
+      return `<div class="row"><span class="rdot" style="background:${dot}"></span><div class="info"><div class="t">${esc(e.title)}</div><div class="s">${sub.join(' · ')}</div></div>${e.meet?'<span class="brand" style="color:#0F6E56;background:#E4F1ED">Meet</span>':''}${link}</div>`;
+    }).join('');
+  }catch(e){show($('visiohdr'),false);show($('visiobox'),false);}
+}
 // --- Ma to-do (Notion) --------------------------------------------------
 async function loadTodo(){
   try{
-    const r=await api('/api/todos');const d=await r.json();
+    const isSup=VIEWER&&VIEWER.role==='supervisor';
+    const view=(isSup&&$('cpfilter')&&$('cpfilter').value)?$('cpfilter').value:null;
+    const r=await api('/api/todos'+(view?('?view='+encodeURIComponent(view)):''));const d=await r.json();
     if(!d.enabled){show($('todohdr'),false);show($('todobox'),false);return;}
+    let hdr='Ma to-do';
+    if(isSup) hdr=(!view||view==='ALL')?'To-do de l\'équipe':'To-do — '+view;
+    $('todohdr').textContent=hdr;
     show($('todohdr'),true);show($('todobox'),true);
-    renderTodo(d.tasks||[]);
+    renderTodo(d.tasks||[], isSup&&(!view||view==='ALL'), (isSup&&view&&view!=='ALL')?view:null);
   }catch(e){show($('todohdr'),false);show($('todobox'),false);}
 }
-function renderTodo(tasks){
+function renderTodo(tasks, showOwner, addFor){
   const today=new Date().toISOString().slice(0,10);
-  const add='<div class="todoadd"><input id="todoinput" placeholder="Ajouter une tâche… puis Entrée"><button class="lk" id="todobtn">+ Ajouter</button></div>';
+  const add='<div class="todoadd"><input id="todoinput" placeholder="Ajouter une tâche'+(addFor?(' pour '+addFor):'')+'… puis Entrée"><button class="lk" id="todobtn">+ Ajouter</button></div>';
   let rows;
   if(!tasks.length) rows='<div class="state" style="padding:14px">Rien à faire — to-do à jour ✨</div>';
   else rows=tasks.map(t=>{
     const late=t.echeance&&t.echeance<today, due=t.echeance===today;
     const meta=[]; if(t.echeance)meta.push((late?'⚠ en retard · ':(due?'aujourd\'hui · ':''))+fmtDate(t.echeance)); if(t.projet)meta.push(esc(t.projet));
     const prio=t.priorite?`<span class="prio ${t.priorite}">${t.priorite}</span>`:'';
+    const own=(showOwner&&t.responsable)?`<span class="owner">${esc(t.responsable)}</span>`:'';
     return `<div class="todo" data-id="${t.id}"><button class="check" title="Marquer comme fait"></button>
-      <div class="info"><div class="t">${esc(t.task)}</div><div class="s" style="${late?'color:#C2553B':''}">${meta.join(' · ')}</div></div>${prio}</div>`;
+      <div class="info"><div class="t">${esc(t.task)}</div><div class="s" style="${late?'color:#C2553B':''}">${meta.join(' · ')}</div></div>${own}${prio}</div>`;
   }).join('');
   $('todobox').innerHTML=add+rows;
   $('todobtn').onclick=addTask;
@@ -275,8 +300,11 @@ function renderTodo(tasks){
 }
 async function addTask(){
   const v=$('todoinput').value.trim(); if(!v)return;
+  const isSup=VIEWER&&VIEWER.role==='supervisor';
+  const view=(isSup&&$('cpfilter')&&$('cpfilter').value)?$('cpfilter').value:null;
+  const body={task:v}; if(isSup&&view&&view!=='ALL') body.responsable=view;
   $('todoinput').value=''; $('todoinput').placeholder='Ajout…';
-  await api('/api/todos',{method:'POST',body:JSON.stringify({task:v})});
+  await api('/api/todos',{method:'POST',body:JSON.stringify(body)});
   loadTodo();
 }
 async function doneTask(btn){

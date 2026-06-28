@@ -246,6 +246,13 @@ app.get("/api/gmail/inbox", auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// --- Visios du jour (Google Agenda de la personne) ----------------------
+app.get("/api/calendar", auth, async (req, res) => {
+  if (!gm.ENABLED || typeof gm.calendarToday !== "function") return res.json({ enabled: false });
+  try { const r = await gm.calendarToday(req.user.email); res.json({ enabled: true, ...r }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // --- To-do (base Notion "Tâches Équipe (Live)") -------------------------
 const TASKS_DB = "5e993c84-9927-4c20-986b-32c2a14c2cbf";
 function mapTask(pg) {
@@ -265,21 +272,27 @@ app.get("/api/todos", auth, async (req, res) => {
       const r = await notion.databases.query({ database_id: TASKS_DB, start_cursor: cursor, page_size: 100 });
       r.results.forEach((pg) => all.push(mapTask(pg))); cursor = r.has_more ? r.next_cursor : null;
     } while (cursor);
-    const me = normName(req.user.name);
-    const tasks = all
-      .filter((t) => t.statut !== "Fait" && normName(t.responsable) === me)
-      .sort((a, b) => (a.echeance || "9999").localeCompare(b.echeance || "9999"));
-    res.json({ enabled: true, tasks });
+    const isSup = req.user.role === "supervisor";
+    const view = String(req.query.view || "");
+    let tasks = all.filter((t) => t.statut !== "Fait");
+    if (isSup) {
+      if (view && view !== "ALL") tasks = tasks.filter((t) => normName(t.responsable) === normName(view));
+    } else {
+      tasks = tasks.filter((t) => normName(t.responsable) === normName(req.user.name));
+    }
+    tasks.sort((a, b) => (a.echeance || "9999").localeCompare(b.echeance || "9999"));
+    res.json({ enabled: true, tasks, scope: isSup ? (view || "ALL") : "me" });
   } catch (e) { res.json({ enabled: false, error: e.message, tasks: [] }); }
 });
 app.post("/api/todos", auth, async (req, res) => {
   if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
   const task = String(req.body?.task || "").trim();
   if (!task) return res.status(400).json({ error: "tâche vide" });
+  const resp = (req.user.role === "supervisor" && req.body?.responsable) ? String(req.body.responsable) : req.user.name;
   const props = {
     "Tâche": { title: [{ text: { content: task } }] },
     "Statut": { select: { name: "À faire" } },
-    "Responsable": { select: { name: req.user.name } },
+    "Responsable": { select: { name: resp } },
   };
   if (req.body?.echeance) props["Échéance"] = { date: { start: req.body.echeance } };
   try { const pg = await notion.pages.create({ parent: { database_id: TASKS_DB }, properties: props }); res.json({ ok: true, id: pg.id }); }
