@@ -373,7 +373,10 @@ function openMessage(btn){
   const nx=row.nextElementSibling;
   if(nx&&nx.classList.contains('msgpanel')){nx.remove();return;}
   const p=SRC_PROFILS.find(x=>x.id===id)||{};
-  const inf=String(p.task||'').replace(/^@/,'').split(/[ (]/)[0]||'';
+  let raw=String(p.task||'').replace(/^contacter\s+/i,'').trim();
+  let inf;
+  if(!raw || /^https?:\/\//i.test(raw)) inf='[prénom]';        // lien ou vide -> placeholder
+  else { inf=raw.replace(/^@/,'').split(/[ \/(]/)[0]; if(!inf) inf='[prénom]'; }
   const cp=p.responsable||(VIEWER&&VIEWER.name)||'';
   const brand=p.projet||'';
   const panel=document.createElement('div'); panel.className='msgpanel';
