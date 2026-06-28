@@ -128,6 +128,15 @@ async function createDraft(email, { to, subject, body }) {
   const s = loadDrafts(); (s[email] = s[email] || []).push(r.data.id); saveDrafts(s);
   return { ok: true, id: r.data.id };
 }
+/** Envoie un mail (sur clic explicite de la CP). Nécessite un destinataire. */
+async function sendEmail(email, { to, subject, body }) {
+  const gmail = gmailFor(email);
+  if (!gmail) return { ok: false, error: "non connecté" };
+  if (!to) return { ok: false, error: "destinataire manquant" };
+  const raw = b64url(mime({ to, subject, body }));
+  const r = await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+  return { ok: true, id: r.data.id };
+}
 /** Compte nos brouillons encore présents (= pas encore envoyés). Élague ceux envoyés. */
 async function draftsToValidate(email) {
   const gmail = gmailFor(email);
@@ -141,4 +150,4 @@ async function draftsToValidate(email) {
   return { count: keep.length };
 }
 
-module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, analyzeFor, calendarToday, createDraft, draftsToValidate, SCOPES };
+module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, analyzeFor, calendarToday, createDraft, sendEmail, draftsToValidate, SCOPES };

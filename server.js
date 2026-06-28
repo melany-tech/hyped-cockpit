@@ -262,6 +262,13 @@ app.get("/api/gmail/drafts", auth, async (req, res) => {
   try { res.json(await gm.draftsToValidate(req.user.email)); }
   catch (e) { res.json({ count: 0 }); }
 });
+app.post("/api/gmail/send", auth, async (req, res) => {
+  if (!gm.ENABLED) return res.status(400).json({ error: "Gmail non configuré" });
+  const { to, subject, body } = req.body || {};
+  if (!to) return res.status(400).json({ error: "destinataire manquant" });
+  try { res.json(await gm.sendEmail(req.user.email, { to, subject, body })); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // --- Visios du jour (Google Agenda de la personne) ----------------------
 app.get("/api/calendar", auth, async (req, res) => {
