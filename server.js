@@ -29,7 +29,7 @@ const USERS = loadUsers();
 // === Assignation créateur -> CP (HYBRIDE) ================================
 // Manuel : champ "Interlocuteur" dans Notion (prioritaire si renseigné).
 // Auto   : on déduit qui gère un créateur d'après QUI échange avec lui par mail.
-const ASSIGN_STORE = path.join(__dirname, "assignments.json");
+const ASSIGN_STORE = path.join(process.env.DATA_DIR || __dirname, "assignments.json"); // disque persistant en prod
 let ASSIGN = {}; // { creatorNorm: "Prénom CP" }
 try { ASSIGN = JSON.parse(fs.readFileSync(ASSIGN_STORE, "utf8")); } catch (e) { ASSIGN = {}; }
 function normName(s) {
@@ -244,6 +244,51 @@ app.get("/api/gmail/inbox", auth, async (req, res) => {
     learnAssignments(req.user.name, r); // apprend qui gère quel créateur
     res.json({ enabled: true, ...r });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// --- To-do (base Notion "Tâches Équipe (Live)") -------------------------
+const TASKS_DB = "5e993c84-9927-4c20-986b-32c2a14c2cbf";
+function mapTask(pg) {
+  const p = pg.properties || {};
+  const sel = (x) => p[x]?.select?.name || null;
+  const ttl = (p["Tâche"]?.title || []).map((t) => t.plain_text).join("");
+  return {
+    id: pg.id, task: ttl || "(sans titre)", statut: sel("Statut"), responsable: sel("Responsable"),
+    priorite: sel("Priorité"), projet: sel("Projet"), echeance: p["Échéance"]?.date?.start || null, url: pg.url,
+  };
+}
+app.get("/api/todos", auth, async (req, res) => {
+  if (DEMO || !notion) return res.json({ enabled: false, tasks: [] });
+  try {
+    const all = []; let cursor;
+    do {
+      const r = await notion.databases.query({ database_id: TASKS_DB, start_cursor: cursor, page_size: 100 });
+      r.results.forEach((pg) => all.push(mapTask(pg))); cursor = r.has_more ? r.next_cursor : null;
+    } while (cursor);
+    const me = normName(req.user.name);
+    const tasks = all
+      .filter((t) => t.statut !== "Fait" && normName(t.responsable) === me)
+      .sort((a, b) => (a.echeance || "9999").localeCompare(b.echeance || "9999"));
+    res.json({ enabled: true, tasks });
+  } catch (e) { res.json({ enabled: false, error: e.message, tasks: [] }); }
+});
+app.post("/api/todos", auth, async (req, res) => {
+  if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
+  const task = String(req.body?.task || "").trim();
+  if (!task) return res.status(400).json({ error: "tâche vide" });
+  const props = {
+    "Tâche": { title: [{ text: { content: task } }] },
+    "Statut": { select: { name: "À faire" } },
+    "Responsable": { select: { name: req.user.name } },
+  };
+  if (req.body?.echeance) props["Échéance"] = { date: { start: req.body.echeance } };
+  try { const pg = await notion.pages.create({ parent: { database_id: TASKS_DB }, properties: props }); res.json({ ok: true, id: pg.id }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post("/api/todos/:id/done", auth, async (req, res) => {
+  if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
+  try { await notion.pages.update({ page_id: req.params.id, properties: { "Statut": { select: { name: "Fait" } } } }); res.json({ ok: true }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get("*", (req, res) => res.sendFile(path.join(__dirname, "index.html")));

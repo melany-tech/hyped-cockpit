@@ -11,7 +11,8 @@ const { analyzeMailbox } = require("./mail-analyzer");
 
 const ENABLED = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REDIRECT_URI);
 const SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"];
-const STORE = path.join(__dirname, "gmail-tokens.json"); // jeton de rafraîchissement par email (cf. note persistance)
+const DATA_DIR = process.env.DATA_DIR || __dirname; // disque persistant en prod (ex. /var/data)
+const STORE = path.join(DATA_DIR, "gmail-tokens.json"); // jeton de rafraîchissement par email (survit aux redéploiements si DATA_DIR = disque)
 
 let google = null;
 if (ENABLED) { google = require("googleapis").google; }
