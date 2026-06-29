@@ -276,7 +276,7 @@ app.get("/api/overview", auth, async (req, res) => {
       { key: "a_contacter", label: "À contacter",   count: aContacter },
       { key: "contacte",    label: "Contacté",      count: contacte },
       { key: "reponse",     label: "Réponse reçue", count: 0, soon: true },
-      { key: "brief",       label: "Brief envoyé",  count: 0, soon: true },
+      { key: "brief",       label: "Brief envoyé",  count: loadBriefs().filter((b) => mine(b.cp)).length },
       { key: "contenu",     label: "Contenu reçu",  count: recus },
       { key: "publie",      label: "Publié",        count: 0, soon: true },
     ];
@@ -363,6 +363,15 @@ app.post("/api/gmail/send", auth, async (req, res) => {
   if (!to) return res.status(400).json({ error: "destinataire manquant" });
   try { const r = await gm.sendEmail(req.user.email, { to, subject, body }); if (r && r.ok) logActivity({ type: "email", creator: to, cp: req.user.name }); res.json(r); }
   catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Marque un brief comme envoyé/préparé pour une collab → allume l'étape pipeline + activité
+app.post("/api/brief", auth, (req, res) => {
+  const creator = String(req.body?.creator || "").trim();
+  const brand = req.body?.brand || null;
+  if (!creator) return res.status(400).json({ error: "créateur manquant" });
+  recordBrief({ creator, brand, cp: req.user.name, at: Date.now() });
+  logActivity({ type: "brief", creator, brand, cp: req.user.name });
+  res.json({ ok: true });
 });
 
 // --- Visios du jour (Google Agenda de la personne) ----------------------
@@ -491,6 +500,15 @@ const CONTACTED_STORE = path.join(DATA_DIR, "contacted.json");
 function loadContacted() { try { return JSON.parse(fs.readFileSync(CONTACTED_STORE, "utf8")); } catch (e) { return []; } }
 function saveContacted(a) { try { fs.writeFileSync(CONTACTED_STORE, JSON.stringify(a)); } catch (e) {} }
 function recordContacted(rec) { const a = loadContacted(); a.push(rec); saveContacted(a); }
+// --- Briefs envoyés (allume l'étape « Brief envoyé » du pipeline) --------
+const BRIEF_STORE = path.join(DATA_DIR, "briefs.json");
+function loadBriefs() { try { return JSON.parse(fs.readFileSync(BRIEF_STORE, "utf8")); } catch (e) { return []; } }
+function saveBriefs(a) { try { fs.writeFileSync(BRIEF_STORE, JSON.stringify(a)); } catch (e) {} }
+function recordBrief(rec) { const a = loadBriefs(); a.push(rec); saveBriefs(a.slice(-500)); }
+// Mail de demande de stats/bilan (J+5 après publication)
+function genStatsFR(brand, name, cp) {
+  return `Hello ${name} ✨\n\nMerci encore pour ta superbe collab avec ${brand} ! 🤍\n\nPour clôturer la campagne côté marque, est-ce que tu pourrais m'envoyer les statistiques de tes contenus : vues, portée/impressions, likes, partages, enregistrements, et les captures des stories ?\n\nUn petit screenshot de chaque contenu suffit largement. Ça nous permet de faire le bilan avec ${brand}.\n\nMerci d'avance et à très vite,\n${cp}`;
+}
 
 // --- Veille / Sourcing : profils à contacter (board Tâches, Type=Prise de contact) ---
 const INHAIRCARE_DB = "380f8ac3-c3ae-80ce-ba4c-e8e82490edc6";
@@ -680,6 +698,58 @@ async function ensureRelances() {
 }
 ensureRelances();
 setInterval(ensureRelances, 6 * 3600 * 1000);
+
+// --- Demande de stats/bilan : J+5 après publication (repris de l'ancien système) -------
+async function ensureStatsTasks() {
+  if (DEMO || !notion) return;
+  try {
+    if (!Object.keys(USERMAP).length) { try { await resolveUsers(); } catch (e) {} }
+    const iso = (d) => d.toISOString().slice(0, 10);
+    const now = new Date();
+    const end = iso(new Date(now.getTime() - 5 * 864e5));   // publié il y a au moins 5 jours
+    const start = iso(new Date(now.getTime() - 30 * 864e5)); // …et pas plus de 30 jours (fenêtre)
+    const posted = []; let cursor;
+    do {
+      const r = await notion.databases.query({
+        database_id: INHAIRCARE_DB, start_cursor: cursor, page_size: 100,
+        filter: { and: [
+          { property: "Date", date: { on_or_after: start, on_or_before: end } },
+          { property: "Statut", select: { equals: "Posté" } },
+        ] },
+      });
+      r.results.forEach((pg) => {
+        const p = pg.properties || {};
+        const nom = title(p["Nom"]) || "(sans nom)";
+        const cp = firstPerson(p["Interlocuteur"]) || ASSIGN[normName(nom)] || null;
+        posted.push({ nom, cp });
+      });
+      cursor = r.has_more ? r.next_cursor : null;
+    } while (cursor);
+    if (!posted.length) return;
+    const existing = new Set(); let c2;
+    do {
+      const r = await notion.databases.query({ database_id: TASKS_DB, start_cursor: c2, page_size: 100, filter: { property: "Tâche", title: { contains: "Récupérer les stats" } } });
+      r.results.forEach((pg) => { const t = mapTask(pg); if (t.statut !== "Fait") existing.add(t.task.trim()); });
+      c2 = r.has_more ? r.next_cursor : null;
+    } while (c2);
+    for (const d of posted) {
+      const ttl = `Récupérer les stats de ${d.nom} (In Haircare)`;
+      if (existing.has(ttl)) continue;
+      const props = { "Tâche": { title: [{ text: { content: ttl } }] }, "Statut": { select: { name: "À faire" } }, "Projet": { select: { name: "In Haircare" } }, "Type": { select: { name: "Bilan" } } };
+      if (d.cp) props["Responsable"] = { select: { name: d.cp } };
+      try {
+        await notion.pages.create({ parent: { database_id: TASKS_DB }, properties: props }); existing.add(ttl); console.log("stats task créée:", ttl);
+        // brouillon de demande de stats dans le Gmail de la CP (elle relit puis envoie/édite)
+        if (d.cp && gm.ENABLED && typeof gm.createDraft === "function") {
+          const e = emailOf(d.cp);
+          if (e && gm.isConnected(e)) { await gm.createDraft(e, { to: "", subject: "Stats de ta collab In Haircare 📊", body: genStatsFR("In Haircare", d.nom, d.cp) }); }
+        }
+      } catch (e) { console.warn("stats task", e.message); }
+    }
+  } catch (e) { console.warn("ensureStatsTasks", e.message); }
+}
+ensureStatsTasks();
+setInterval(ensureStatsTasks, 6 * 3600 * 1000);
 
 app.get("*", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.listen(PORT, () => console.log(`Cockpit ${DEMO ? "(DÉMO)" : "(Notion live, clients actifs)"} → http://localhost:${PORT}`));

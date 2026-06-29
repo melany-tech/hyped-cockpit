@@ -138,6 +138,8 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
 .dgrid-2{grid-template-columns:1fr 1fr}
 .panel{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:15px 16px}
 .panel.block{margin-bottom:16px}
+.panelhint{font-size:11.5px;color:var(--gray);margin:-4px 0 12px;line-height:1.4}
+.briefbtn{white-space:nowrap;cursor:pointer}
 .pt{font-size:13px;font-weight:700;margin:0 0 12px;display:flex;align-items:center;gap:7px;color:var(--navy)}
 .panel .row{margin-bottom:8px}
 .panel .row:last-child{margin-bottom:0}
@@ -413,9 +415,10 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
     <div id="srcbox"></div>
   </section>
 
-  <!-- À traiter -->
+  <!-- Contenus en cours -->
   <section class="panel block" id="listpanel">
-    <p class="pt"><span class="pi">📥</span> À traiter</p>
+    <p class="pt"><span class="pi">🎬</span> Contenus en cours</p>
+    <div class="panelhint">Les contenus de tes collabs en cours : à lancer, en production, à valider. Clique « ✍️ Brief » pour préparer le brief, ou « Ouvrir » pour aller sur Notion.</div>
     <div id="list"><div class="state">Chargement…</div></div>
   </section>
 
@@ -708,7 +711,7 @@ async function loadDrafts(){
   }catch(e){show($('draftbanner'),false);}
 }
 function timeAgo(ts){ if(!ts)return''; const s=Math.max(0,(Date.now()-ts)/1000); if(s<60)return"à l'instant"; const m=Math.floor(s/60); if(m<60)return'il y a '+m+' min'; const h=Math.floor(m/60); if(h<24)return'il y a '+h+'h'; const d=Math.floor(h/24); return 'il y a '+d+' j'; }
-const ACT_META={ profil_ajoute:{ic:'📱',lbl:'Nouveau profil à contacter'}, contacte:{ic:'✅',lbl:'Profil contacté'}, relance:{ic:'✉️',lbl:'Relance envoyée'}, brouillon:{ic:'📝',lbl:'Brouillon préparé'}, email:{ic:'📨',lbl:'Message envoyé'} };
+const ACT_META={ profil_ajoute:{ic:'📱',lbl:'Nouveau profil à contacter'}, contacte:{ic:'✅',lbl:'Profil contacté'}, relance:{ic:'✉️',lbl:'Relance envoyée'}, brief:{ic:'📋',lbl:'Brief envoyé'}, brouillon:{ic:'📝',lbl:'Brouillon préparé'}, email:{ic:'📨',lbl:'Message envoyé'} };
 async function loadActivity(){
   try{
     const r=await api('/api/activity'+tparam());const d=await r.json();
@@ -807,13 +810,39 @@ function render(){
   $('list').innerHTML=list.map(a=>{
     const extra=[a.label];if(a.date)extra.push(fmtDate(a.date));
     const showOwn=isSup||teamOn();
-    const owner=(showOwn&&a.cp)?`<span class="owner" title="Cheffe de projet">${a.cp}</span>`:(showOwn?`<span class="owner none" title="Personne assignée">— non assigné</span>`:'');
+    const owner=(showOwn&&a.cp)?`<span class="owner" title="Cheffe de projet">${esc(a.cp)}</span>`:(showOwn?`<span class="owner none" title="Personne assignée">— non assigné</span>`:'');
     const link=a.url?`<a href="${a.url}" target="_blank" rel="noopener">Ouvrir</a>`:'';
-    return `<div class="row">
+    return `<div class="row" data-name="${esc(a.name)}" data-brand="${esc(a.brand)}" data-cp="${esc(a.cp||'')}">
       <span class="rdot" style="background:${a.color}"></span>
-      <div class="info"><div class="t">${a.name}</div><div class="s">${extra.join(' · ')}</div></div>
-      ${owner}<span class="brand">${a.brand}</span>${link}</div>`;
+      <div class="info"><div class="t">${esc(a.name)}</div><div class="s">${esc(extra.join(' · '))}</div></div>
+      ${owner}<span class="brand">${esc(a.brand)}</span>${link}<button class="lk primary briefbtn">✍️ Brief</button></div>`;
   }).join('');
+  document.querySelectorAll('#list .briefbtn').forEach(b=>b.onclick=()=>openBrief(b));
+}
+// --- Panneau message générique (Brouillon ou Envoyer) -------------------
+function openMsgPanel(rowEl, opts){
+  const nx=rowEl.nextElementSibling;
+  if(nx&&nx.classList.contains('msgpanel')){nx.remove();return;}
+  const panel=document.createElement('div'); panel.className='msgpanel';
+  panel.innerHTML='<input class="msgto" type="email" placeholder="Email du destinataire (requis pour envoyer)"><textarea class="msgtxt" rows="13"></textarea><div class="msgbtns"><button class="lk msgcopy">Copier</button> <button class="lk msgdraft">📧 Brouillon</button> <button class="lk msgsend">✉️ Envoyer</button></div>';
+  rowEl.after(panel);
+  const ta=panel.querySelector('.msgtxt'); ta.value=opts.body||'';
+  if(opts.to) panel.querySelector('.msgto').value=opts.to;
+  const subjOf=()=>opts.subject||'Message — Hyped Agency';
+  const cpbtn=panel.querySelector('.msgcopy');
+  cpbtn.onclick=()=>{ta.select();try{document.execCommand('copy');}catch(e){}cpbtn.textContent='Copié ✓';setTimeout(()=>cpbtn.textContent='Copier',1500);};
+  const dbtn=panel.querySelector('.msgdraft');
+  dbtn.onclick=async()=>{ dbtn.textContent='…'; const r=await api('/api/gmail/draft',{method:'POST',body:JSON.stringify({to:(panel.querySelector('.msgto').value||'').trim(),subject:subjOf(),body:ta.value})}); const d=await r.json().catch(()=>({})); if(d&&d.ok){dbtn.textContent='Brouillon créé ✓';loadDrafts();if(opts.onSent)opts.onSent('brouillon');} else dbtn.textContent='↻ Reconnecte ton Gmail'; setTimeout(()=>{dbtn.textContent='📧 Brouillon';},2600); };
+  const sbtn=panel.querySelector('.msgsend');
+  sbtn.onclick=async()=>{ const to=(panel.querySelector('.msgto').value||'').trim(); if(!to){sbtn.textContent='Ajoute un destinataire';setTimeout(()=>sbtn.textContent='✉️ Envoyer',2200);return;} if(!confirm('Envoyer ce mail à '+to+' ?'))return; sbtn.textContent='Envoi…'; const r=await api('/api/gmail/send',{method:'POST',body:JSON.stringify({to,subject:subjOf(),body:ta.value})}); const d=await r.json().catch(()=>({})); sbtn.textContent=(d&&d.ok)?'Envoyé ✓':(d.error||'↻ Reconnecte ton Gmail'); if(d&&d.ok&&opts.onSent)opts.onSent('email'); setTimeout(()=>{sbtn.textContent='✉️ Envoyer';},2800); };
+}
+function genBriefFR(brand, name){
+  const cp=(VIEWER&&VIEWER.name)||'';
+  return `Hello ${name} ✨\n\nSuper contente de lancer ta collab avec ${brand} ! 🎉\nTu trouveras en pièce jointe le brief complet (livrables, deadlines, do & don't, hashtags et mentions).\n\nEn résumé :\n• Livrables : [à compléter]\n• Date de mise en ligne : [à compléter]\n• Mentions : @${brand} + #partenariat\n\nOn valide ensemble la preview avant publication, et n'hésite pas si tu as la moindre question avant de tourner 🤍\n\nBelle journée,\n${cp}`;
+}
+function openBrief(btn){
+  const row=btn.closest('.row'); const name=row.dataset.name||''; const brand=row.dataset.brand||'';
+  openMsgPanel(row,{ subject:'Brief — '+brand+' x '+name, body:genBriefFR(brand,name), onSent:async()=>{ try{ await api('/api/brief',{method:'POST',body:JSON.stringify({creator:name,brand})}); loadOverview(); loadActivity(); }catch(e){} } });
 }
 // --- Visios du jour (Google Agenda) -------------------------------------
 function fmtTime(s){if(!s)return'';const d=new Date(s);return d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
