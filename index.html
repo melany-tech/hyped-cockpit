@@ -127,7 +127,9 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
 .logoimg-login{height:34px;margin:0 auto 16px}
 /* ---- Dashboard (cartes + grilles) ---- */
 .statcards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
-.scard{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.scard{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:14px 16px;cursor:pointer;transition:border-color .12s,box-shadow .12s,transform .12s;outline:none}
+.scard:hover{border-color:var(--teal);box-shadow:0 4px 16px rgba(44,144,135,.12);transform:translateY(-1px)}
+.scard:focus-visible{border-color:var(--teal)}
 .scard .sic{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;margin-bottom:9px}
 .scard .slbl{font-size:12px;color:var(--gray);font-weight:600}
 .scard .snum{font-size:26px;font-weight:800;margin-top:2px;color:var(--navy)}
@@ -452,11 +454,20 @@ function setupChrome(){
   document.querySelectorAll('.sb-nav .nav').forEach(a=>a.onclick=()=>navGo(a));
   try{ TEAM_VIEW = localStorage.getItem('hc_team')==='1'; }catch(e){}
   const tc=$('teamchk'); if(tc){ tc.checked=TEAM_VIEW; tc.onchange=()=>{ TEAM_VIEW=tc.checked; try{localStorage.setItem('hc_team',TEAM_VIEW?'1':'0');}catch(e){} load(); }; }
+  const sc=$('statcards');
+  if(sc){ sc.addEventListener('click',e=>{const c=e.target.closest('.scard');if(c)statCardGo(c.dataset.act);}); sc.addEventListener('keydown',e=>{if(e.key==='Enter'){const c=e.target.closest('.scard');if(c)statCardGo(c.dataset.act);}}); }
+  const lg=document.querySelector('.sb-logo'); if(lg){ lg.style.cursor='pointer'; lg.title='Retour au cockpit'; lg.onclick=()=>navToView('cockpit'); }
   showView('cockpit');
 }
 const VIEW_MAP={ profils:['srcpanel','brandpanel'], contenus:['listpanel','brandpanel','fillpanel'], messages:['mailpanel'] };
 const ALL_BLOCKS=['statcards','agendapanel','todopanel','pipelinepanel','brandpanel','fillpanel','srcpanel','listpanel','mailpanel'];
 function navGo(a){ document.querySelectorAll('.sb-nav .nav').forEach(x=>x.classList.toggle('on',x===a)); showView(a.dataset.go); }
+function navToView(v){ const a=[...document.querySelectorAll('.sb-nav .nav')].find(x=>x.dataset.go===v); if(a)navGo(a); else showView(v); }
+function statCardGo(act){
+  if(act==='profils') navToView('profils');
+  else if(act==='contenus') navToView('contenus');
+  else { navToView('cockpit'); setTimeout(()=>{const el=$('todopanel'); if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},220); } // à traiter / relances → priorités
+}
 let CURRENT_VIEW='cockpit';
 const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview'};
 function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
@@ -614,12 +625,12 @@ function updateStats(){
   const aValider = s?s.aValider:ROWS.filter(r=>r.grp==='À valider').length;
   const d=o.deltas||null;
   const delta=(k)=>{ if(!d) return ''; const v=d[k]; if(v>0) return '<div class="dl chg">▴ '+v+' vs hier</div>'; if(v<0) return '<div class="dl chg">▾ '+Math.abs(v)+' vs hier</div>'; return '<div class="dl eq">= stable</div>'; };
-  const card=(ic,bg,col,lbl,num,dk)=>`<div class="scard"><div class="sic" style="background:${bg};color:${col}">${ic}</div><div class="slbl">${lbl}</div><div class="snum">${num}</div>${delta(dk)}</div>`;
+  const card=(ic,bg,col,lbl,num,dk,act)=>`<div class="scard" data-act="${act||''}" tabindex="0" role="button" title="Voir ${esc(lbl)}"><div class="sic" style="background:${bg};color:${col}">${ic}</div><div class="slbl">${lbl}</div><div class="snum">${num}</div>${delta(dk)}</div>`;
   $('statcards').innerHTML=
-    card('🗒️','#E4F0EA','#2C9087','À traiter aujourd\'hui',aTraiter,'aTraiter')+
-    card('👥','#EDE7F5','#7A5AA8','Profils à contacter',aContacter,'aContacter')+
-    card('⏱️','#FBEBDD','#C77F2A','Relances en attente',relances,'relances')+
-    card('📄','#FCF3DC','#B98A12','Contenus à valider',aValider,'aValider');
+    card('🗒️','#E4F0EA','#2C9087','À traiter aujourd\'hui',aTraiter,'aTraiter','todo')+
+    card('👥','#EDE7F5','#7A5AA8','Profils à contacter',aContacter,'aContacter','profils')+
+    card('⏱️','#FBEBDD','#C77F2A','Relances en attente',relances,'relances','relances')+
+    card('📄','#FCF3DC','#B98A12','Contenus à valider',aValider,'aValider','contenus');
   updateBell();
 }
 // --- Pipeline + vue par marque ------------------------------------------
