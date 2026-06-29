@@ -443,7 +443,7 @@ async function load(){
     const present=ROWS.map(x=>x.cp).filter(Boolean);
     const cps=[...new Set([...(d.team||[]),...present])].sort();
     $('cpfilter').innerHTML='<option value="ALL">Toute l\'équipe</option>'+cps.map(c=>`<option value="${c}">${c}</option>`).join('');
-    $('cpfilter').onchange=()=>{render();loadTodo();loadOverview();};show($('filterbar'),true);
+    $('cpfilter').onchange=()=>{render();loadTodo();loadOverview();loadMail();};show($('filterbar'),true);
   }else show($('filterbar'),false);
   loadAlerts();          // remplissage des calendriers : visible par toutes les CP
   render();
@@ -548,30 +548,38 @@ async function loadDrafts(){
   }catch(e){show($('draftbanner'),false);}
 }
 function esc(s){return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function mailAs(){
+  const isSup=VIEWER&&VIEWER.role==='supervisor';
+  const v=(isSup&&$('cpfilter'))?$('cpfilter').value:'';
+  return (isSup&&v&&v!=='ALL')?v:null; // pilote qui regarde une CP précise
+}
+function setMailTitle(who){ const hdr=$('mailpanel')&&$('mailpanel').querySelector('.pt'); if(hdr) hdr.innerHTML='<span class="pi">✉️</span> '+(who?('Mails créateurs — '+esc(who)):'Mes mails créateurs'); }
 async function loadMail(){
   try{
-    const r=await api('/api/gmail/status');const s=await r.json();
+    const who=mailAs(); const q=who?('?as='+encodeURIComponent(who)):'';
+    const r=await api('/api/gmail/status'+q);const s=await r.json();
     if(!s.enabled){show($('mailpanel'),false);return;}
-    show($('mailpanel'),true);
+    show($('mailpanel'),true); setMailTitle(who);
     if(!s.connected){
-      $('mailbox').innerHTML='<div class="mailconnect"><p>Connecte ta boîte Gmail pour faire remonter ici les <b>réponses de tes créateurs</b>, classées par marque (réponses, previews, factures, logistique). Lecture seule — aucun mail n\'est envoyé ni modifié, et personne d\'autre que toi ne voit ta boîte.</p><button class="btn gmailbtn" id="gmailconnect">Connecter mon Gmail</button></div>';
-      $('gmailconnect').onclick=async()=>{
-        $('gmailconnect').textContent='Redirection…';
-        const rr=await api('/api/gmail/connect');const dd=await rr.json();
-        if(dd.url)window.location.href=dd.url;else{$('gmailconnect').textContent='Connecter mon Gmail';alert(dd.error||'Indisponible');}
-      };
+      if(who){ $('mailbox').innerHTML='<div class="mailconnect"><p><b>'+esc(who)+'</b> n\'a pas encore connecté son Gmail. Elle doit le faire elle-même depuis son propre compte cockpit — tu ne peux pas le connecter à sa place.</p></div>'; return; }
+      $('mailbox').innerHTML='<div class="mailconnect"><p>Connecte ta boîte Gmail pour faire remonter ici les <b>réponses de tes créateurs</b>, classées par marque (réponses, previews, factures, logistique). Lecture seule — aucun mail n\'est envoyé ni modifié.</p><button class="btn gmailbtn" id="gmailconnect">Connecter mon Gmail</button></div>';
+      $('gmailconnect').onclick=async()=>{ $('gmailconnect').textContent='Redirection…'; const rr=await api('/api/gmail/connect');const dd=await rr.json(); if(dd.url)window.location.href=dd.url;else{$('gmailconnect').textContent='Connecter mon Gmail';alert(dd.error||'Indisponible');} };
       return;
     }
-    $('mailbox').innerHTML='<div class="state">Analyse de ta boîte…</div>';
-    const ir=await api('/api/gmail/inbox');const d=await ir.json();
-    if(d.connected===false){ $('mailbox').innerHTML='<div class="mailconnect"><p>Connexion expirée.</p><button class="btn gmailbtn" id="gmailconnect">Reconnecter mon Gmail</button></div>'; $('gmailconnect').onclick=()=>loadMail(); return; }
-    renderMail(d);
+    $('mailbox').innerHTML='<div class="state">Analyse de la boîte…</div>';
+    const ir=await api('/api/gmail/inbox'+q);const d=await ir.json();
+    if(d.connected===false){
+      if(who) $('mailbox').innerHTML='<div class="mailconnect"><p><b>'+esc(who)+'</b> n\'a pas connecté son Gmail (ou la connexion a expiré).</p></div>';
+      else { $('mailbox').innerHTML='<div class="mailconnect"><p>Connexion expirée.</p><button class="btn gmailbtn" id="gmailconnect">Reconnecter mon Gmail</button></div>'; $('gmailconnect').onclick=()=>loadMail(); }
+      return;
+    }
+    renderMail(d, who);
   }catch(e){show($('mailpanel'),false);}
 }
-function renderMail(d){
+function renderMail(d, who){
   const reps=d.creatorReplies||[];
-  try{setPipeReponse(reps.length);}catch(e){}
-  const sum=`<div class="mailsum">${d.relevant||0} mail(s) liés à tes collabs · <b>${reps.length} réponse(s) créateur</b> · ${(d.noise||0)+(d.offTopic||0)} ignoré(s) (pubs, recrutement, newsletters)</div>`;
+  if(!who){ try{setPipeReponse(reps.length);}catch(e){} }
+  const sum=`<div class="mailsum">${d.relevant||0} mail(s) liés aux collabs · <b>${reps.length} réponse(s) créateur</b> · ${(d.noise||0)+(d.offTopic||0)} ignoré(s) (pubs, recrutement, newsletters)</div>`;
   if(!reps.length){$('mailbox').innerHTML=sum+'<div class="state">Aucune réponse créateur récente. 👌</div>';return;}
   const CC={facturation:'#C77F2A',preview:'#7A5AA8',logistique:'#2C9087','réponse':'#1C3A44'};
   $('mailbox').innerHTML=sum+reps.map(m=>{

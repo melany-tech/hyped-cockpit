@@ -297,8 +297,19 @@ app.get("/api/alerts", auth, async (req, res) => {
   try { res.json(await buildAlerts()); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 // --- Connexion Gmail par personne (réponses créateurs) ------------------
-app.get("/api/gmail/status", auth, (req, res) =>
-  res.json({ enabled: gm.ENABLED, connected: gm.ENABLED ? gm.isConnected(req.user.email) : false }));
+// Résout quelle boîte regarder : par défaut la sienne ; le PILOTE peut viser une CP (?as=Prénom).
+function inboxTarget(req) {
+  const as = String(req.query.as || "").trim();
+  if (as && req.user.role === "supervisor") {
+    const email = as.includes("@") ? as.toLowerCase() : emailOf(as);
+    if (email) return { email, viewing: as };
+  }
+  return { email: req.user.email, viewing: null };
+}
+app.get("/api/gmail/status", auth, (req, res) => {
+  const t = inboxTarget(req);
+  res.json({ enabled: gm.ENABLED, connected: gm.ENABLED ? gm.isConnected(t.email) : false, viewing: t.viewing });
+});
 app.get("/api/gmail/connect", auth, (req, res) => {
   if (!gm.ENABLED) return res.status(400).json({ error: "Connexion Gmail non configurée." });
   res.json({ url: gm.getAuthUrl(req.user.email) });
@@ -310,10 +321,12 @@ app.get("/api/gmail/callback", async (req, res) => {
 app.get("/api/gmail/inbox", auth, async (req, res) => {
   if (!gm.ENABLED) return res.json({ enabled: false });
   try {
+    const t = inboxTarget(req); // sa boîte, ou celle d'une CP si pilote + ?as=
+    if (!gm.isConnected(t.email)) return res.json({ enabled: true, connected: false, viewing: t.viewing });
     const collabs = await fetchRows(); // marques + créateurs des calendriers
-    const r = await gm.analyzeFor(req.user.email, collabs);
-    learnAssignments(req.user.name, r); // apprend qui gère quel créateur
-    res.json({ enabled: true, ...r });
+    const r = await gm.analyzeFor(t.email, collabs);
+    if (!t.viewing) learnAssignments(req.user.name, r); // n'apprend que sur sa propre boîte
+    res.json({ enabled: true, viewing: t.viewing, ...r });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 // --- Brouillons mail (le cockpit prépare, la CP relit et envoie) ---------
