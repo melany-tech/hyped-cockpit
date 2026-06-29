@@ -288,6 +288,21 @@ app.get("/api/overview", auth, async (req, res) => {
     res.json({ enabled: true, brands, pipeline, relances: relancesN, stats, deltas });
   } catch (e) { res.json({ enabled: false, error: e.message, brands: [], pipeline: [] }); }
 });
+// Footer « Dernières activités » : journal réel des actions (profils, contacts, relances, mails)
+app.get("/api/activity", auth, (req, res) => {
+  const isSup = req.user.role === "supervisor";
+  const me = normName(req.user.name);
+  const teamReq = String(req.query.team || "") === "1" && !isSup;
+  const mine = (cp) => isSup || teamReq || normName(cp) === me;
+  const clean = (s) => String(s || "").replace(/^contacter\s+/i, "").trim();
+  const evs = [];
+  loadActivity().forEach((a) => { if (mine(a.cp)) evs.push({ ...a, creator: clean(a.creator) }); });
+  loadContacted().forEach((c) => { if (mine(c.cp)) evs.push({ type: c.relance ? "relance" : "contacte", creator: clean(c.creator), brand: c.brand, cp: c.cp, at: c.at }); });
+  evs.sort((a, b) => (b.at || 0) - (a.at || 0));
+  const seen = new Set(); const out = [];
+  for (const e of evs) { const k = e.type + "|" + (e.creator || "") + "|" + Math.round((e.at || 0) / 60000); if (seen.has(k)) continue; seen.add(k); out.push(e); if (out.length >= 12) break; }
+  res.json({ activity: out });
+});
 app.get("/api/alerts", auth, async (req, res) => {
   // Remplissage des calendriers : visible par TOUTES les CP (plus seulement le pilote).
   if (DEMO) return res.json({ monthLabel: "juillet 2026", minPerWeek: MIN_PER_WEEK, target: 12, fill: [
@@ -334,7 +349,7 @@ app.post("/api/gmail/draft", auth, async (req, res) => {
   if (!gm.ENABLED) return res.status(400).json({ error: "Gmail non configuré" });
   const { to, subject, body } = req.body || {};
   if (!subject && !body) return res.status(400).json({ error: "message vide" });
-  try { res.json(await gm.createDraft(req.user.email, { to, subject, body })); }
+  try { const r = await gm.createDraft(req.user.email, { to, subject, body }); if (r && r.ok) logActivity({ type: "brouillon", creator: to || null, cp: req.user.name }); res.json(r); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.get("/api/gmail/drafts", auth, async (req, res) => {
@@ -346,7 +361,7 @@ app.post("/api/gmail/send", auth, async (req, res) => {
   if (!gm.ENABLED) return res.status(400).json({ error: "Gmail non configuré" });
   const { to, subject, body } = req.body || {};
   if (!to) return res.status(400).json({ error: "destinataire manquant" });
-  try { res.json(await gm.sendEmail(req.user.email, { to, subject, body })); }
+  try { const r = await gm.sendEmail(req.user.email, { to, subject, body }); if (r && r.ok) logActivity({ type: "email", creator: to, cp: req.user.name }); res.json(r); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -465,6 +480,13 @@ function snapshotAndDelta(key, stats) {
   const deltas = {}; for (const k in stats) deltas[k] = stats[k] - (base[k] || 0);
   return deltas;
 }
+// --- Journal d'activité (footer « Dernières activités ») ----------------
+const ACTIVITY_STORE = path.join(DATA_DIR, "activity.json");
+function loadActivity() { try { return JSON.parse(fs.readFileSync(ACTIVITY_STORE, "utf8")); } catch (e) { return []; } }
+function saveActivity(a) { try { fs.writeFileSync(ACTIVITY_STORE, JSON.stringify(a)); } catch (e) {} }
+function logActivity(ev) {
+  try { const a = loadActivity(); a.push({ at: Date.now(), ...ev }); saveActivity(a.slice(-200)); } catch (e) {}
+}
 const CONTACTED_STORE = path.join(DATA_DIR, "contacted.json");
 function loadContacted() { try { return JSON.parse(fs.readFileSync(CONTACTED_STORE, "utf8")); } catch (e) { return []; } }
 function saveContacted(a) { try { fs.writeFileSync(CONTACTED_STORE, JSON.stringify(a)); } catch (e) {} }
@@ -521,6 +543,7 @@ app.post("/api/sourcing", auth, async (req, res) => {
         }
       }
     } catch (e) { console.warn("auto-draft", e.message); }
+    logActivity({ type: "profil_ajoute", creator: String(profil).replace(/^contacter\s+/i, "").trim(), brand: req.body?.marque || null, cp: resp || null });
     res.json({ ok: true, id: pg.id, draft });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -533,6 +556,7 @@ app.post("/api/sourcing/:id/contacted", auth, async (req, res) => {
     await notion.pages.update({ page_id: req.params.id, properties: { "Statut": { select: { name: "Fait" } } } });
     // trace pour la relance auto (si pas de réponse sous 3 jours)
     recordContacted({ creator: t.task, cp: t.responsable || ASSIGN[normName(t.task)] || null, brand: t.projet || null, at: Date.now(), relance: false });
+    logActivity({ type: "contacte", creator: String(t.task).replace(/^contacter\s+/i, "").trim(), brand: t.projet || null, cp: t.responsable || req.user.name });
     // 2) bascule en collab "à lancer" dans le calendrier de la marque (In Haircare géré)
     let moved = false;
     if (t.projet === "In Haircare") {
