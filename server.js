@@ -226,7 +226,8 @@ app.get("/api/collabs", auth, async (req, res) => {
     let rows = await fetchRows();
     // HYBRIDE : l'Interlocuteur Notion (manuel) prime ; sinon rattachement auto par mail.
     rows = rows.map((r) => (r.cp ? r : { ...r, cp: ASSIGN[normName(r.name)] || null }));
-    if (req.user.role !== "supervisor") rows = rows.filter((r) => r.cp === req.user.name);
+    const teamReq = String(req.query.team || "") === "1" && req.user.role !== "supervisor"; // CP en vue équipe (congés)
+    if (req.user.role !== "supervisor" && !teamReq) rows = rows.filter((r) => r.cp === req.user.name);
     const team = USERS.filter((u) => u.role === "cp").map((u) => u.name);
     res.json({ rows, demo: DEMO, viewer: { name: req.user.name, role: req.user.role }, team });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -238,7 +239,8 @@ app.get("/api/overview", auth, async (req, res) => {
   try {
     const isSup = req.user.role === "supervisor";
     const me = normName(req.user.name);
-    const mine = (resp) => isSup || normName(resp) === me;
+    const teamReq = String(req.query.team || "") === "1" && !isSup; // CP en vue équipe (congés)
+    const mine = (resp) => isSup || teamReq || normName(resp) === me;
     // 1) tâches veille (Prise de contact / Relance créateur), non "Fait"
     const tasks = []; let cur;
     do {
@@ -256,7 +258,7 @@ app.get("/api/overview", auth, async (req, res) => {
     // 2) collabs (contenus) par marque
     let rows = await fetchRows();
     rows = rows.map((r) => (r.cp ? r : { ...r, cp: ASSIGN[normName(r.name)] || null }));
-    if (!isSup) rows = rows.filter((r) => r.cp === req.user.name);
+    if (!isSup && !teamReq) rows = rows.filter((r) => r.cp === req.user.name);
     rows.forEach((r) => {
       const b = r.brand || "Autres";
       if (r.grp === "À valider") B(b).recus++; else B(b).contenus++;
@@ -281,7 +283,8 @@ app.get("/api/overview", auth, async (req, res) => {
     // 4) indicateurs + deltas « vs hier » (instantané quotidien par CP)
     const stats = { aTraiter: open.length, aContacter, relances: relancesN, aValider: recus };
     const key = isSup ? ("SUP:" + (normName(req.user.name) || "pilote")) : String(req.user.email || "").toLowerCase();
-    let deltas = null; try { deltas = snapshotAndDelta(key, stats); } catch (e) {}
+    // en vue équipe (CP), on ne touche pas au snapshot perso : pas de delta faussé
+    let deltas = null; if (!teamReq) { try { deltas = snapshotAndDelta(key, stats); } catch (e) {} }
     res.json({ enabled: true, brands, pipeline, relances: relancesN, stats, deltas });
   } catch (e) { res.json({ enabled: false, error: e.message, brands: [], pipeline: [] }); }
 });
@@ -379,10 +382,11 @@ app.get("/api/todos", auth, async (req, res) => {
     } while (cursor);
     const isSup = req.user.role === "supervisor";
     const view = String(req.query.view || "");
+    const teamReq = String(req.query.team || "") === "1" && !isSup; // CP en vue équipe (congés)
     let tasks = all.filter((t) => t.statut !== "Fait");
     if (isSup) {
       if (view && view !== "ALL") tasks = tasks.filter((t) => normName(t.responsable) === normName(view));
-    } else {
+    } else if (!teamReq) {
       tasks = tasks.filter((t) => normName(t.responsable) === normName(req.user.name));
     }
     tasks.sort((a, b) => (a.echeance || "9999").localeCompare(b.echeance || "9999"));
