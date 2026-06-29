@@ -29,7 +29,17 @@ const USERS = loadUsers();
 // === Assignation créateur -> CP (HYBRIDE) ================================
 // Manuel : champ "Interlocuteur" dans Notion (prioritaire si renseigné).
 // Auto   : on déduit qui gère un créateur d'après QUI échange avec lui par mail.
-const ASSIGN_STORE = path.join(process.env.DATA_DIR || __dirname, "assignments.json"); // disque persistant en prod
+// Dossier de stockage persistant : on préfère le disque monté /var/data (survit aux deploys).
+function resolveDataDir() {
+  for (const d of ["/var/data", process.env.DATA_DIR, __dirname]) {
+    if (!d) continue;
+    try { fs.mkdirSync(d, { recursive: true }); fs.accessSync(d, fs.constants.W_OK); return d; } catch (e) {}
+  }
+  return __dirname;
+}
+const DATA_DIR = resolveDataDir();
+try { console.log("[data] stockage persistant →", DATA_DIR); } catch (e) {}
+const ASSIGN_STORE = path.join(DATA_DIR, "assignments.json"); // disque persistant en prod
 let ASSIGN = {}; // { creatorNorm: "Prénom CP" }
 try { ASSIGN = JSON.parse(fs.readFileSync(ASSIGN_STORE, "utf8")); } catch (e) { ASSIGN = {}; }
 function normName(s) {
@@ -268,7 +278,11 @@ app.get("/api/overview", auth, async (req, res) => {
       { key: "contenu",     label: "Contenu reçu",  count: recus },
       { key: "publie",      label: "Publié",        count: 0, soon: true },
     ];
-    res.json({ enabled: true, brands, pipeline, relances: relancesN });
+    // 4) indicateurs + deltas « vs hier » (instantané quotidien par CP)
+    const stats = { aTraiter: open.length, aContacter, relances: relancesN, aValider: recus };
+    const key = isSup ? ("SUP:" + (normName(req.user.name) || "pilote")) : String(req.user.email || "").toLowerCase();
+    let deltas = null; try { deltas = snapshotAndDelta(key, stats); } catch (e) {}
+    res.json({ enabled: true, brands, pipeline, relances: relancesN, stats, deltas });
   } catch (e) { res.json({ enabled: false, error: e.message, brands: [], pipeline: [] }); }
 });
 app.get("/api/alerts", auth, async (req, res) => {
@@ -416,7 +430,25 @@ function genOutreachFR(brand, inf, cp) {
 function emailOf(cpName) { const u = USERS.find((x) => normName(x.name) === normName(cpName)); return u ? u.email : null; }
 
 // --- Relances créateurs : on trace les profils contactés pour relancer si pas de réponse ---
-const CONTACTED_STORE = path.join(process.env.DATA_DIR || __dirname, "contacted.json");
+// --- Instantané quotidien des indicateurs (pour les deltas « vs hier ») ---
+const STATS_STORE = path.join(DATA_DIR, "stats.json");
+function loadStatsStore() { try { return JSON.parse(fs.readFileSync(STATS_STORE, "utf8")); } catch (e) { return {}; } }
+function saveStatsStore(s) { try { fs.writeFileSync(STATS_STORE, JSON.stringify(s)); } catch (e) {} }
+function snapshotAndDelta(key, stats) {
+  const store = loadStatsStore();
+  const byDay = store[key] = store[key] || {};
+  const today = new Date().toISOString().slice(0, 10);
+  const prevDays = Object.keys(byDay).filter((d) => d < today).sort();
+  const base = prevDays.length ? byDay[prevDays[prevDays.length - 1]] : null;
+  byDay[today] = stats;
+  const keep = Object.keys(byDay).sort().slice(-10); // ~10 derniers jours
+  store[key] = Object.fromEntries(keep.map((d) => [d, byDay[d]]));
+  saveStatsStore(store);
+  if (!base) return null;
+  const deltas = {}; for (const k in stats) deltas[k] = stats[k] - (base[k] || 0);
+  return deltas;
+}
+const CONTACTED_STORE = path.join(DATA_DIR, "contacted.json");
 function loadContacted() { try { return JSON.parse(fs.readFileSync(CONTACTED_STORE, "utf8")); } catch (e) { return []; } }
 function saveContacted(a) { try { fs.writeFileSync(CONTACTED_STORE, JSON.stringify(a)); } catch (e) {} }
 function recordContacted(rec) { const a = loadContacted(); a.push(rec); saveContacted(a); }

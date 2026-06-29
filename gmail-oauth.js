@@ -15,8 +15,19 @@ const SCOPES = [
   "https://www.googleapis.com/auth/calendar.readonly", // visios du jour (lecture seule)
   "https://www.googleapis.com/auth/gmail.compose",     // créer des brouillons (jamais d'envoi auto)
 ];
-const DATA_DIR = process.env.DATA_DIR || __dirname; // disque persistant en prod (ex. /var/data)
-const STORE = path.join(DATA_DIR, "gmail-tokens.json"); // jeton de rafraîchissement par email (survit aux redéploiements si DATA_DIR = disque)
+// Choix du dossier de stockage : on PRÉFÈRE le disque persistant monté sur /var/data
+// (les jetons survivent alors aux redéploiements), peu importe la variable DATA_DIR.
+// Fallback : DATA_DIR si défini & accessible en écriture, sinon le dossier de l'app.
+function resolveDataDir() {
+  for (const d of ["/var/data", process.env.DATA_DIR, __dirname]) {
+    if (!d) continue;
+    try { fs.mkdirSync(d, { recursive: true }); fs.accessSync(d, fs.constants.W_OK); return d; } catch (e) {}
+  }
+  return __dirname;
+}
+const DATA_DIR = resolveDataDir();
+const STORE = path.join(DATA_DIR, "gmail-tokens.json"); // jeton de rafraîchissement par email (survit aux redéploiements)
+try { console.log("[gmail] stockage des jetons →", STORE); } catch (e) {}
 
 let google = null;
 if (ENABLED) { google = require("googleapis").google; }
