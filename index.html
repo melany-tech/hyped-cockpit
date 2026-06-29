@@ -139,7 +139,8 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
 .panel{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:15px 16px}
 .panel.block{margin-bottom:16px}
 .panelhint{font-size:11.5px;color:var(--gray);margin:-4px 0 12px;line-height:1.4}
-.briefbtn{white-space:nowrap;cursor:pointer}
+.briefbtn,.replybtn{white-space:nowrap;cursor:pointer}
+.naqty{font-size:11px;font-weight:500;color:var(--gray)}
 .pt{font-size:13px;font-weight:700;margin:0 0 12px;display:flex;align-items:center;gap:7px;color:var(--navy)}
 .panel .row{margin-bottom:8px}
 .panel .row:last-child{margin-bottom:0}
@@ -409,6 +410,13 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
     </section>
   </div>
 
+  <!-- Prochaines actions (1 par créateur) -->
+  <section class="panel block hidden" id="nextactionspanel">
+    <p class="pt"><span class="pi">🎯</span> Prochaines actions <span class="naqty">· une par créateur</span></p>
+    <div class="panelhint">Tes mails créateurs regroupés : une seule action à faire par personne, avec la réponse déjà prête. Clique « ✍️ Répondre » → relis → Brouillon ou Envoyer.</div>
+    <div id="nextactions"></div>
+  </section>
+
   <!-- Profils à contacter -->
   <section class="panel block" id="srcpanel">
     <p class="pt"><span class="pi">🔎</span> <span id="srchdr2">Profils à contacter</span></p>
@@ -471,8 +479,8 @@ function setupChrome(){
   const lg=document.querySelector('.sb-logo'); if(lg){ lg.style.cursor='pointer'; lg.title='Retour au cockpit'; lg.onclick=()=>navToView('cockpit'); }
   showView('cockpit');
 }
-const VIEW_MAP={ profils:['srcpanel','brandpanel'], contenus:['listpanel','brandpanel','fillpanel'], messages:['mailpanel'] };
-const ALL_BLOCKS=['statcards','agendapanel','todopanel','pipelinepanel','brandpanel','fillpanel','srcpanel','listpanel','mailpanel'];
+const VIEW_MAP={ profils:['srcpanel','brandpanel'], contenus:['listpanel','brandpanel','fillpanel'], messages:['nextactionspanel','mailpanel'] };
+const ALL_BLOCKS=['statcards','agendapanel','todopanel','pipelinepanel','brandpanel','fillpanel','nextactionspanel','srcpanel','listpanel','mailpanel'];
 function navGo(a){ document.querySelectorAll('.sb-nav .nav').forEach(x=>x.classList.toggle('on',x===a)); showView(a.dataset.go); }
 function navToView(v){ const a=[...document.querySelectorAll('.sb-nav .nav')].find(x=>x.dataset.go===v); if(a)navGo(a); else showView(v); }
 function statCardGo(act){
@@ -751,20 +759,54 @@ async function loadMail(){
     renderMail(d, who);
   }catch(e){show($('mailpanel'),false);}
 }
+function emailFromHeader(from){ const m=String(from||'').match(/<([^>]+)>/); return m?m[1]:(String(from||'').includes('@')?String(from).trim():''); }
+function genReplyFR(category, creator){
+  const cp=mailAs()||(VIEWER&&VIEWER.name)||''; const c=creator||'toi';
+  const T={
+    'preview':`Hello ${c} ✨\n\nMerci pour la preview, c'est top ! 🙌\n[ À compléter : valider tel quel / petits ajustements → … ]\n\nDès que c'est bon de ton côté, tu peux publier 🤍\n\n${cp}`,
+    'logistique':`Hello ${c} ✨\n\nParfait, merci pour ton adresse ! On t'envoie le colis 📦 (réception sous 3-5 jours ouvrés).\nJe reviens vers toi pour caler les dates de mise en ligne.\n\nÀ très vite,\n${cp}`,
+    'facturation':`Hello ${c} ✨\n\nMerci, ta facture est bien reçue ! Je la transmets pour règlement, tu seras réglé·e dans les délais convenus.\nN'hésite pas si besoin 🤍\n\n${cp}`,
+    'réponse':`Hello ${c} ✨\n\nMerci beaucoup pour ton retour, contente que ça te parle ! 🤍\n\nPour avancer, peux-tu me confirmer :\n• tes modalités (tarif / conditions) si on part sur du rémunéré,\n• ton adresse postale + téléphone pour l'envoi,\net je te prépare la suite dans la foulée.\n\nÀ très vite,\n${cp}`
+  };
+  return T[category]||`Hello ${c} ✨\n\nMerci pour ton message ! Je reviens vers toi très vite 🤍\n\n${cp}`;
+}
+function openReply(btn){
+  const row=btn.closest('[data-email]'); if(!row)return;
+  const subj=row.dataset.subject||''; const re=/^re\s*:/i.test(subj)?subj:('Re: '+subj);
+  openMsgPanel(row,{ to:row.dataset.email||'', subject:re||'Re:', body:genReplyFR(row.dataset.cat||'', row.dataset.creator||''), onSent:()=>loadActivity() });
+}
+function renderNextActions(reps){
+  const box=$('nextactions'); if(!box)return;
+  const byKey={};
+  (reps||[]).forEach(m=>{ const k=(m.créateur||emailFromHeader(m.from)||m.subject||Math.random()); if(!byKey[k]) byKey[k]=m; });
+  const items=Object.values(byKey);
+  if(!items.length){show($('nextactionspanel'),false);return;}
+  show($('nextactionspanel'),true);
+  const ACT={'preview':'Valider la preview','logistique':'Confirmer la logistique','facturation':'Traiter la facture','réponse':'Répondre'};
+  box.innerHTML=items.slice(0,12).map(m=>{
+    const email=emailFromHeader(m.from); const who2=m.créateur||email||'créateur';
+    const lbl=(ACT[m.category]||'Répondre')+' à '+who2;
+    return `<div class="row" data-email="${esc(email)}" data-subject="${esc(m.subject||'')}" data-cat="${esc(m.category||'')}" data-creator="${esc(m.créateur||'')}"><span class="rdot" style="background:#2C9087"></span><div class="info"><div class="t">${esc(lbl)}</div><div class="s">${esc(m.subject||'')}${m.brand?(' · '+esc(m.brand)):''}</div></div><button class="lk primary replybtn">✍️ Répondre</button></div>`;
+  }).join('');
+  document.querySelectorAll('#nextactions .replybtn').forEach(b=>b.onclick=()=>openReply(b));
+}
 function renderMail(d, who){
   const reps=d.creatorReplies||[];
   if(!who){ try{setPipeReponse(reps.length);}catch(e){} }
+  renderNextActions(reps);
   const sum=`<div class="mailsum">${d.relevant||0} mail(s) liés aux collabs · <b>${reps.length} réponse(s) créateur</b> · ${(d.noise||0)+(d.offTopic||0)} ignoré(s) (pubs, recrutement, newsletters)</div>`;
   if(!reps.length){$('mailbox').innerHTML=sum+'<div class="state">Aucune réponse créateur récente. 👌</div>';return;}
   const CC={facturation:'#C77F2A',preview:'#7A5AA8',logistique:'#2C9087','réponse':'#1C3A44'};
   $('mailbox').innerHTML=sum+reps.map(m=>{
-    const who=m.créateur?`<span class="owner">${esc(m.créateur)}</span>`:'';
+    const ownerTag=m.créateur?`<span class="owner">${esc(m.créateur)}</span>`:'';
     const c=CC[m.category]||'#56666D';
     const link=m.url?`<a href="${m.url}" target="_blank" rel="noopener">Ouvrir</a>`:'';
-    return `<div class="row"><span class="rdot" style="background:${c}"></span>
+    const email=emailFromHeader(m.from);
+    return `<div class="row" data-email="${esc(email)}" data-subject="${esc(m.subject||'')}" data-cat="${esc(m.category||'')}" data-creator="${esc(m.créateur||'')}"><span class="rdot" style="background:${c}"></span>
       <div class="info"><div class="t">${esc(m.subject)||'(sans objet)'}</div><div class="s">${esc(m.from)} · ${esc(m.category)}</div></div>
-      <span class="brand">${esc(m.brand)}</span>${who}${link}</div>`;
+      <span class="brand">${esc(m.brand)}</span>${ownerTag}<button class="lk primary replybtn">✍️ Répondre</button>${link}</div>`;
   }).join('');
+  document.querySelectorAll('#mailbox .replybtn').forEach(b=>b.onclick=()=>openReply(b));
 }
 async function loadAlerts(){
   try{
