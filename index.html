@@ -109,6 +109,17 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
 .msgbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
 .msgsend{color:#fff;background:var(--teal);border-color:var(--teal)}
 .msgsend:hover{background:#247a72}
+.msgsnip{font-size:11px;color:#7C8A86;margin-top:3px;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:560px}
+.msgrecv{background:#F4F7F7;border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:10px}
+.msgrecv-h{font-size:11px;font-weight:700;color:var(--navy);margin-bottom:5px}
+.msgrecv-h a{color:var(--teal);text-decoration:none;font-weight:600}
+.msgrecv-b{font-size:12px;color:var(--gray);line-height:1.45;white-space:pre-wrap}
+/* check-list : case à cocher claire */
+.todo .tcheck{width:22px;height:22px;border:2px solid #CFDADA;border-radius:7px;background:#fff;cursor:pointer;flex:none;transition:all .12s;position:relative}
+.todo .tcheck:hover{border-color:var(--teal);background:#EAF3F1}
+.todo .tcheck.on{border-color:var(--teal);background:var(--teal)}
+.todo .tcheck.on:after{content:'✓';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700}
+.todo .ti-emoji{font-size:14px;margin-right:5px}
 .draftbanner{display:block;background:#FBEFD9;color:#9A6B12;border:1px solid #F0E0C0;border-radius:11px;padding:12px 16px;margin-bottom:18px;font-weight:600;font-size:13.5px;text-decoration:none}
 .draftbanner:hover{background:#F6E6C8}
 .calbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px}
@@ -780,7 +791,7 @@ function genReplyFR(category, creator){
 function openReply(btn){
   const row=btn.closest('[data-email]'); if(!row)return;
   const subj=row.dataset.subject||''; const re=/^re\s*:/i.test(subj)?subj:('Re: '+subj);
-  openMsgPanel(row,{ to:row.dataset.email||'', subject:re||'Re:', body:genReplyFR(row.dataset.cat||'', row.dataset.creator||''), onSent:()=>loadActivity() });
+  openMsgPanel(row,{ to:row.dataset.email||'', subject:re||'Re:', body:genReplyFR(row.dataset.cat||'', row.dataset.creator||''), received:row.dataset.snippet||'', threadUrl:row.dataset.url||'', onSent:()=>loadActivity() });
 }
 function renderNextActions(reps){
   const box=$('nextactions'); if(!box)return;
@@ -791,9 +802,9 @@ function renderNextActions(reps){
   show($('nextactionspanel'),true);
   const ACT={'preview':'Valider la preview','logistique':'Confirmer la logistique','facturation':'Traiter la facture','réponse':'Répondre'};
   box.innerHTML=items.slice(0,12).map(m=>{
-    const email=emailFromHeader(m.from); const who2=m.créateur||email||'créateur';
+    const email=emailFromHeader(m.from); const who2=m.créateur||email||'créateur'; const snip=(m.snippet||'');
     const lbl=(ACT[m.category]||'Répondre')+' à '+who2;
-    return `<div class="row" data-email="${esc(email)}" data-subject="${esc(m.subject||'')}" data-cat="${esc(m.category||'')}" data-creator="${esc(m.créateur||'')}"><span class="rdot" style="background:#2C9087"></span><div class="info"><div class="t">${esc(lbl)}</div><div class="s">${esc(m.subject||'')}${m.brand?(' · '+esc(m.brand)):''}</div></div><button class="lk primary replybtn">✍️ Répondre</button></div>`;
+    return `<div class="row" data-email="${esc(email)}" data-subject="${esc(m.subject||'')}" data-cat="${esc(m.category||'')}" data-creator="${esc(m.créateur||'')}" data-snippet="${esc(snip.slice(0,400))}" data-url="${esc(m.url||'')}"><span class="rdot" style="background:#2C9087"></span><div class="info"><div class="t">${esc(lbl)}</div><div class="s">${esc(m.subject||'')}${m.brand?(' · '+esc(m.brand)):''}</div>${snip?`<div class="msgsnip">${esc(snip.slice(0,130))}${snip.length>130?'…':''}</div>`:''}</div><button class="lk primary replybtn">✍️ Répondre</button></div>`;
   }).join('');
   document.querySelectorAll('#nextactions .replybtn').forEach(b=>b.onclick=()=>openReply(b));
 }
@@ -808,9 +819,9 @@ function renderMail(d, who){
     const ownerTag=m.créateur?`<span class="owner">${esc(m.créateur)}</span>`:'';
     const c=CC[m.category]||'#56666D';
     const link=m.url?`<a href="${m.url}" target="_blank" rel="noopener">Ouvrir</a>`:'';
-    const email=emailFromHeader(m.from);
-    return `<div class="row" data-email="${esc(email)}" data-subject="${esc(m.subject||'')}" data-cat="${esc(m.category||'')}" data-creator="${esc(m.créateur||'')}"><span class="rdot" style="background:${c}"></span>
-      <div class="info"><div class="t">${esc(m.subject)||'(sans objet)'}</div><div class="s">${esc(m.from)} · ${esc(m.category)}</div></div>
+    const email=emailFromHeader(m.from); const snip=(m.snippet||'');
+    return `<div class="row" data-email="${esc(email)}" data-subject="${esc(m.subject||'')}" data-cat="${esc(m.category||'')}" data-creator="${esc(m.créateur||'')}" data-snippet="${esc(snip.slice(0,400))}" data-url="${esc(m.url||'')}"><span class="rdot" style="background:${c}"></span>
+      <div class="info"><div class="t">${esc(m.subject)||'(sans objet)'}</div><div class="s">${esc(m.from)} · ${esc(m.category)}</div>${snip?`<div class="msgsnip">${esc(snip.slice(0,130))}${snip.length>130?'…':''}</div>`:''}</div>
       <span class="brand">${esc(m.brand)}</span>${ownerTag}<button class="lk primary replybtn">✍️ Répondre</button>${link}</div>`;
   }).join('');
   document.querySelectorAll('#mailbox .replybtn').forEach(b=>b.onclick=()=>openReply(b));
@@ -873,7 +884,8 @@ function openMsgPanel(rowEl, opts){
   const nx=rowEl.nextElementSibling;
   if(nx&&nx.classList.contains('msgpanel')){nx.remove();return;}
   const panel=document.createElement('div'); panel.className='msgpanel';
-  panel.innerHTML='<input class="msgto" type="email" placeholder="Email du destinataire (requis pour envoyer)"><textarea class="msgtxt" rows="13"></textarea><div class="msgbtns"><button class="lk msgcopy">Copier</button> <button class="lk msgdraft">📧 Brouillon</button> <button class="lk msgsend">✉️ Envoyer</button></div>';
+  const recv = opts.received ? `<div class="msgrecv"><div class="msgrecv-h">📨 Message reçu${opts.threadUrl?` · <a href="${esc(opts.threadUrl)}" target="_blank" rel="noopener">Ouvrir le fil dans Gmail ↗</a>`:''}</div><div class="msgrecv-b">${esc(opts.received)}</div></div>` : '';
+  panel.innerHTML=recv+'<input class="msgto" type="email" placeholder="Email du destinataire (requis pour envoyer)"><textarea class="msgtxt" rows="12"></textarea><div class="msgbtns"><button class="lk msgcopy">Copier</button> <button class="lk msgdraft">📧 Brouillon</button> <button class="lk msgsend">✉️ Envoyer</button></div>';
   rowEl.after(panel);
   const ta=panel.querySelector('.msgtxt'); ta.value=opts.body||'';
   if(opts.to) panel.querySelector('.msgto').value=opts.to;
@@ -967,14 +979,14 @@ function renderTodo(tasks, showOwner, addFor){
     const prio=(t.priorite==='Haute'||isLate||due);
     const chip=prio?'<span class="tchip prioc">Priorité</span>':'<span class="tchip todoc">À faire</span>';
     const own=(showOwner&&t.responsable)?`<span class="owner">${esc(t.responsable)}</span>`:'';
-    return `<div class="todo" data-id="${t.id}"><button class="tic doneb" title="Marquer comme fait">${taskIcon(t)}</button>
-      <div class="info"><div class="t">${esc(t.task)}</div><div class="s" style="${isLate?'color:#C2553B':''}">${meta.join(' · ')||'—'}</div></div>${own}${chip}</div>`;
+    return `<div class="todo" data-id="${t.id}"><button class="tcheck" title="Cliquer = terminé ✓"></button>
+      <div class="info"><div class="t"><span class="ti-emoji">${taskIcon(t)}</span>${esc(t.task)}</div><div class="s" style="${isLate?'color:#C2553B':''}">${meta.join(' · ')||'—'}</div></div>${own}${chip}</div>`;
   }).join('');
   $('todobox').innerHTML=add+rows;
   NOTIF.late=late; NOTIF.lateItems=lateItems; updateBell();
   $('todobtn').onclick=addTask;
   $('todoinput').onkeydown=(e)=>{if(e.key==='Enter')addTask();};
-  document.querySelectorAll('#todobox .doneb').forEach(b=>b.onclick=()=>doneTask(b));
+  document.querySelectorAll('#todobox .tcheck').forEach(b=>b.onclick=()=>doneTask(b));
 }
 async function addTask(){
   const v=$('todoinput').value.trim(); if(!v)return;
