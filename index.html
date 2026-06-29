@@ -236,6 +236,22 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
 .rtot>div{text-align:center;background:var(--soft);border-radius:10px;padding:12px 6px}
 .rtot b{display:block;font-size:22px;font-weight:800;color:var(--navy)}
 .rtot span{font-size:10.5px;color:var(--gray);font-weight:600}
+/* page Calendrier */
+.calwrap{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;align-items:start}
+.calmonth{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:16px}
+.cmtitle{font-size:14px;font-weight:700;color:var(--navy);text-transform:capitalize;margin-bottom:12px}
+.cmgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.cmwd{font-size:10px;font-weight:700;color:#9aa6a8;text-align:center;padding-bottom:4px}
+.cmcell{position:relative;aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:9px;font-size:13px;color:var(--navy);font-weight:600;background:var(--soft)}
+.cmcell.em{background:transparent}
+.cmcell.tod{background:var(--teal);color:#fff}
+.cmcell .cmdot{position:absolute;bottom:3px;right:4px;font-size:8px;font-weight:800;background:#C77F2A;color:#fff;min-width:13px;height:13px;border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 2px}
+.cmcell.tod .cmdot{background:#fff;color:var(--teal)}
+.cmlegend{font-size:10.5px;color:var(--gray);margin-top:12px;display:flex;align-items:center;gap:6px}
+.callist{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.callist .calsub{font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;margin:2px 0 9px}
+.callist .calsub:not(:first-child){margin-top:16px}
+@media(max-width:820px){.calwrap{grid-template-columns:1fr}}
 .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:20px}
 .topbar h1{font-size:24px}
 .tb-right{display:flex;align-items:center;gap:10px;position:relative}
@@ -403,6 +419,7 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
     <section id="campagnesview" style="display:none"><p class="pt"><span class="pi">📣</span> Campagnes par marque</p><div id="campagnesbox"><div class="state">Chargement…</div></div></section>
     <section id="contactsview" style="display:none"><p class="pt"><span class="pi">👥</span> Contacts créateurs</p><div id="contactsbox"><div class="state">Chargement…</div></div></section>
     <section id="rapportsview" style="display:none"><p class="pt"><span class="pi">📊</span> Rapports</p><div id="rapportsbox"><div class="state">Chargement…</div></div></section>
+    <section id="calendrierview" style="display:none"><p class="pt"><span class="pi">📅</span> Calendrier</p><div id="calendrierbox"><div class="state">Chargement…</div></div></section>
     <div class="foot">Clients actifs uniquement · filtré par interlocutrice.</div>
   </div><!-- /.main -->
 </div><!-- /#app -->
@@ -437,16 +454,17 @@ function setupChrome(){
   const tc=$('teamchk'); if(tc){ tc.checked=TEAM_VIEW; tc.onchange=()=>{ TEAM_VIEW=tc.checked; try{localStorage.setItem('hc_team',TEAM_VIEW?'1':'0');}catch(e){} load(); }; }
   showView('cockpit');
 }
-const VIEW_MAP={ profils:['srcpanel','brandpanel'], contenus:['listpanel','brandpanel','fillpanel'], calendrier:['agendapanel'], messages:['mailpanel'] };
+const VIEW_MAP={ profils:['srcpanel','brandpanel'], contenus:['listpanel','brandpanel','fillpanel'], messages:['mailpanel'] };
 const ALL_BLOCKS=['statcards','agendapanel','todopanel','pipelinepanel','brandpanel','fillpanel','srcpanel','listpanel','mailpanel'];
 function navGo(a){ document.querySelectorAll('.sb-nav .nav').forEach(x=>x.classList.toggle('on',x===a)); showView(a.dataset.go); }
 let CURRENT_VIEW='cockpit';
-const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview'};
-function hideAllViews(){ ['campagnesview','contactsview','rapportsview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
+const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview'};
+function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
 function refreshCustomView(){
   if(CURRENT_VIEW==='campagnes')renderCampagnes();
   else if(CURRENT_VIEW==='contacts')renderContacts();
   else if(CURRENT_VIEW==='rapports')renderRapports();
+  else if(CURRENT_VIEW==='calendrier')renderCalendrier();
 }
 function showView(v){
   CURRENT_VIEW=v;
@@ -517,6 +535,23 @@ function renderRapports(){
   const tot=brands.reduce((a,b)=>({c:a.c+b.aContacter,r:a.r+b.relances,at:a.at+b.contenus,re:a.re+b.recus}),{c:0,r:0,at:0,re:0});
   let t3=`<div class="rsec"><div class="rsec-h">∑ Totaux équipe</div><div class="rtot"><div><b>${tot.c}</b><span>à contacter</span></div><div><b>${tot.r}</b><span>relances</span></div><div><b>${tot.at}</b><span>contenus attendus</span></div><div><b>${tot.re}</b><span>reçus</span></div></div></div>`;
   $('rapportsbox').innerHTML=t1+t2+t3;
+}
+let CAL_EVENTS=[];
+function renderCalendrier(){
+  const now=new Date(), y=now.getFullYear(), m=now.getMonth(), today=now.getDate();
+  const start=(new Date(y,m,1).getDay()+6)%7, days=new Date(y,m+1,0).getDate();
+  const byDay={};
+  (ROWS||[]).forEach(r=>{ if(!r.date)return; const d=new Date(r.date); if(d.getFullYear()===y&&d.getMonth()===m){ const dd=d.getDate(); (byDay[dd]=byDay[dd]||[]).push(r); } });
+  const wd=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(w=>`<span class="cmwd">${w}</span>`).join('');
+  let cells=''; for(let i=0;i<start;i++)cells+='<span class="cmcell em"></span>';
+  for(let d=1;d<=days;d++){ const n=(byDay[d]||[]).length; cells+=`<span class="cmcell${d===today?' tod':''}"><span class="cmn">${d}</span>${n?`<span class="cmdot">${n}</span>`:''}</span>`; }
+  const monthName=now.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+  const todayISO=now.toISOString().slice(0,10);
+  const up=(ROWS||[]).filter(r=>r.date&&r.date.slice(0,10)>=todayISO).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,25);
+  let evHtml='';
+  if(CAL_EVENTS&&CAL_EVENTS.length){ evHtml='<div class="calsub">📹 Tes visios aujourd’hui</div>'+CAL_EVENTS.map(e=>`<div class="row"><span class="rdot" style="background:${e.meet?'#2C9087':'#7A5AA8'}"></span><div class="info"><div class="t">${esc(e.title)}</div><div class="s">${e.allDay?'journée':fmtTime(e.start)}</div></div>${e.meet?'<span class="brand" style="color:#0F6E56;background:#E4F1ED">Meet</span>':''}</div>`).join(''); }
+  const upHtml = up.length? up.map(r=>`<div class="row"><span class="rdot" style="background:${r.color||'#7A5AA8'}"></span><div class="info"><div class="t">${esc(r.name)}</div><div class="s">${esc(r.label||'')}${r.brand?(' · '+esc(r.brand)):''}</div></div>${r.cp&&(VIEWER&&(VIEWER.role==='supervisor'||teamOn()))?`<span class="owner">${esc(r.cp)}</span>`:''}<span class="brand">${fmtDate(r.date)}</span></div>`).join('') : '<div class="state2">Aucune échéance à venir dans les calendriers clients.</div>';
+  $('calendrierbox').innerHTML=`<div class="calwrap"><div class="calmonth"><div class="cmtitle">${monthName}</div><div class="cmgrid">${wd}${cells}</div><div class="cmlegend"><span class="cmdot" style="position:static;display:inline-flex">n</span> = collabs prévues ce jour</div></div><div class="callist">${evHtml}<div class="calsub">📅 Prochaines échéances</div>${upHtml}</div></div>`;
 }
 function applySearch(q){
   document.querySelectorAll('#list .row, #srcbox .row').forEach(row=>{
@@ -760,6 +795,7 @@ function miniCal(){
   return `<div class="minical"><div class="mc-h">${mname}</div><div class="mc-grid">${wd}${cells}</div></div>`;
 }
 function renderAgenda(events){
+  CAL_EVENTS=events||[]; if(CURRENT_VIEW==='calendrier')renderCalendrier();
   const now=new Date();
   const dnum=now.getDate(), mon=now.toLocaleDateString('fr-FR',{month:'short'});
   const evHtml=(events&&events.length)?events.map(e=>{
