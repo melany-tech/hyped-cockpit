@@ -353,7 +353,7 @@ app.post("/api/gmail/send", auth, async (req, res) => {
 // --- Visios du jour (Google Agenda de la personne) ----------------------
 app.get("/api/calendar", auth, async (req, res) => {
   if (!gm.ENABLED || typeof gm.calendarToday !== "function") return res.json({ enabled: false });
-  try { const r = await gm.calendarToday(req.user.email); res.json({ enabled: true, ...r }); }
+  try { const t = inboxTarget(req); const r = await gm.calendarToday(t.email); res.json({ enabled: true, viewing: t.viewing, ...r }); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 

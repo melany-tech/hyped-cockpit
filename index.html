@@ -536,7 +536,7 @@ function renderRapports(){
   let t3=`<div class="rsec"><div class="rsec-h">∑ Totaux équipe</div><div class="rtot"><div><b>${tot.c}</b><span>à contacter</span></div><div><b>${tot.r}</b><span>relances</span></div><div><b>${tot.at}</b><span>contenus attendus</span></div><div><b>${tot.re}</b><span>reçus</span></div></div></div>`;
   $('rapportsbox').innerHTML=t1+t2+t3;
 }
-let CAL_EVENTS=[];
+let CAL_EVENTS=[], CAL_VIEWING=null;
 function renderCalendrier(){
   const now=new Date(), y=now.getFullYear(), m=now.getMonth(), today=now.getDate();
   const start=(new Date(y,m,1).getDay()+6)%7, days=new Date(y,m+1,0).getDate();
@@ -549,7 +549,7 @@ function renderCalendrier(){
   const todayISO=now.toISOString().slice(0,10);
   const up=(ROWS||[]).filter(r=>r.date&&r.date.slice(0,10)>=todayISO).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,25);
   let evHtml='';
-  if(CAL_EVENTS&&CAL_EVENTS.length){ evHtml='<div class="calsub">📹 Tes visios aujourd’hui</div>'+CAL_EVENTS.map(e=>`<div class="row"><span class="rdot" style="background:${e.meet?'#2C9087':'#7A5AA8'}"></span><div class="info"><div class="t">${esc(e.title)}</div><div class="s">${e.allDay?'journée':fmtTime(e.start)}</div></div>${e.meet?'<span class="brand" style="color:#0F6E56;background:#E4F1ED">Meet</span>':''}</div>`).join(''); }
+  if(CAL_EVENTS&&CAL_EVENTS.length){ evHtml='<div class="calsub">📹 Visios aujourd’hui'+(CAL_VIEWING?(' — '+esc(CAL_VIEWING)):'')+'</div>'+CAL_EVENTS.map(e=>`<div class="row"><span class="rdot" style="background:${e.meet?'#2C9087':'#7A5AA8'}"></span><div class="info"><div class="t">${esc(e.title)}</div><div class="s">${e.allDay?'journée':fmtTime(e.start)}</div></div>${e.meet?'<span class="brand" style="color:#0F6E56;background:#E4F1ED">Meet</span>':''}</div>`).join(''); }
   const upHtml = up.length? up.map(r=>`<div class="row"><span class="rdot" style="background:${r.color||'#7A5AA8'}"></span><div class="info"><div class="t">${esc(r.name)}</div><div class="s">${esc(r.label||'')}${r.brand?(' · '+esc(r.brand)):''}</div></div>${r.cp&&(VIEWER&&(VIEWER.role==='supervisor'||teamOn()))?`<span class="owner">${esc(r.cp)}</span>`:''}<span class="brand">${fmtDate(r.date)}</span></div>`).join('') : '<div class="state2">Aucune échéance à venir dans les calendriers clients.</div>';
   $('calendrierbox').innerHTML=`<div class="calwrap"><div class="calmonth"><div class="cmtitle">${monthName}</div><div class="cmgrid">${wd}${cells}</div><div class="cmlegend"><span class="cmdot" style="position:static;display:inline-flex">n</span> = collabs prévues ce jour</div></div><div class="callist">${evHtml}<div class="calsub">📅 Prochaines échéances</div>${upHtml}</div></div>`;
 }
@@ -581,7 +581,7 @@ async function load(){
     const present=ROWS.map(x=>x.cp).filter(Boolean);
     const cps=[...new Set([...(d.team||[]),...present])].sort();
     $('cpfilter').innerHTML='<option value="ALL">Toute l\'équipe</option>'+cps.map(c=>`<option value="${c}">${c}</option>`).join('');
-    $('cpfilter').onchange=()=>{render();loadTodo();loadOverview();loadMail();};show($('filterbar'),true);
+    $('cpfilter').onchange=()=>{render();loadTodo();loadOverview();loadMail();loadVisios();};show($('filterbar'),true);
   }else show($('filterbar'),false);
   loadAlerts();          // remplissage des calendriers : visible par toutes les CP
   render();
@@ -809,9 +809,12 @@ function renderAgenda(events){
 }
 async function loadVisios(){
   try{
-    const r=await api('/api/calendar');const d=await r.json();
-    if(!d.enabled||!d.connected){show($('agendapanel'),false);return;}
+    const who=mailAs(); const q=who?('?as='+encodeURIComponent(who)):'';
+    const r=await api('/api/calendar'+q);const d=await r.json();
+    if(!d.enabled||!d.connected){ show($('agendapanel'),false); CAL_EVENTS=[]; CAL_VIEWING=who; if(CURRENT_VIEW==='calendrier')renderCalendrier(); return; }
     show($('agendapanel'),true);
+    const hdr=$('agendapanel')&&$('agendapanel').querySelector('.pt'); if(hdr) hdr.innerHTML='<span class="pi">📅</span> '+(who?('Agenda — '+esc(who)):'Agenda du jour');
+    CAL_VIEWING=who;
     renderAgenda(d.events||[]);
   }catch(e){show($('agendapanel'),false);}
 }
