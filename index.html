@@ -153,8 +153,9 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
 .bc .bav{width:26px;height:26px;border-radius:8px;background:var(--navy);color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:none}
 .bc .bnm{font-size:13px;font-weight:700;color:var(--navy)}
 .bc .brow2{display:grid;grid-template-columns:1fr 1fr;gap:7px}
-.bc .cell .k{font-size:10px;color:var(--gray);font-weight:600}
-.bc .cell .v{font-size:17px;font-weight:800;color:var(--navy)}
+.bc .cell{min-width:0}
+.bc .cell .v{font-size:19px;font-weight:800;color:var(--navy);line-height:1}
+.bc .cell .k{font-size:10.5px;color:var(--gray);font-weight:600;line-height:1.2;margin-top:2px}
 .alertsbox{margin:0;border:none;padding:0}
 #alertsbox .alerthdr{margin-top:0}
 @media(max-width:820px){.statcards{grid-template-columns:1fr 1fr}.dgrid-3,.dgrid-2{grid-template-columns:1fr}}
@@ -511,13 +512,14 @@ function renderBrands(brands){
   if(!brands.length){show($('brandpanel'),false);return;}
   show($('brandpanel'),true);
   const ini=(b)=>String(b).split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase();
+  const cell=(n,sing,plur)=>`<div class="cell"><div class="v">${n}</div><div class="k">${n<=1?sing:plur}</div></div>`;
   $('brandcards').innerHTML='<div class="bcards">'+brands.map(b=>`
     <div class="bc" data-b="${esc(b.brand)}"><div class="bh"><div class="bav">${esc(ini(b.brand))}</div><div class="bnm">${esc(b.brand)}</div></div>
       <div class="brow2">
-        <div class="cell"><div class="k">Profils</div><div class="v">${b.aContacter}</div></div>
-        <div class="cell"><div class="k">Relances</div><div class="v">${b.relances}</div></div>
-        <div class="cell"><div class="k">Attendus</div><div class="v">${b.contenus}</div></div>
-        <div class="cell"><div class="k">Reçus</div><div class="v">${b.recus}</div></div>
+        ${cell(b.aContacter,'profil à contacter','profils à contacter')}
+        ${cell(b.relances,'relance en attente','relances en attente')}
+        ${cell(b.contenus,'contenu attendu','contenus attendus')}
+        ${cell(b.recus,'contenu reçu','contenus reçus')}
       </div><div class="bcmore">Voir le détail →</div></div>`).join('')+'</div><div id="branddetail"></div>';
   document.querySelectorAll('#brandcards .bc').forEach(c=>c.onclick=()=>openBrand(c.dataset.b,c));
 }
