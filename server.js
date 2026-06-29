@@ -221,8 +221,58 @@ app.get("/api/collabs", auth, async (req, res) => {
     res.json({ rows, demo: DEMO, viewer: { name: req.user.name, role: req.user.role }, team });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// --- Vue par marque + pipeline (agrégats réels) -------------------------
+// Alimente les "cartes par marque" et la barre "pipeline profils" du dashboard.
+app.get("/api/overview", auth, async (req, res) => {
+  if (DEMO || !notion) return res.json({ enabled: false, brands: [], pipeline: [] });
+  try {
+    const isSup = req.user.role === "supervisor";
+    const me = normName(req.user.name);
+    const mine = (resp) => isSup || normName(resp) === me;
+    // 1) tâches veille (Prise de contact / Relance créateur), non "Fait"
+    const tasks = []; let cur;
+    do {
+      const r = await notion.databases.query({ database_id: TASKS_DB, start_cursor: cur, page_size: 100 });
+      r.results.forEach((pg) => tasks.push(mapTask(pg))); cur = r.has_more ? r.next_cursor : null;
+    } while (cur);
+    const open = tasks.filter((t) => t.statut !== "Fait" && mine(t.responsable));
+    const C = {};
+    const B = (b) => (C[b] = C[b] || { brand: b, aContacter: 0, relances: 0, contenus: 0, recus: 0 });
+    open.forEach((t) => {
+      const b = t.projet || "Autres";
+      if (t.type === "Prise de contact") B(b).aContacter++;
+      else if (t.type === "Relance créateur") B(b).relances++;
+    });
+    // 2) collabs (contenus) par marque
+    let rows = await fetchRows();
+    rows = rows.map((r) => (r.cp ? r : { ...r, cp: ASSIGN[normName(r.name)] || null }));
+    if (!isSup) rows = rows.filter((r) => r.cp === req.user.name);
+    rows.forEach((r) => {
+      const b = r.brand || "Autres";
+      if (r.grp === "À valider") B(b).recus++; else B(b).contenus++;
+    });
+    const brands = Object.values(C)
+      .filter((x) => x.aContacter || x.relances || x.contenus || x.recus)
+      .sort((a, b) => (b.aContacter + b.relances + b.contenus + b.recus) - (a.aContacter + a.relances + a.contenus + a.recus));
+    // 3) pipeline global (6 étapes ; réel là où on le trace)
+    const contacted = loadContacted().filter((c) => mine(c.cp));
+    const aContacter = open.filter((t) => t.type === "Prise de contact").length;
+    const contacte = contacted.length;
+    const recus = rows.filter((r) => r.grp === "À valider").length;
+    const relancesN = open.filter((t) => t.type === "Relance créateur").length;
+    const pipeline = [
+      { key: "a_contacter", label: "À contacter",   count: aContacter },
+      { key: "contacte",    label: "Contacté",      count: contacte },
+      { key: "reponse",     label: "Réponse reçue", count: 0, soon: true },
+      { key: "brief",       label: "Brief envoyé",  count: 0, soon: true },
+      { key: "contenu",     label: "Contenu reçu",  count: recus },
+      { key: "publie",      label: "Publié",        count: 0, soon: true },
+    ];
+    res.json({ enabled: true, brands, pipeline, relances: relancesN });
+  } catch (e) { res.json({ enabled: false, error: e.message, brands: [], pipeline: [] }); }
+});
 app.get("/api/alerts", auth, async (req, res) => {
-  if (req.user.role !== "supervisor") return res.json({ fill: [] });
+  // Remplissage des calendriers : visible par TOUTES les CP (plus seulement le pilote).
   if (DEMO) return res.json({ monthLabel: "juillet 2026", minPerWeek: MIN_PER_WEEK, target: 12, fill: [
     { brand: "Doucéa", status: "vide", count: 0, target: 12 },
     { brand: "In Haircare", status: "faible", count: 5, target: 12 },
