@@ -240,7 +240,9 @@ app.get("/api/overview", auth, async (req, res) => {
     const isSup = req.user.role === "supervisor";
     const me = normName(req.user.name);
     const teamReq = String(req.query.team || "") === "1" && !isSup; // CP en vue équipe (congés)
-    const mine = (resp) => isSup || teamReq || normName(resp) === me;
+    const viewCp = isSup ? String(req.query.view || "").trim() : ""; // pilote qui regarde une CP précise
+    const scoped = viewCp && viewCp !== "ALL"; // si oui, on cale TOUT sur cette CP (cohérent avec la liste)
+    const mine = (resp) => scoped ? (normName(resp) === normName(viewCp)) : (isSup || teamReq || normName(resp) === me);
     // 1) tâches veille (Prise de contact / Relance créateur), non "Fait"
     const tasks = []; let cur;
     do {
@@ -258,7 +260,8 @@ app.get("/api/overview", auth, async (req, res) => {
     // 2) collabs (contenus) par marque
     let rows = await fetchRows();
     rows = rows.map((r) => (r.cp ? r : { ...r, cp: ASSIGN[normName(r.name)] || null }));
-    if (!isSup && !teamReq) rows = rows.filter((r) => r.cp === req.user.name);
+    if (scoped) rows = rows.filter((r) => normName(r.cp) === normName(viewCp));
+    else if (!isSup && !teamReq) rows = rows.filter((r) => r.cp === req.user.name);
     rows.forEach((r) => {
       const b = r.brand || "Autres";
       if (r.grp === "À valider") B(b).recus++; else B(b).contenus++;
@@ -284,7 +287,7 @@ app.get("/api/overview", auth, async (req, res) => {
     const stats = { aTraiter: open.length, aContacter, relances: relancesN, aValider: recus };
     const key = isSup ? ("SUP:" + (normName(req.user.name) || "pilote")) : String(req.user.email || "").toLowerCase();
     // en vue équipe (CP), on ne touche pas au snapshot perso : pas de delta faussé
-    let deltas = null; if (!teamReq) { try { deltas = snapshotAndDelta(key, stats); } catch (e) {} }
+    let deltas = null; if (!teamReq && !scoped) { try { deltas = snapshotAndDelta(key, stats); } catch (e) {} }
     res.json({ enabled: true, brands, pipeline, relances: relancesN, stats, deltas });
   } catch (e) { res.json({ enabled: false, error: e.message, brands: [], pipeline: [] }); }
 });
@@ -751,5 +754,7 @@ async function ensureStatsTasks() {
 ensureStatsTasks();
 setInterval(ensureStatsTasks, 6 * 3600 * 1000);
 
+// Guide CP (PDF) accessible depuis le cockpit
+app.get(["/guide", "/guide.pdf"], (req, res) => res.sendFile(path.join(__dirname, "guide.pdf")));
 app.get("*", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.listen(PORT, () => console.log(`Cockpit ${DEMO ? "(DÉMO)" : "(Notion live, clients actifs)"} → http://localhost:${PORT}`));

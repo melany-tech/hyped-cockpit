@@ -368,6 +368,7 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
       <div class="tb-right">
         <span id="demobadge" class="demo hidden">Mode démo</span>
         <span class="chip" id="totalchip">…</span>
+        <a class="iconbtn" id="guidebtn" href="/guide" target="_blank" rel="noopener" title="Guide du cockpit" style="text-decoration:none">📖</a>
         <button class="iconbtn" id="searchbtn" title="Rechercher">🔍</button>
         <button class="iconbtn" id="bellbtn" title="Notifications">🔔<span class="badge hidden" id="bellcount">0</span></button>
         <div class="avatar" id="avatarbtn"><span class="av-ini" id="avini">·</span><span class="av-name" id="avname"></span><span class="av-caret">▾</span></div>
@@ -655,9 +656,15 @@ function updateStats(){
   updateBell();
 }
 // --- Pipeline + vue par marque ------------------------------------------
+function overviewParam(){
+  const isSup=VIEWER&&VIEWER.role==='supervisor';
+  const v=(isSup&&$('cpfilter'))?$('cpfilter').value:'';
+  if(isSup&&v&&v!=='ALL') return '?view='+encodeURIComponent(v); // pilote → cale l'overview sur la CP
+  return tparam();
+}
 async function loadOverview(){
   try{
-    const r=await api('/api/overview'+tparam());const d=await r.json();
+    const r=await api('/api/overview'+overviewParam());const d=await r.json();
     if(!d.enabled){show($('pipelinepanel'),false);show($('brandpanel'),false);OVERVIEW=null;updateStats();return;}
     OVERVIEW=d;renderPipeline(d.pipeline||[]);renderBrands(d.brands||[]);updateStats();refreshCustomView();
   }catch(e){show($('pipelinepanel'),false);show($('brandpanel'),false);}
