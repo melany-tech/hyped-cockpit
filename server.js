@@ -345,6 +345,32 @@ app.post("/api/todos/:id/done", auth, async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// --- Message d'approche auto (brouillon prêt dès l'ajout d'un profil) ----
+const BRAND_INFO = {
+  "In Haircare": { produits: "la routine complète In Haircare (Milk'In, Curl n'Go et le nouveau Final Touch)", fr: "In Haircare est une marque française spécialisée dans les soins capillaires pensés pour les cheveux texturés — bouclés, frisés, crépus — avec des formules clean, naturelles et efficaces, fabriquées en France et primées (Beauty Shortlist Awards 2025)." },
+  "Doucéa": { produits: "les soins Doucéa", fr: "Doucéa est une marque de soins dermo-pédiatriques pensée pour les enfants à peau sensible ou atopique. L'idée : réconcilier le besoin du parent et le plaisir de l'enfant, avec des soins efficaces, sensoriels et concentrés en madécassoside (actif apaisant)." },
+  "LIVA": { produits: "the full LIVA range", fr: "LIVA est une marque de soins capillaires cliniquement testée, en lancement national chez Walmart (US) : lors d'une étude de 3 semaines, 85% des participantes ont trouvé leurs cheveux plus denses et plus sains." },
+  "Curls Matter": { produits: "les produits Curls Matter", fr: "Curls Matter est une marque dédiée au soin des cheveux bouclés et texturés." },
+};
+function infFromTitle(t) {
+  let raw = String(t || "").replace(/^contacter\s+/i, "").trim();
+  if (!raw || /^https?:\/\//i.test(raw)) return "[prénom]";
+  raw = raw.replace(/^@/, "").split(/[ \/(]/)[0];
+  return raw || "[prénom]";
+}
+function genOutreachFR(brand, inf, cp) {
+  const b = BRAND_INFO[brand] || { produits: "nos produits", fr: brand + " est une marque que nous accompagnons chez Hyped Agency." };
+  const disp = "1 Reel + 1 set de stories";
+  return `Hello ${inf} ✨\n\nJe suis ${cp}, cheffe de projet chez Hyped Agency, et je représente la marque ${brand}.\n\n${b.fr}\n\nJe te contacte car nous aimons beaucoup ton contenu, que nous trouvons très qualitatif et en parfaite adéquation avec l'univers de la marque. ✨\n\nL'idée serait de te faire découvrir ${b.produits} et de mettre en avant ${disp} dans le cadre d'un partenariat avec ${brand}.\n\nSerais-tu partante ? Je reste bien sûr disponible pour la moindre question et serais ravie d'échanger avec toi. 🤍\n\nAu plaisir de te lire,\n${cp}`;
+}
+function emailOf(cpName) { const u = USERS.find((x) => normName(x.name) === normName(cpName)); return u ? u.email : null; }
+
+// --- Relances créateurs : on trace les profils contactés pour relancer si pas de réponse ---
+const CONTACTED_STORE = path.join(process.env.DATA_DIR || __dirname, "contacted.json");
+function loadContacted() { try { return JSON.parse(fs.readFileSync(CONTACTED_STORE, "utf8")); } catch (e) { return []; } }
+function saveContacted(a) { try { fs.writeFileSync(CONTACTED_STORE, JSON.stringify(a)); } catch (e) {} }
+function recordContacted(rec) { const a = loadContacted(); a.push(rec); saveContacted(a); }
+
 // --- Veille / Sourcing : profils à contacter (board Tâches, Type=Prise de contact) ---
 const INHAIRCARE_DB = "380f8ac3-c3ae-80ce-ba4c-e8e82490edc6";
 app.get("/api/sourcing", auth, async (req, res) => {
@@ -381,8 +407,23 @@ app.post("/api/sourcing", auth, async (req, res) => {
   const lien = req.body?.lien || (/^https?:\/\//i.test(profil) ? profil : null);
   if (lien) props["Lien profil"] = { url: String(lien) };
   if (req.body?.commentaire) props["Commentaire veille"] = { rich_text: [{ text: { content: String(req.body.commentaire) } }] };
-  try { const pg = await notion.pages.create({ parent: { database_id: TASKS_DB }, properties: props }); res.json({ ok: true, id: pg.id }); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    const pg = await notion.pages.create({ parent: { database_id: TASKS_DB }, properties: props });
+    // Message auto-prêt : brouillon d'approche dans le Gmail de la CP assignée (si connectée)
+    let draft = false;
+    try {
+      if (resp && gm.ENABLED && typeof gm.createDraft === "function") {
+        const cpEmail = emailOf(resp);
+        if (cpEmail && gm.isConnected(cpEmail)) {
+          const inf = infFromTitle(profil);
+          const subject = "Partenariat " + (req.body?.marque || "") + " — Hyped Agency";
+          const r = await gm.createDraft(cpEmail, { to: "", subject, body: genOutreachFR(req.body?.marque || "", inf, resp) });
+          draft = !!(r && r.ok);
+        }
+      }
+    } catch (e) { console.warn("auto-draft", e.message); }
+    res.json({ ok: true, id: pg.id, draft });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.post("/api/sourcing/:id/contacted", auth, async (req, res) => {
   if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
@@ -391,6 +432,8 @@ app.post("/api/sourcing/:id/contacted", auth, async (req, res) => {
     const t = mapTask(pg);
     // 1) sort de la liste veille
     await notion.pages.update({ page_id: req.params.id, properties: { "Statut": { select: { name: "Fait" } } } });
+    // trace pour la relance auto (si pas de réponse sous 3 jours)
+    recordContacted({ creator: t.task, cp: t.responsable || ASSIGN[normName(t.task)] || null, brand: t.projet || null, at: Date.now(), relance: false });
     // 2) bascule en collab "à lancer" dans le calendrier de la marque (In Haircare géré)
     let moved = false;
     if (t.projet === "In Haircare") {
@@ -467,6 +510,53 @@ async function ensurePreviewTasks() {
 }
 ensurePreviewTasks();
 setInterval(ensurePreviewTasks, 6 * 3600 * 1000); // re-vérifie ~4x/jour (dédup -> pas de doublon)
+
+// --- Relances créateurs : "Relancer X" si contacté il y a 3j+ et pas de réponse -------
+async function ensureRelances() {
+  if (DEMO || !notion || !gm.ENABLED) return;
+  try {
+    const list = loadContacted();
+    if (!list.length) return;
+    const now = Date.now();
+    // créateurs ayant répondu, par boîte CP
+    const repliesByEmail = {};
+    const collabs = await fetchRows();
+    for (const email of (gm.connectedEmails ? gm.connectedEmails() : [])) {
+      try {
+        const r = await gm.analyzeFor(email, collabs);
+        const s = new Set(); (r.creatorReplies || []).forEach((m) => { if (m["créateur"]) s.add(normName(m["créateur"])); });
+        repliesByEmail[email] = s;
+      } catch (e) {}
+    }
+    // tâches relance déjà existantes (dédup)
+    const existing = new Set(); let c;
+    do {
+      const r = await notion.databases.query({ database_id: TASKS_DB, start_cursor: c, page_size: 100, filter: { property: "Tâche", title: { contains: "Relancer" } } });
+      r.results.forEach((pg) => { const tt = mapTask(pg); if (tt.statut !== "Fait") existing.add(tt.task.trim()); });
+      c = r.has_more ? r.next_cursor : null;
+    } while (c);
+    let changed = false;
+    for (const rec of list) {
+      if (rec.relance) continue;
+      if (now - rec.at < 3 * 864e5) continue; // on laisse 3 jours pour répondre
+      const cname = infFromTitle(rec.creator);
+      if (cname === "[prénom]") { rec.relance = true; changed = true; continue; } // pas de nom exploitable
+      const cpEmail = rec.cp ? emailOf(rec.cp) : null;
+      const replied = cpEmail && repliesByEmail[cpEmail] ? repliesByEmail[cpEmail].has(normName(rec.creator)) : false;
+      if (replied) { rec.relance = true; changed = true; continue; } // a répondu -> pas de relance
+      const ttl = `Relancer ${cname}${rec.brand ? " (" + rec.brand + ")" : ""}`;
+      if (existing.has(ttl)) { rec.relance = true; changed = true; continue; }
+      const props = { "Tâche": { title: [{ text: { content: ttl } }] }, "Type": { select: { name: "Relance créateur" } }, "Statut": { select: { name: "À faire" } } };
+      if (rec.cp) props["Responsable"] = { select: { name: rec.cp } };
+      if (rec.brand) props["Projet"] = { select: { name: rec.brand } };
+      try { await notion.pages.create({ parent: { database_id: TASKS_DB }, properties: props }); existing.add(ttl); rec.relance = true; changed = true; console.log("relance créée:", ttl); }
+      catch (e) { console.warn("relance", e.message); }
+    }
+    if (changed) saveContacted(list);
+  } catch (e) { console.warn("ensureRelances", e.message); }
+}
+ensureRelances();
+setInterval(ensureRelances, 6 * 3600 * 1000);
 
 app.get("*", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.listen(PORT, () => console.log(`Cockpit ${DEMO ? "(DÉMO)" : "(Notion live, clients actifs)"} → http://localhost:${PORT}`));
