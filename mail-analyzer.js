@@ -27,6 +27,11 @@ function isNoise(email) {
   const t = `${email.from || ""} ${email.subject || ""} ${email.snippet || ""}`;
   return NOISE_PATTERNS.some((re) => re.test(t));
 }
+// Un expéditeur @hyped-agency.fr = membre de l'équipe (CP/pilote) qui écrit lui-même
+// à un créateur. Ce n'est PAS une réponse créateur → pas de "Répondre à sa collègue".
+function isFromTeam(email) {
+  return /@hyped-agency\.fr/i.test(email && email.from || "");
+}
 
 // --- Mots-clés par marque (depuis les calendriers) ----------------------
 function handleVariants(name) {
@@ -108,7 +113,8 @@ function analyzeMailbox(emails, collabs, brandProducts = {}) {
     if (r.isNoise) { noise++; continue; }
     if (!r.brand) { offTopic++; continue; }
     (byBrand[r.brand] ||= []).push({ ...e, ...r });
-    if (r.isReply) creatorReplies.push({ ...e, ...r });
+    // réponse créateur = un mail REÇU d'un créateur (donc PAS d'un @hyped-agency.fr)
+    if (r.isReply && !isFromTeam(e)) creatorReplies.push({ ...e, ...r });
   }
   return {
     total: (emails || []).length,
