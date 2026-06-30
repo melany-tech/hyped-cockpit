@@ -146,6 +146,8 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
 .todo .tcheck.on{border-color:var(--teal);background:var(--teal)}
 .todo .tcheck.on:after{content:'✓';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700}
 .todo .ti-emoji{font-size:14px;margin-right:5px}
+.todolink{color:var(--teal);font-weight:600;text-decoration:none;border-bottom:1px solid rgba(44,144,135,.35)}
+.todolink:hover{border-bottom-color:var(--teal)}
 .draftbanner{display:block;background:#FBEFD9;color:#9A6B12;border:1px solid #F0E0C0;border-radius:11px;padding:12px 16px;margin-bottom:18px;font-weight:600;font-size:13.5px;text-decoration:none}
 .draftbanner:hover{background:#F6E6C8}
 .calbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px}
@@ -1029,6 +1031,11 @@ function taskIcon(t){const s=(t.task||'').toLowerCase();
   if(/brief/.test(s))return '📝';
   if(/site|process|setup/.test(s))return '🛠️';
   return '📌';}
+function linkify(s){
+  return String(s||'').split(/(https?:\/\/[^\s]+)/g).map(p=>/^https?:\/\//.test(p)
+    ? `<a href="${esc(p)}" target="_blank" rel="noopener" class="todolink" onclick="event.stopPropagation()">${esc(p)} ↗</a>`
+    : esc(p)).join('');
+}
 function renderTodo(tasks, showOwner, addFor){
   const today=new Date().toISOString().slice(0,10);
   let late=0; const lateItems=[];
@@ -1043,7 +1050,7 @@ function renderTodo(tasks, showOwner, addFor){
     const chip=prio?'<span class="tchip prioc">Priorité</span>':'<span class="tchip todoc">À faire</span>';
     const own=(showOwner&&t.responsable)?`<span class="owner">${esc(t.responsable)}</span>`:'';
     return `<div class="todo" data-id="${t.id}"><button class="tcheck" title="Cliquer = terminé ✓"></button>
-      <div class="info"><div class="t"><span class="ti-emoji">${taskIcon(t)}</span>${esc(t.task)}</div><div class="s" style="${isLate?'color:#C2553B':''}">${meta.join(' · ')||'—'}</div></div>${own}${chip}</div>`;
+      <div class="info"><div class="t"><span class="ti-emoji">${taskIcon(t)}</span>${linkify(t.task)}</div><div class="s" style="${isLate?'color:#C2553B':''}">${meta.join(' · ')||'—'}</div></div>${own}${chip}</div>`;
   }).join('');
   $('todobox').innerHTML=add+rows;
   NOTIF.late=late; NOTIF.lateItems=lateItems; updateBell();
