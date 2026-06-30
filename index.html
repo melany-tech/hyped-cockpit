@@ -114,6 +114,14 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
 .seg button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
 .msgdisp{flex:1;min-width:160px}
 .msgtxt{width:100%;font-family:inherit;font-size:13px;color:var(--navy);background:var(--bg);border:1px solid #CFDADA;border-radius:9px;padding:11px;line-height:1.55;resize:vertical}
+.aibar{display:flex;align-items:center;gap:10px;margin:2px 0 8px}
+.lk.ai{background:#EFEAFB;color:#5B3FA8;border:1px solid #D8CCF3;font-weight:600}
+.lk.ai:disabled{opacity:.55;cursor:default}
+.aistatus{font-size:12px;color:var(--muted)}
+.aistatus.busy{color:#5B3FA8}
+.aistatus.busy::before{content:'';display:inline-block;width:9px;height:9px;margin-right:6px;border:2px solid #C9B8EE;border-top-color:#5B3FA8;border-radius:50%;vertical-align:-1px;animation:aispin .7s linear infinite}
+.aistatus.ok{color:var(--teal)}
+@keyframes aispin{to{transform:rotate(360deg)}}
 .msgcopy{margin-top:8px}
 .msgdraft{margin-top:8px}
 .msgto{width:100%;font-family:inherit;font-size:13px;color:var(--navy);background:var(--bg);border:1px solid #CFDADA;border-radius:9px;padding:9px 11px;margin:8px 0}
@@ -798,7 +806,8 @@ function genReplyFR(category, creator){
 function openReply(btn){
   const row=btn.closest('[data-email]'); if(!row)return;
   const subj=row.dataset.subject||''; const re=/^re\s*:/i.test(subj)?subj:('Re: '+subj);
-  openMsgPanel(row,{ to:row.dataset.email||'', subject:re||'Re:', body:genReplyFR(row.dataset.cat||'', row.dataset.creator||''), received:row.dataset.snippet||'', threadUrl:row.dataset.url||'', onSent:()=>loadActivity() });
+  openMsgPanel(row,{ to:row.dataset.email||'', subject:re||'Re:', body:genReplyFR(row.dataset.cat||'', row.dataset.creator||''), received:row.dataset.snippet||'', threadUrl:row.dataset.url||'', onSent:()=>loadActivity(),
+    aiSuggest:{ threadId:row.dataset.thread||'', creator:row.dataset.creator||'', brand:row.dataset.brand||'', category:row.dataset.cat||'', subject:row.dataset.subject||'', snippet:row.dataset.snippet||'' } });
 }
 function renderNextActions(reps){
   const box=$('nextactions'); if(!box)return;
@@ -826,7 +835,7 @@ function renderMail(d, who){
     const c=CC[m.category]||'#56666D';
     const link=m.url?`<a href="${m.url}" target="_blank" rel="noopener">Ouvrir</a>`:'';
     const email=emailFromHeader(m.from); const snip=(m.snippet||'');
-    return `<div class="row" data-email="${esc(email)}" data-subject="${esc(m.subject||'')}" data-cat="${esc(m.category||'')}" data-creator="${esc(m.créateur||'')}" data-snippet="${esc(snip.slice(0,400))}" data-url="${esc(m.url||'')}"><span class="rdot" style="background:${c}"></span>
+    return `<div class="row" data-email="${esc(email)}" data-subject="${esc(m.subject||'')}" data-cat="${esc(m.category||'')}" data-creator="${esc(m.créateur||'')}" data-brand="${esc(m.brand||'')}" data-thread="${esc(m.threadId||'')}" data-snippet="${esc(snip.slice(0,400))}" data-url="${esc(m.url||'')}"><span class="rdot" style="background:${c}"></span>
       <div class="info"><div class="t">${esc(m.subject)||'(sans objet)'}</div><div class="s">${esc(m.from)} · ${esc(m.category)}</div>${snip?`<div class="msgsnip">${esc(snip.slice(0,130))}${snip.length>130?'…':''}</div>`:''}</div>
       <span class="brand">${esc(m.brand)}</span>${ownerTag}<button class="lk primary replybtn">✍️ Répondre</button>${link}</div>`;
   }).join('');
@@ -908,9 +917,25 @@ function openMsgPanel(rowEl, opts){
   if(nx&&nx.classList.contains('msgpanel')){nx.remove();return;}
   const panel=document.createElement('div'); panel.className='msgpanel';
   const recv = opts.received ? `<div class="msgrecv"><div class="msgrecv-h">📨 Message reçu${opts.threadUrl?` · <a href="${esc(opts.threadUrl)}" target="_blank" rel="noopener">Ouvrir le fil dans Gmail ↗</a>`:''}</div><div class="msgrecv-b">${esc(opts.received)}</div></div>` : '';
-  panel.innerHTML=recv+'<input class="msgto" type="email" placeholder="Email du destinataire (requis pour envoyer)"><textarea class="msgtxt" rows="12"></textarea><div class="msgbtns"><button class="lk msgcopy">Copier</button> <button class="lk msgdraft">📧 Brouillon</button> <button class="lk msgsend">✉️ Envoyer</button></div>';
+  const aibar = opts.aiSuggest ? `<div class="aibar"><button class="lk ai aigen">✨ Régénérer la réponse</button><span class="aistatus"></span></div>` : '';
+  panel.innerHTML=recv+aibar+'<input class="msgto" type="email" placeholder="Email du destinataire (requis pour envoyer)"><textarea class="msgtxt" rows="12"></textarea><div class="msgbtns"><button class="lk msgcopy">Copier</button> <button class="lk msgdraft">📧 Brouillon</button> <button class="lk msgsend">✉️ Envoyer</button></div>';
   rowEl.after(panel);
   const ta=panel.querySelector('.msgtxt'); ta.value=opts.body||'';
+  if(opts.aiSuggest){
+    const st=panel.querySelector('.aistatus'), gb=panel.querySelector('.aigen');
+    const runAI=async()=>{
+      st.textContent='✨ Analyse du message en cours…'; st.className='aistatus busy'; gb.disabled=true;
+      try{
+        const r=await api('/api/reply/suggest',{method:'POST',body:JSON.stringify(opts.aiSuggest)});
+        const d=await r.json().catch(()=>({}));
+        if(d&&d.ok&&d.body){ ta.value=d.body; st.textContent='✨ Réponse adaptée au message reçu'; st.className='aistatus ok'; }
+        else if(d&&d.reason==='nokey'){ st.textContent='💤 Cerveau IA non activé — template par défaut'; st.className='aistatus'; }
+        else { st.textContent='Réponse auto indisponible — template gardé'; st.className='aistatus'; }
+      }catch(e){ st.textContent='Réponse auto indisponible — template gardé'; st.className='aistatus'; }
+      gb.disabled=false;
+    };
+    gb.onclick=runAI; runAI();
+  }
   if(opts.to) panel.querySelector('.msgto').value=opts.to;
   const subjOf=()=>opts.subject||'Message — Hyped Agency';
   const cpbtn=panel.querySelector('.msgcopy');

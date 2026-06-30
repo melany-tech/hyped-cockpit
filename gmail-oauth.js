@@ -76,6 +76,56 @@ async function fetchEmails(gmail, query = "newer_than:30d -in:sent -in:draft -ca
   }
   return out;
 }
+// --- Lecture du corps complet d'un fil (pour la réponse intelligente) ----
+function b64urlDecode(s) {
+  try { return Buffer.from(String(s || "").replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"); } catch (e) { return ""; }
+}
+function htmlToText(h) {
+  return String(h || "")
+    .replace(/<\s*(br|\/p|\/div|\/li)\s*>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&#39;/g, "'").replace(/&quot;/gi, '"')
+    .replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+}
+function extractBody(payload) {
+  if (!payload) return "";
+  // privilégie text/plain, sinon text/html nettoyé
+  let plain = "", html = "";
+  const walk = (p) => {
+    if (!p) return;
+    const mt = p.mimeType || "";
+    if (mt === "text/plain" && p.body?.data) plain += b64urlDecode(p.body.data) + "\n";
+    else if (mt === "text/html" && p.body?.data) html += b64urlDecode(p.body.data) + "\n";
+    (p.parts || []).forEach(walk);
+  };
+  walk(payload);
+  const txt = plain.trim() || htmlToText(html);
+  // coupe la citation du fil précédent (Le ... a écrit / lignes >)
+  return txt
+    .split(/\n\s*(?:Le\s.+?a écrit\s*:|On\s.+?wrote:|De\s*:|-{2,}\s*Message)/)[0]
+    .split(/\n>/)[0]
+    .trim()
+    .slice(0, 4000);
+}
+/** Renvoie le texte du dernier message REÇU (pas de la boîte `email`) d'un fil. */
+async function fetchThreadText(email, threadId) {
+  const gmail = gmailFor(email);
+  if (!gmail || !threadId) return { ok: false };
+  try {
+    const t = await gmail.users.threads.get({ userId: "me", id: threadId, format: "full" });
+    const msgs = t.data.messages || [];
+    const mine = String(email || "").toLowerCase();
+    // dernier message dont l'expéditeur n'est PAS la boîte connectée
+    let pick = null;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const h = Object.fromEntries((msgs[i].payload?.headers || []).map((x) => [x.name, x.value]));
+      if (!String(h.From || "").toLowerCase().includes(mine)) { pick = { m: msgs[i], h }; break; }
+    }
+    if (!pick) { const m = msgs[msgs.length - 1]; pick = { m, h: Object.fromEntries((m?.payload?.headers || []).map((x) => [x.name, x.value])) }; }
+    return { ok: true, from: pick.h.From || "", subject: pick.h.Subject || "", date: pick.h.Date || "", text: extractBody(pick.m.payload) || pick.m.snippet || "" };
+  } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+}
+
 /** Analyse la boîte de `email` avec les créateurs/marques de `collabs`. */
 async function analyzeFor(email, collabs, brandProducts = {}) {
   const gmail = gmailFor(email);
@@ -161,4 +211,4 @@ async function draftsToValidate(email) {
   return { count: keep.length };
 }
 
-module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, analyzeFor, calendarToday, createDraft, sendEmail, draftsToValidate, SCOPES };
+module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, analyzeFor, calendarToday, createDraft, sendEmail, draftsToValidate, fetchThreadText, SCOPES };

@@ -382,6 +382,60 @@ app.post("/api/gmail/send", auth, async (req, res) => {
   try { const r = await gm.sendEmail(req.user.email, { to, subject, body }); if (r && r.ok) logActivity({ type: "email", creator: to, cp: req.user.name }); res.json(r); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
+// --- Cerveau IA : rédige une réponse adaptée au mail RÉELLEMENT reçu ------
+const REPLY_MODEL = process.env.REPLY_MODEL || "claude-3-5-haiku-latest";
+async function claudeReply({ cp, creator, brand, category, received, subject }) {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return { ok: false, reason: "nokey" };
+  const sys = [
+    "Tu es " + (cp || "la chef de projet") + ", chef de projet dans une agence de marketing d'influence (Hyped Agency).",
+    "Tu réponds par mail à un créateur de contenu, en français, au nom de la marque concernée.",
+    "TON : chaleureux, naturel, tutoiement, professionnel mais proche. Emojis légers et bien placés (✨ 🤍 📦 🙌), jamais en excès.",
+    "RÈGLE D'OR : tu réponds VRAIMENT au contenu du message reçu — tu reprends ses points, tu réponds à ses questions, tu rebondis sur ce qu'il dit. Pas de réponse générique.",
+    "Si une info te manque pour avancer (adresse postale, modalités/tarif, dates, lien preview...), demande-la clairement mais sans alourdir.",
+    "N'invente JAMAIS de fait (montant, date, condition) qui n'est pas dans le message. Si tu ne sais pas, demande.",
+    "Sois concis : 4 à 10 lignes. Commence par 'Hello " + (creator || "toi") + " ✨' (ou le prénom réel s'il apparaît) et signe avec '" + (cp || "") + "'.",
+    "Réponds UNIQUEMENT par le corps du mail, sans objet, sans guillemets, sans commentaire.",
+  ].join("\n");
+  const ctx = [
+    "Marque : " + (brand || "—"),
+    "Créateur : " + (creator || "—"),
+    "Objet du fil : " + (subject || "—"),
+    category ? ("Type détecté : " + category) : "",
+    "",
+    "Message reçu du créateur :",
+    "\"\"\"",
+    (received || "").slice(0, 4000),
+    "\"\"\"",
+    "",
+    "Rédige la réponse de " + (cp || "la CP") + ".",
+  ].filter(Boolean).join("\n");
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: REPLY_MODEL, max_tokens: 700, system: sys, messages: [{ role: "user", content: ctx }] }),
+    });
+    if (!r.ok) { const t = await r.text().catch(() => ""); return { ok: false, reason: "api", detail: (t || "").slice(0, 300), status: r.status }; }
+    const d = await r.json();
+    const text = (d.content || []).filter((c) => c.type === "text").map((c) => c.text).join("").trim();
+    if (!text) return { ok: false, reason: "empty" };
+    return { ok: true, body: text };
+  } catch (e) { return { ok: false, reason: "exc", detail: String(e && e.message || e) }; }
+}
+app.post("/api/reply/suggest", auth, async (req, res) => {
+  const { threadId, creator, brand, category, snippet, subject } = req.body || {};
+  let received = String(snippet || "").trim();
+  try {
+    const t = inboxTarget(req);
+    if (gm.ENABLED && threadId && gm.isConnected(t.email)) {
+      const full = await gm.fetchThreadText(t.email, threadId);
+      if (full && full.ok && full.text) received = full.text;
+    }
+  } catch (e) {}
+  const out = await claudeReply({ cp: req.user.name, creator, brand, category, received, subject });
+  res.json(out);
+});
 // Marque un brief comme envoyé/préparé pour une collab → allume l'étape pipeline + activité
 app.post("/api/brief", auth, (req, res) => {
   const creator = String(req.body?.creator || "").trim();
