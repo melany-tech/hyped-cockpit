@@ -417,7 +417,7 @@ async function callAnthropic(sys, ctx) {
     return text ? { ok: true, body: text, via: "anthropic" } : { ok: false, reason: "empty" };
   } catch (e) { return { ok: false, reason: "exc", detail: String(e && e.message || e) }; }
 }
-async function claudeReply({ cp, creator, brand, category, received, subject }) {
+async function claudeReply({ cp, creator, brand, category, received, subject, transcript }) {
   const hasOpenAI = !!process.env.OPENAI_API_KEY, hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
   if (!hasOpenAI && !hasAnthropic) return { ok: false, reason: "nokey" };
   const sys = [
@@ -438,8 +438,10 @@ async function claudeReply({ cp, creator, brand, category, received, subject }) 
     "• N'écris jamais rien qui pourrait vexer ou heurter le créateur.",
     "",
     "RÈGLE D'OR : tu réponds VRAIMENT au contenu du message reçu — tu reprends ses points, tu réponds à ses questions, tu rebondis sur ce qu'il dit. JAMAIS de réponse générique.",
-    "Si une info te manque pour avancer (adresse postale, modalités/tarif, dates, lien preview…), demande-la clairement mais avec tact.",
-    "N'invente JAMAIS un fait (montant, date, condition) absent du message. Si tu ne sais pas, demande.",
+    "RÈGLE BUDGET (très importante) : par DÉFAUT, une collaboration Hyped se fait en ÉCHANGE DE PRODUITS (cadeau / gifting), donc NON rémunérée. Une collab n'est rémunérée QUE si un budget / tarif / montant / 'rémunéré' / 'paid' a été EXPLICITEMENT évoqué dans l'historique du fil. Si rien de tel n'apparaît dans les messages précédents, considère que c'est NON rémunéré (envoi de produits).",
+    "Donc si le créateur demande 'est-ce rémunéré ?' et que RIEN dans le fil ne parle de budget : réponds avec tact qu'il s'agit d'un partenariat en échange de produits (envoi de nos produits), pas d'une collab rémunérée. N'affirme JAMAIS que c'est payé si le budget n'a pas été abordé avant.",
+    "Si une info te manque pour avancer (adresse postale, dates, lien preview…), demande-la clairement mais avec tact.",
+    "N'invente JAMAIS un fait (montant, date, condition) absent du fil. Si tu ne sais pas, demande — sauf pour le caractère rémunéré, où l'absence de mention = non rémunéré.",
     "Reste concis : 4 à 10 lignes.",
     "Réponds UNIQUEMENT par le corps du mail, sans objet, sans guillemets, sans commentaire.",
   ].join("\n");
@@ -449,7 +451,12 @@ async function claudeReply({ cp, creator, brand, category, received, subject }) 
     "Objet du fil : " + (subject || "—"),
     category ? ("Type détecté : " + category) : "",
     "",
-    "Message reçu du créateur :",
+    transcript ? "Historique COMPLET du fil (du plus ancien au plus récent — sert à juger si le budget a déjà été évoqué) :" : "Message reçu du créateur :",
+    "\"\"\"",
+    (transcript || received || "").slice(0, 7000),
+    "\"\"\"",
+    "",
+    "Dernier message reçu (celui auquel tu réponds) :",
     "\"\"\"",
     (received || "").slice(0, 4000),
     "\"\"\"",
@@ -466,14 +473,16 @@ async function claudeReply({ cp, creator, brand, category, received, subject }) 
 app.post("/api/reply/suggest", auth, async (req, res) => {
   const { threadId, creator, brand, category, snippet, subject } = req.body || {};
   let received = String(snippet || "").trim();
+  let transcript = "";
   try {
     const t = inboxTarget(req);
     if (gm.ENABLED && threadId && gm.isConnected(t.email)) {
       const full = await gm.fetchThreadText(t.email, threadId);
       if (full && full.ok && full.text) received = full.text;
+      if (full && full.ok && full.transcript) transcript = full.transcript;
     }
   } catch (e) {}
-  const out = await claudeReply({ cp: req.user.name, creator, brand, category, received, subject });
+  const out = await claudeReply({ cp: req.user.name, creator, brand, category, received, subject, transcript });
   res.json(out);
 });
 // Marque un brief comme envoyé/préparé pour une collab → allume l'étape pipeline + activité

@@ -122,7 +122,14 @@ async function fetchThreadText(email, threadId) {
       if (!String(h.From || "").toLowerCase().includes(mine)) { pick = { m: msgs[i], h }; break; }
     }
     if (!pick) { const m = msgs[msgs.length - 1]; pick = { m, h: Object.fromEntries((m?.payload?.headers || []).map((x) => [x.name, x.value])) }; }
-    return { ok: true, from: pick.h.From || "", subject: pick.h.Subject || "", date: pick.h.Date || "", text: extractBody(pick.m.payload) || pick.m.snippet || "" };
+    // transcript complet du fil (du + ancien au + récent), pour juger sur l'historique
+    const transcript = msgs.map((m) => {
+      const h = Object.fromEntries((m.payload?.headers || []).map((x) => [x.name, x.value]));
+      const who = String(h.From || "").toLowerCase().includes(mine) ? "NOUS (agence)" : "CRÉATEUR";
+      const body = extractBody(m.payload) || m.snippet || "";
+      return who + " : " + body;
+    }).join("\n\n---\n\n").slice(0, 7000);
+    return { ok: true, from: pick.h.From || "", subject: pick.h.Subject || "", date: pick.h.Date || "", text: extractBody(pick.m.payload) || pick.m.snippet || "", transcript };
   } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
 }
 
