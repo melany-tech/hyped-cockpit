@@ -43,6 +43,17 @@ input:focus{outline:none;border-color:var(--teal)}
 .fillrow .track.unk{background:repeating-linear-gradient(45deg,#EEF1F1,#EEF1F1 5px,#E3E7E7 5px,#E3E7E7 10px)}
 .fillrow .bar{height:100%;border-radius:7px}
 .fillrow .fn{font-size:12px;font-weight:600;width:72px;text-align:right;flex:none}
+.fillrow2{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.fillrow2:last-child{margin-bottom:2px}
+.fillrow2 .fb{font-size:13px;font-weight:600;color:var(--navy);width:100px;flex:none}
+.fillrow2 .wks{flex:1;display:flex;gap:5px}
+.fillrow2 .fn{font-size:12px;font-weight:700;width:62px;text-align:right;flex:none}
+.wk{flex:1;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800}
+.wk.ok{background:#DCEFEA;color:#0F6E56}
+.wk.low{background:#FBEBDD;color:#9A6B12}
+.wk.none{background:#F0EFEC;color:#B7BFBd}
+.filllegend{font-size:10px;color:var(--gray);margin-top:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.filllegend .wk{width:18px;height:18px;flex:none;font-size:9px}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
 .card{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
 .card .lbl{font-size:12px;color:var(--gray);font-weight:500;display:flex;align-items:center;gap:7px}
@@ -522,7 +533,7 @@ function showView(v){
   window.scrollTo({top:0,behavior:'smooth'});
 }
 // ===== Pages Campagnes / Contacts / Rapports (vraies données) =====
-let ALERTS=[];
+let ALERTS=[], ALERTS_MONTH='';
 function brandIni(b){ return String(b).split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase(); }
 function infName(t){ return String(t||'').replace(/^contacter\s+/i,'').trim()||String(t||''); }
 function brandUnion(){
@@ -544,7 +555,7 @@ function renderCampagnes(){
     const cps=[...new Set([...cols.map(r=>r.cp).filter(Boolean),...(SRC_PROFILS||[]).filter(p=>p.projet===brand).map(p=>p.responsable).filter(Boolean)])];
     const fill=(ALERTS||[]).find(a=>a.brand===brand);
     let bar='';
-    if(fill&&fill.target&&fill.status!=='inconnu'&&fill.status!=='erreur'){ const pct=Math.min(100,Math.round((fill.count||0)/fill.target*100)); const col=fill.status==='vide'?'#C2553B':(fill.status==='faible'?'#C77F2A':'#2C9087'); bar=`<div class="cbar"><i style="width:${pct}%;background:${col}"></i></div><div class="csub">${fill.count||0}/${fill.target} collabs ce mois · objectif 3/sem</div>`; }
+    if(fill&&fill.weeks&&fill.status!=='inconnu'&&fill.status!=='erreur'){ const wo=fill.weeksOk||0, tw=fill.totalWeeks||fill.weeks.length; const seg=fill.weeks.map(w=>`<span class="wk ${w.ok?'ok':(w.collabs>0?'low':'none')}" title="${w.collabs} collab(s) · ${w.days} jour(s)">${w.days}</span>`).join(''); bar=`<div class="wks" style="margin-top:8px;display:flex;gap:5px">${seg}</div><div class="csub">${wo}/${tw} sem. bien remplies (≥3 collabs · ≥3 jours)</div>`; }
     else if(fill) bar='<div class="csub">remplissage non vérifié</div>';
     return `<div class="campcard">
       <div class="camph"><div class="bav">${esc(brandIni(brand))}</div><div><div class="campn">${esc(brand)}</div><div class="campcp">${cps.length?('CP : '+cps.map(esc).join(', ')):'CP à attribuer'}</div></div></div>
@@ -565,8 +576,9 @@ function renderContacts(){
 function renderRapports(){
   const brands=((OVERVIEW&&OVERVIEW.brands)||[]);
   const fillRows=(ALERTS||[]);
-  let t1='<div class="rsec"><div class="rsec-h">📊 Remplissage des calendriers · objectif 3/sem</div>';
-  t1+= fillRows.length? fillRows.map(c=>{ if(c.status==='inconnu'||c.status==='erreur') return `<div class="fillrow"><span class="fb">${esc(c.brand)}</span><div class="track unk"></div><span class="fn" style="color:#8A8780">non vérif.</span></div>`; const t=c.target||12; const pct=Math.min(100,Math.round((c.count||0)/t*100)); const col=c.status==='vide'?'#C2553B':(c.status==='faible'?'#C77F2A':'#2C9087'); return `<div class="fillrow"><span class="fb">${esc(c.brand)}</span><div class="track"><div class="bar" style="width:${pct}%;background:${col}"></div></div><span class="fn">${c.count||0}/${t}</span></div>`; }).join('') : '<div class="state2">Données de remplissage indisponibles.</div>';
+  let t1='<div class="rsec"><div class="rsec-h">📊 Remplissage des calendriers'+(ALERTS_MONTH?(' · '+esc(ALERTS_MONTH)):'')+' · objectif ≥3 collabs ET ≥3 jours/sem</div>';
+  t1+= fillRows.length? fillRows.map(fillRowHTML).join('') : '<div class="state2">Données de remplissage indisponibles.</div>';
+  t1+='<div class="filllegend"><span class="wk ok">3</span> semaine OK · <span class="wk low">1</span> incomplète · <span class="wk none">0</span> vide — le chiffre = jours couverts</div>';
   t1+='</div>';
   let t2='<div class="rsec"><div class="rsec-h">🔭 Pipeline par marque</div><table class="rtab"><tr><th>Marque</th><th>À contacter</th><th>Relances</th><th>Attendus</th><th>Reçus</th></tr>'+
     (brands.length?brands.map(b=>`<tr><td>${esc(b.brand)}</td><td>${b.aContacter}</td><td>${b.relances}</td><td>${b.contenus}</td><td>${b.recus}</td></tr>`).join(''):'<tr><td colspan="5" style="color:#9aa6a8">—</td></tr>')+'</table></div>';
@@ -820,23 +832,25 @@ function renderMail(d, who){
   }).join('');
   document.querySelectorAll('#mailbox .replybtn').forEach(b=>b.onclick=()=>openReply(b));
 }
+// Une ligne marque : segments par semaine (jours couverts), vert si ≥3 collabs ET ≥3 jours.
+function fillRowHTML(c){
+  if(c.status==='inconnu'||c.status==='erreur'){
+    return `<div class="fillrow2"><span class="fb">${esc(c.brand)}</span><div class="wks"></div><span class="fn" style="color:#9aa6a8">non vérifié</span></div>`;
+  }
+  const weeks=c.weeks||[];
+  const seg=weeks.map((w,i)=>{ const cls=w.ok?'ok':((w.collabs>0)?'low':'none'); return `<span class="wk ${cls}" title="Semaine ${i+1} : ${w.collabs} collab(s) sur ${w.days} jour(s) différents">${w.days}</span>`; }).join('');
+  const wo=c.weeksOk||0, tw=c.totalWeeks||weeks.length||0;
+  const col=c.status==='ok'?'#0F6E56':(c.status==='vide'?'#C2553B':'#9A6B12');
+  return `<div class="fillrow2"><span class="fb">${esc(c.brand)}</span><div class="wks">${seg}</div><span class="fn" style="color:${col}">${wo}/${tw} sem.</span></div>`;
+}
 async function loadAlerts(){
   try{
     const r=await api('/api/alerts');const d=await r.json();
     const fill=d.fill||[];
-    ALERTS=fill; refreshCustomView();
+    ALERTS=fill; ALERTS_MONTH=d.monthLabel||''; refreshCustomView();
     if(!fill.length){show($('fillpanel'),false);return;}
     show($('fillpanel'),true);
-    const bar=(c)=>{
-      const t=c.target||12;
-      if(c.status==='inconnu'||c.status==='erreur')
-        return `<div class="fillrow"><span class="fb">${c.brand}</span><div class="track unk"></div><span class="fn" style="color:#8A8780">non vérif.</span></div>`;
-      const pct=Math.min(100,Math.round((c.count||0)/t*100));
-      const col=c.status==='vide'?'#C2553B':(c.status==='faible'?'#C77F2A':'#2C9087');
-      const num=c.status==='vide'?'#C2553B':(c.status==='faible'?'#9A6B12':'#0F6E56');
-      return `<div class="fillrow"><span class="fb">${c.brand}</span><div class="track"><div class="bar" style="width:${pct}%;background:${col}"></div></div><span class="fn" style="color:${num}">${(c.count||0)}/${t}</span></div>`;
-    };
-    $('alertsbox').innerHTML='<div class="alerthdr">'+(d.monthLabel||'')+' · objectif 3 collabs/semaine</div>'+fill.map(bar).join('');
+    $('alertsbox').innerHTML='<div class="alerthdr">'+(d.monthLabel||'')+' · objectif : ≥3 collabs ET ≥3 jours différents / semaine</div>'+fill.map(fillRowHTML).join('')+'<div class="filllegend"><span class="wk ok">3</span> semaine OK · <span class="wk low">1</span> incomplète · <span class="wk none">0</span> vide — le chiffre = jours couverts</div>';
   }catch(e){show($('fillpanel'),false);}
 }
 function render(){

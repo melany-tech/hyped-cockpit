@@ -98,14 +98,16 @@ const FILL_CHECK = [
   { brand: "Doucéa",      dbId: "37bf8ac3-c3ae-81d6-9dbd-d7f4a64165a8", dateProp: "Date" },
   { brand: "Curls Matter", unverifiable: true }, // structure par mois -> non vérifiable auto
 ];
-async function countInMonth(dbId, dateProp, startISO, endISO) {
-  let n = 0, cursor;
+const MIN_DAYS = 3; // règle Hyped : un calendrier est "bien rempli" si ≥3 JOURS différents/semaine
+async function datesInMonth(dbId, dateProp, startISO, endISO) {
+  const out = []; let cursor;
   do {
     const r = await notion.databases.query({ database_id: dbId, start_cursor: cursor, page_size: 100,
       filter: { property: dateProp, date: { on_or_after: startISO, on_or_before: endISO } } });
-    n += r.results.length; cursor = r.has_more ? r.next_cursor : null;
+    r.results.forEach((pg) => { const dt = pg.properties?.[dateProp]?.date?.start; if (dt) out.push(dt.slice(0, 10)); });
+    cursor = r.has_more ? r.next_cursor : null;
   } while (cursor);
-  return n;
+  return out;
 }
 async function buildAlerts() {
   const now = new Date();
@@ -113,19 +115,29 @@ async function buildAlerts() {
   const end = new Date(now.getFullYear(), now.getMonth() + 2, 0);
   const iso = (d) => d.toISOString().slice(0, 10);
   const monthLabel = start.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
-  const days = Math.round((end - start) / 864e5) + 1;
-  const weeks = Math.max(1, Math.round(days / 7));
-  const target = MIN_PER_WEEK * weeks; // ex. ~13 pour un mois (3/semaine)
+  // semaines (lundi→dimanche) qui couvrent le mois
+  const weekMondays = [];
+  { const d = new Date(start); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // lundi de la semaine du 1er
+    while (d <= end) { weekMondays.push(iso(d)); d.setDate(d.getDate() + 7); } }
+  const totalWeeks = weekMondays.length;
+  const firstMon = new Date(weekMondays[0] + "T00:00:00");
   const fill = [];
   for (const c of FILL_CHECK) {
-    if (c.unverifiable) { fill.push({ brand: c.brand, status: "inconnu", target }); continue; }
-    let count;
-    try { count = await countInMonth(c.dbId, c.dateProp, iso(start), iso(end)); }
-    catch (e) { fill.push({ brand: c.brand, status: "erreur", target }); continue; }
-    const status = count === 0 ? "vide" : (count < target ? "faible" : "ok");
-    fill.push({ brand: c.brand, count, target, status });
+    if (c.unverifiable) { fill.push({ brand: c.brand, status: "inconnu", totalWeeks, minDays: MIN_DAYS }); continue; }
+    let dates;
+    try { dates = await datesInMonth(c.dbId, c.dateProp, iso(start), iso(end)); }
+    catch (e) { fill.push({ brand: c.brand, status: "erreur", totalWeeks, minDays: MIN_DAYS }); continue; }
+    const byWeekDays = weekMondays.map(() => new Set());   // jours distincts couverts
+    const byWeekCount = weekMondays.map(() => 0);            // nb de collabs
+    dates.forEach((dt) => { const idx = Math.floor((new Date(dt + "T00:00:00") - firstMon) / (7 * 864e5)); if (idx >= 0 && idx < byWeekDays.length) { byWeekDays[idx].add(dt); byWeekCount[idx]++; } });
+    // une semaine est OK seulement si ≥ MIN_PER_WEEK collabs ET ≥ MIN_DAYS jours différents
+    const weeks = weekMondays.map((w, i) => { const days = byWeekDays[i].size, collabs = byWeekCount[i]; return { week: w, days, collabs, ok: collabs >= MIN_PER_WEEK && days >= MIN_DAYS }; });
+    const weeksOk = weeks.filter((x) => x.ok).length;
+    const totalCollabs = dates.length;
+    const status = totalCollabs === 0 ? "vide" : (weeksOk === 0 ? "faible" : (weeksOk < totalWeeks ? "partiel" : "ok"));
+    fill.push({ brand: c.brand, weeks, weeksOk, totalWeeks, totalCollabs, minDays: MIN_DAYS, minCollabs: MIN_PER_WEEK, status });
   }
-  return { monthLabel, minPerWeek: MIN_PER_WEEK, target, fill };
+  return { monthLabel, minDays: MIN_DAYS, fill };
 }
 
 // id utilisateur Notion -> prénom (pour les champs "personne")
@@ -309,10 +321,12 @@ app.get("/api/activity", auth, (req, res) => {
 });
 app.get("/api/alerts", auth, async (req, res) => {
   // Remplissage des calendriers : visible par TOUTES les CP (plus seulement le pilote).
-  if (DEMO) return res.json({ monthLabel: "juillet 2026", minPerWeek: MIN_PER_WEEK, target: 12, fill: [
-    { brand: "Doucéa", status: "vide", count: 0, target: 12 },
-    { brand: "In Haircare", status: "faible", count: 5, target: 12 },
-    { brand: "Curls Matter", status: "inconnu", target: 12 } ] });
+  if (DEMO) return res.json({ monthLabel: "juillet 2026", minDays: MIN_DAYS, fill: [
+    { brand: "In Haircare", status: "partiel", weeksOk: 2, totalWeeks: 4, totalCollabs: 11, minDays: 3, minCollabs: 3, weeks: [
+      { days: 3, collabs: 4, ok: true }, { days: 1, collabs: 2, ok: false }, { days: 3, collabs: 3, ok: true }, { days: 1, collabs: 2, ok: false } ] },
+    { brand: "Doucéa", status: "vide", weeksOk: 0, totalWeeks: 4, totalCollabs: 0, minDays: 3, minCollabs: 3, weeks: [
+      { days: 0, collabs: 0, ok: false }, { days: 0, collabs: 0, ok: false }, { days: 0, collabs: 0, ok: false }, { days: 0, collabs: 0, ok: false } ] },
+    { brand: "Curls Matter", status: "inconnu", totalWeeks: 4, minDays: 3 } ] });
   try { res.json(await buildAlerts()); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 // --- Connexion Gmail par personne (réponses créateurs) ------------------
