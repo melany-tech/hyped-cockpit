@@ -383,18 +383,64 @@ app.post("/api/gmail/send", auth, async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 // --- Cerveau IA : rédige une réponse adaptée au mail RÉELLEMENT reçu ------
+// Compatible OpenAI (ChatGPT) ET Anthropic (Claude). On utilise la clé présente :
+//   - OPENAI_API_KEY  -> ChatGPT  (modèle OPENAI_MODEL, défaut gpt-4o-mini)
+//   - ANTHROPIC_API_KEY -> Claude (modèle REPLY_MODEL, défaut claude-3-5-haiku-latest)
 const REPLY_MODEL = process.env.REPLY_MODEL || "claude-3-5-haiku-latest";
-async function claudeReply({ cp, creator, brand, category, received, subject }) {
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+async function callOpenAI(sys, ctx) {
+  const key = process.env.OPENAI_API_KEY;
+  try {
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "content-type": "application/json", "authorization": "Bearer " + key },
+      body: JSON.stringify({ model: OPENAI_MODEL, max_tokens: 700, temperature: 0.7,
+        messages: [{ role: "system", content: sys }, { role: "user", content: ctx }] }),
+    });
+    if (!r.ok) { const t = await r.text().catch(() => ""); return { ok: false, reason: "api", detail: (t || "").slice(0, 300), status: r.status }; }
+    const d = await r.json();
+    const text = (d.choices?.[0]?.message?.content || "").trim();
+    return text ? { ok: true, body: text, via: "openai" } : { ok: false, reason: "empty" };
+  } catch (e) { return { ok: false, reason: "exc", detail: String(e && e.message || e) }; }
+}
+async function callAnthropic(sys, ctx) {
   const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return { ok: false, reason: "nokey" };
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: REPLY_MODEL, max_tokens: 700, system: sys, messages: [{ role: "user", content: ctx }] }),
+    });
+    if (!r.ok) { const t = await r.text().catch(() => ""); return { ok: false, reason: "api", detail: (t || "").slice(0, 300), status: r.status }; }
+    const d = await r.json();
+    const text = (d.content || []).filter((c) => c.type === "text").map((c) => c.text).join("").trim();
+    return text ? { ok: true, body: text, via: "anthropic" } : { ok: false, reason: "empty" };
+  } catch (e) { return { ok: false, reason: "exc", detail: String(e && e.message || e) }; }
+}
+async function claudeReply({ cp, creator, brand, category, received, subject }) {
+  const hasOpenAI = !!process.env.OPENAI_API_KEY, hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
+  if (!hasOpenAI && !hasAnthropic) return { ok: false, reason: "nokey" };
   const sys = [
-    "Tu es " + (cp || "la chef de projet") + ", chef de projet dans une agence de marketing d'influence (Hyped Agency).",
-    "Tu réponds par mail à un créateur de contenu, en français, au nom de la marque concernée.",
-    "TON : chaleureux, naturel, tutoiement, professionnel mais proche. Emojis légers et bien placés (✨ 🤍 📦 🙌), jamais en excès.",
-    "RÈGLE D'OR : tu réponds VRAIMENT au contenu du message reçu — tu reprends ses points, tu réponds à ses questions, tu rebondis sur ce qu'il dit. Pas de réponse générique.",
-    "Si une info te manque pour avancer (adresse postale, modalités/tarif, dates, lien preview...), demande-la clairement mais sans alourdir.",
-    "N'invente JAMAIS de fait (montant, date, condition) qui n'est pas dans le message. Si tu ne sais pas, demande.",
-    "Sois concis : 4 à 10 lignes. Commence par 'Hello " + (creator || "toi") + " ✨' (ou le prénom réel s'il apparaît) et signe avec '" + (cp || "") + "'.",
+    "Tu es " + (cp || "la chef de projet") + ", chef de projet chez Hyped Agency (agence de marketing d'influence).",
+    "Tu réponds par mail à un CRÉATEUR / INFLUENCEUR, en français, au nom de la marque concernée.",
+    "",
+    "VOIX DE MARQUE HYPED (à respecter scrupuleusement) :",
+    "• Ton dynamique, engageant, professionnel mais accessible et chaleureux. Tutoiement.",
+    "• Le créateur doit ressentir de la chaleur, de la proximité et du professionnalisme, pour donner envie de continuer à collaborer.",
+    "• Commence par 'Hello " + (creator || "toi") + "' (utilise le vrai prénom s'il apparaît dans le message).",
+    "• Montre de l'enthousiasme pour la collab ou le projet.",
+    "• Sois clair et concis dans les demandes et les infos.",
+    "• Inclus TOUJOURS une action attendue (un retour, un ajustement, une confirmation d'adresse/dispo, etc.).",
+    "• Emojis Hyped à utiliser UNIQUEMENT si le message est positif : 🫶🏾 🥰 ❤️ 😍 😊 ☺️ ✨. Sans excès.",
+    "• Propose toujours ta disponibilité, ex : 'Je me tiens à ta disposition si tu as la moindre question' ou \"N'hésite pas à revenir vers moi si tu as la moindre question ☺️\".",
+    "• Formulations en SUGGESTION, jamais en ordre : 'On te propose…', 'Et si on partait sur…' plutôt que 'Fais ceci'. Si le créateur insiste, tu peux rappeler avec tact qu'il s'agit d'une collaboration commerciale, sans être trop formel.",
+    "• Termine TOUJOURS par 'À très vite' suivi de ✨, puis la signature '" + (cp || "") + "'.",
+    "• N'écris jamais rien qui pourrait vexer ou heurter le créateur.",
+    "",
+    "RÈGLE D'OR : tu réponds VRAIMENT au contenu du message reçu — tu reprends ses points, tu réponds à ses questions, tu rebondis sur ce qu'il dit. JAMAIS de réponse générique.",
+    "Si une info te manque pour avancer (adresse postale, modalités/tarif, dates, lien preview…), demande-la clairement mais avec tact.",
+    "N'invente JAMAIS un fait (montant, date, condition) absent du message. Si tu ne sais pas, demande.",
+    "Reste concis : 4 à 10 lignes.",
     "Réponds UNIQUEMENT par le corps du mail, sans objet, sans guillemets, sans commentaire.",
   ].join("\n");
   const ctx = [
@@ -410,18 +456,12 @@ async function claudeReply({ cp, creator, brand, category, received, subject }) 
     "",
     "Rédige la réponse de " + (cp || "la CP") + ".",
   ].filter(Boolean).join("\n");
-  try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: REPLY_MODEL, max_tokens: 700, system: sys, messages: [{ role: "user", content: ctx }] }),
-    });
-    if (!r.ok) { const t = await r.text().catch(() => ""); return { ok: false, reason: "api", detail: (t || "").slice(0, 300), status: r.status }; }
-    const d = await r.json();
-    const text = (d.content || []).filter((c) => c.type === "text").map((c) => c.text).join("").trim();
-    if (!text) return { ok: false, reason: "empty" };
-    return { ok: true, body: text };
-  } catch (e) { return { ok: false, reason: "exc", detail: String(e && e.message || e) }; }
+  // priorité au fournisseur explicite (REPLY_PROVIDER), sinon OpenAI si présent, sinon Anthropic
+  const pref = String(process.env.REPLY_PROVIDER || "").toLowerCase();
+  if (pref === "openai" && hasOpenAI) return callOpenAI(sys, ctx);
+  if (pref === "anthropic" && hasAnthropic) return callAnthropic(sys, ctx);
+  if (hasOpenAI) return callOpenAI(sys, ctx);
+  return callAnthropic(sys, ctx);
 }
 app.post("/api/reply/suggest", auth, async (req, res) => {
   const { threadId, creator, brand, category, snippet, subject } = req.body || {};
