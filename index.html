@@ -382,12 +382,12 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
     <nav class="sb-nav">
       <a class="nav on" data-go="cockpit"><span class="ni">▦</span> Cockpit</a>
       <a class="nav" data-go="profils"><span class="ni">☺</span> Profils</a>
-      <a class="nav" data-go="campagnes" data-soon="1"><span class="ni">📣</span> Campagnes</a>
+      <a class="nav" data-go="campagnes"><span class="ni">📣</span> Campagnes</a>
       <a class="nav" data-go="contenus"><span class="ni">🎬</span> Contenus</a>
-      <a class="nav" data-go="contacts" data-soon="1"><span class="ni">👥</span> Contacts</a>
+      <a class="nav" data-go="contacts"><span class="ni">👥</span> Contacts</a>
       <a class="nav" data-go="calendrier"><span class="ni">📅</span> Calendrier</a>
       <a class="nav" data-go="messages"><span class="ni">💬</span> Messages</a>
-      <a class="nav" data-go="rapports" data-soon="1"><span class="ni">📊</span> Rapports</a>
+      <a class="nav" data-go="rapports"><span class="ni">📊</span> Rapports</a>
     </nav>
     <div class="sb-bottom">
       <div class="sb-team hidden" id="teamtoggle">
@@ -1019,8 +1019,11 @@ async function loadTodo(){
     else if(teamOn()) hdr='Priorités équipe (vue congés)';
     $('todohdr2').textContent=hdr;
     show($('todopanel'),true);
-    TODO_COUNT=(d.tasks||[]).length;updateStats();
-    renderTodo(d.tasks||[], (isSup&&(!view||view==='ALL'))||teamOn(), (isSup&&view&&view!=='ALL')?view:null);
+    let tasks=d.tasks||[];
+    // Vue équipe (congés) : on montre les sujets des AUTRES CP, pas mes propres tâches
+    if(teamOn()&&VIEWER){ const me=String(VIEWER.name||'').trim().toLowerCase(); tasks=tasks.filter(t=>String(t.responsable||'').trim().toLowerCase()!==me); }
+    TODO_COUNT=tasks.length;updateStats();
+    renderTodo(tasks, (isSup&&(!view||view==='ALL'))||teamOn(), (isSup&&view&&view!=='ALL')?view:null);
   }catch(e){show($('todopanel'),false);}
 }
 function taskIcon(t){const s=(t.task||'').toLowerCase();
@@ -1170,7 +1173,7 @@ function renderSourcing(profils){
     const who=p.responsable?`<span class="owner">${esc(p.responsable)}</span>`:'<span class="owner none">à attribuer</span>';
     const sub=p.commentaire?esc(p.commentaire):'à contacter';
     return `<div class="row" data-id="${p.id}"><span class="rdot" style="background:#C77F2A"></span>
-      <div class="info"><div class="t">${esc(p.task)}</div><div class="s">${sub}</div></div>
+      <div class="info"><div class="t">${linkify(p.task)}</div><div class="s">${sub}</div></div>
       ${p.projet?`<span class="brand">${esc(p.projet)}</span>`:''}${who}${link}
       <button class="lk primary srcmsg">✍️ Message</button><button class="lk srcdone">Marquer comme contacté</button></div>`;
   }).join('');
