@@ -47,11 +47,17 @@ input:focus{outline:none;border-color:var(--teal)}
 .fillrow2:last-child{margin-bottom:2px}
 .fillrow2 .fb{font-size:13px;font-weight:600;color:var(--navy);width:100px;flex:none}
 .fillrow2 .wks{flex:1;display:flex;gap:5px}
-.fillrow2 .fn{font-size:12px;font-weight:700;width:62px;text-align:right;flex:none}
+.fillrow2 .fn{font-size:12px;font-weight:700;width:120px;text-align:right;flex:none}
 .wk{flex:1;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800}
 .wk.ok{background:#DCEFEA;color:#0F6E56}
 .wk.low{background:#FBEBDD;color:#9A6B12}
 .wk.none{background:#F0EFEC;color:#B7BFBd}
+.fillhead{margin-bottom:6px}
+.fillhead .wkh{flex:1;text-align:center;font-size:10px;font-weight:700;letter-spacing:.02em;color:var(--gray);text-transform:uppercase}
+.fillhead .fn{color:var(--gray);font-size:10px;font-weight:700;text-transform:uppercase}
+.pbar{height:7px;border-radius:5px;background:#ECEAE5;overflow:hidden;margin-bottom:3px}
+.pbar .pfill{height:100%;border-radius:5px;background:#2C9087}
+.pscore{font-size:11px;font-weight:800}
 .filllegend{font-size:10px;color:var(--gray);margin-top:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .filllegend .wk{width:18px;height:18px;flex:none;font-size:9px}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
@@ -563,7 +569,7 @@ function renderCampagnes(){
     const cps=[...new Set([...cols.map(r=>r.cp).filter(Boolean),...(SRC_PROFILS||[]).filter(p=>p.projet===brand).map(p=>p.responsable).filter(Boolean)])];
     const fill=(ALERTS||[]).find(a=>a.brand===brand);
     let bar='';
-    if(fill&&fill.weeks&&fill.status!=='inconnu'&&fill.status!=='erreur'){ const wo=fill.weeksOk||0, tw=fill.totalWeeks||fill.weeks.length; const seg=fill.weeks.map(w=>`<span class="wk ${w.ok?'ok':(w.collabs>0?'low':'none')}" title="${w.collabs} collab(s) · ${w.days} jour(s)">${w.days}</span>`).join(''); bar=`<div class="wks" style="margin-top:8px;display:flex;gap:5px">${seg}</div><div class="csub">${wo}/${tw} sem. bien remplies (≥3 collabs · ≥3 jours)</div>`; }
+    if(fill&&fill.weeks&&fill.status!=='inconnu'&&fill.status!=='erreur'){ const wo=fill.weeksOk||0, tw=fill.totalWeeks||fill.weeks.length; const lbl=fill.weeks.map((w,i)=>`<span class="wkh" style="flex:1;text-align:center;font-size:9px;font-weight:700;color:var(--gray);text-transform:uppercase">Sem. ${i+1}</span>`).join(''); const seg=fill.weeks.map((w,i)=>`<span class="wk ${w.ok?'ok':(w.collabs>0?'low':'none')}" title="${w.label||('Semaine '+(i+1))} : ${w.collabs} collab(s) · ${w.days} jour(s) différents">${w.days}</span>`).join(''); bar=`<div class="wks" style="margin-top:8px;display:flex;gap:5px">${lbl}</div><div class="wks" style="margin-top:3px;display:flex;gap:5px">${seg}</div><div class="csub">${wo}/${tw} semaines bien remplies (≥3 collabs ET ≥3 jours)</div>`; }
     else if(fill) bar='<div class="csub">remplissage non vérifié</div>';
     return `<div class="campcard">
       <div class="camph"><div class="bav">${esc(brandIni(brand))}</div><div><div class="campn">${esc(brand)}</div><div class="campcp">${cps.length?('CP : '+cps.map(esc).join(', ')):'CP à attribuer'}</div></div></div>
@@ -585,7 +591,8 @@ function renderRapports(){
   const brands=((OVERVIEW&&OVERVIEW.brands)||[]);
   const fillRows=(ALERTS||[]);
   let t1='<div class="rsec"><div class="rsec-h">📊 Remplissage des calendriers'+(ALERTS_MONTH?(' · '+esc(ALERTS_MONTH)):'')+' · objectif ≥3 collabs ET ≥3 jours/sem</div>';
-  t1+= fillRows.length? fillRows.map(fillRowHTML).join('') : '<div class="state2">Données de remplissage indisponibles.</div>';
+  const rhead=fillRows.find(f=>f.weeks)?fillHeadHTML((fillRows.find(f=>f.weeks)||{}).totalWeeks):'';
+  t1+= fillRows.length? (rhead+fillRows.map(fillRowHTML).join('')) : '<div class="state2">Données de remplissage indisponibles.</div>';
   t1+='<div class="filllegend"><span class="wk ok">3</span> semaine OK · <span class="wk low">1</span> incomplète · <span class="wk none">0</span> vide — le chiffre = jours couverts</div>';
   t1+='</div>';
   let t2='<div class="rsec"><div class="rsec-h">🔭 Pipeline par marque</div><table class="rtab"><tr><th>Marque</th><th>À contacter</th><th>Relances</th><th>Attendus</th><th>Reçus</th></tr>'+
@@ -842,15 +849,21 @@ function renderMail(d, who){
   document.querySelectorAll('#mailbox .replybtn').forEach(b=>b.onclick=()=>openReply(b));
 }
 // Une ligne marque : segments par semaine (jours couverts), vert si ≥3 collabs ET ≥3 jours.
+function fillHeadHTML(tw){
+  const n=tw||4;
+  let h='';for(let i=1;i<=n;i++)h+=`<span class="wkh">Sem. ${i}</span>`;
+  return `<div class="fillrow2 fillhead"><span class="fb"></span><div class="wks">${h}</div><span class="fn">bilan du mois</span></div>`;
+}
 function fillRowHTML(c){
   if(c.status==='inconnu'||c.status==='erreur'){
     return `<div class="fillrow2"><span class="fb">${esc(c.brand)}</span><div class="wks"></div><span class="fn" style="color:#9aa6a8">non vérifié</span></div>`;
   }
   const weeks=c.weeks||[];
-  const seg=weeks.map((w,i)=>{ const cls=w.ok?'ok':((w.collabs>0)?'low':'none'); return `<span class="wk ${cls}" title="Semaine ${i+1} : ${w.collabs} collab(s) sur ${w.days} jour(s) différents">${w.days}</span>`; }).join('');
+  const seg=weeks.map((w,i)=>{ const cls=w.ok?'ok':((w.collabs>0)?'low':'none'); return `<span class="wk ${cls}" title="${w.label||('Semaine '+(i+1))} : ${w.collabs} collab(s) sur ${w.days} jour(s) différents">${w.days}</span>`; }).join('');
   const wo=c.weeksOk||0, tw=c.totalWeeks||weeks.length||0;
+  const pct=tw?Math.round(wo/tw*100):0;
   const col=c.status==='ok'?'#0F6E56':(c.status==='vide'?'#C2553B':'#9A6B12');
-  return `<div class="fillrow2"><span class="fb">${esc(c.brand)}</span><div class="wks">${seg}</div><span class="fn" style="color:${col}">${wo}/${tw} sem.</span></div>`;
+  return `<div class="fillrow2"><span class="fb">${esc(c.brand)}</span><div class="wks">${seg}</div><span class="fn"><div class="pbar"><div class="pfill" style="width:${pct}%;background:${col}"></div></div><span class="pscore" style="color:${col}">${wo}/${tw} sem.</span></span></div>`;
 }
 async function loadAlerts(){
   try{
@@ -859,7 +872,8 @@ async function loadAlerts(){
     ALERTS=fill; ALERTS_MONTH=d.monthLabel||''; refreshCustomView();
     if(!fill.length){show($('fillpanel'),false);return;}
     show($('fillpanel'),true);
-    $('alertsbox').innerHTML='<div class="alerthdr">'+(d.monthLabel||'')+' · objectif : ≥3 collabs ET ≥3 jours différents / semaine</div>'+fill.map(fillRowHTML).join('')+'<div class="filllegend"><span class="wk ok">3</span> semaine OK · <span class="wk low">1</span> incomplète · <span class="wk none">0</span> vide — le chiffre = jours couverts</div>';
+    const head=fill.find(f=>f.weeks)?fillHeadHTML((fill.find(f=>f.weeks)||{}).totalWeeks):'';
+    $('alertsbox').innerHTML='<div class="alerthdr">'+(d.monthLabel||'')+' · objectif : ≥3 collabs ET ≥3 jours différents / semaine</div>'+head+fill.map(fillRowHTML).join('')+'<div class="filllegend"><span class="wk ok">3</span> semaine OK · <span class="wk low">1</span> incomplète · <span class="wk none">0</span> vide — le chiffre dans la case = nombre de jours couverts cette semaine-là</div>';
   }catch(e){show($('fillpanel'),false);}
 }
 function render(){

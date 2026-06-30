@@ -115,23 +115,20 @@ async function buildAlerts() {
   const end = new Date(now.getFullYear(), now.getMonth() + 2, 0);
   const iso = (d) => d.toISOString().slice(0, 10);
   const monthLabel = start.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
-  // semaines (lundi→dimanche) qui couvrent le mois
-  const weekMondays = [];
-  { const d = new Date(start); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // lundi de la semaine du 1er
-    while (d <= end) { weekMondays.push(iso(d)); d.setDate(d.getDate() + 7); } }
-  const totalWeeks = weekMondays.length;
-  const firstMon = new Date(weekMondays[0] + "T00:00:00");
+  // 4 semaines du mois : Semaine 1 = jours 1-7, S2 = 8-14, S3 = 15-21, S4 = 22 → fin du mois
+  const totalWeeks = 4;
+  const weekIdx = (dtISO) => { const day = parseInt(dtISO.slice(8, 10), 10); return Math.min(3, Math.floor((day - 1) / 7)); };
   const fill = [];
   for (const c of FILL_CHECK) {
     if (c.unverifiable) { fill.push({ brand: c.brand, status: "inconnu", totalWeeks, minDays: MIN_DAYS }); continue; }
     let dates;
     try { dates = await datesInMonth(c.dbId, c.dateProp, iso(start), iso(end)); }
     catch (e) { fill.push({ brand: c.brand, status: "erreur", totalWeeks, minDays: MIN_DAYS }); continue; }
-    const byWeekDays = weekMondays.map(() => new Set());   // jours distincts couverts
-    const byWeekCount = weekMondays.map(() => 0);            // nb de collabs
-    dates.forEach((dt) => { const idx = Math.floor((new Date(dt + "T00:00:00") - firstMon) / (7 * 864e5)); if (idx >= 0 && idx < byWeekDays.length) { byWeekDays[idx].add(dt); byWeekCount[idx]++; } });
+    const byWeekDays = [0, 1, 2, 3].map(() => new Set());   // jours distincts couverts
+    const byWeekCount = [0, 0, 0, 0];                         // nb de collabs
+    dates.forEach((dt) => { const idx = weekIdx(dt); byWeekDays[idx].add(dt); byWeekCount[idx]++; });
     // une semaine est OK seulement si ≥ MIN_PER_WEEK collabs ET ≥ MIN_DAYS jours différents
-    const weeks = weekMondays.map((w, i) => { const days = byWeekDays[i].size, collabs = byWeekCount[i]; return { week: w, days, collabs, ok: collabs >= MIN_PER_WEEK && days >= MIN_DAYS }; });
+    const weeks = [0, 1, 2, 3].map((i) => { const days = byWeekDays[i].size, collabs = byWeekCount[i]; return { label: "Semaine " + (i + 1), days, collabs, ok: collabs >= MIN_PER_WEEK && days >= MIN_DAYS }; });
     const weeksOk = weeks.filter((x) => x.ok).length;
     const totalCollabs = dates.length;
     const status = totalCollabs === 0 ? "vide" : (weeksOk === 0 ? "faible" : (weeksOk < totalWeeks ? "partiel" : "ok"));
@@ -323,9 +320,9 @@ app.get("/api/alerts", auth, async (req, res) => {
   // Remplissage des calendriers : visible par TOUTES les CP (plus seulement le pilote).
   if (DEMO) return res.json({ monthLabel: "juillet 2026", minDays: MIN_DAYS, fill: [
     { brand: "In Haircare", status: "partiel", weeksOk: 2, totalWeeks: 4, totalCollabs: 11, minDays: 3, minCollabs: 3, weeks: [
-      { days: 3, collabs: 4, ok: true }, { days: 1, collabs: 2, ok: false }, { days: 3, collabs: 3, ok: true }, { days: 1, collabs: 2, ok: false } ] },
+      { label: "Semaine 1", days: 3, collabs: 4, ok: true }, { label: "Semaine 2", days: 1, collabs: 2, ok: false }, { label: "Semaine 3", days: 3, collabs: 3, ok: true }, { label: "Semaine 4", days: 1, collabs: 2, ok: false } ] },
     { brand: "Doucéa", status: "vide", weeksOk: 0, totalWeeks: 4, totalCollabs: 0, minDays: 3, minCollabs: 3, weeks: [
-      { days: 0, collabs: 0, ok: false }, { days: 0, collabs: 0, ok: false }, { days: 0, collabs: 0, ok: false }, { days: 0, collabs: 0, ok: false } ] },
+      { label: "Semaine 1", days: 0, collabs: 0, ok: false }, { label: "Semaine 2", days: 0, collabs: 0, ok: false }, { label: "Semaine 3", days: 0, collabs: 0, ok: false }, { label: "Semaine 4", days: 0, collabs: 0, ok: false } ] },
     { brand: "Curls Matter", status: "inconnu", totalWeeks: 4, minDays: 3 } ] });
   try { res.json(await buildAlerts()); } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -441,14 +438,19 @@ async function claudeReply({ cp, creator, brand, category, received, subject, tr
     "Ne JAMAIS écrire de signature complète type 'Kendia Koffi / Cheffe de projet / Hyped Agency' : juste le prénom (la signature mail s'ajoute automatiquement).",
     "",
     "RÈGLE D'OR : tu réponds VRAIMENT au contenu du dernier message — tu reprends ses points, réponds à ses questions, rebondis sur ce qu'il dit. JAMAIS de réponse générique.",
-    "RÈGLE BUDGET : par DÉFAUT une collab Hyped se fait en échange de produits (gifting), NON rémunérée. Elle n'est rémunérée QUE si un budget / tarif / montant / facture / paiement a été EXPLICITEMENT évoqué dans l'historique du fil. Si rien de tel n'apparaît avant, c'est NON rémunéré.",
-    "Si le créateur demande 'est-ce rémunéré ?' et que RIEN dans le fil ne parle de budget : formule-le POSITIVEMENT à la Kendia, ex : 'Pour cette collaboration, on part sur un joli portage de nos produits à recevoir en échange de ton contenu ✨' — pas le mot sec 'non rémunéré'. N'affirme JAMAIS que c'est payé si le budget n'a pas été abordé.",
-    "À l'inverse, si le fil parle clairement de factures/paiements, tu es sur une collab rémunérée : agis en conséquence (accuser réception de facture, remboursement de produit acheté, etc.).",
+    "RÈGLE BUDGET — déterminer le type : la collab est rémunérée UNIQUEMENT si un budget / tarif / facture / paiement a déjà été ACTÉ par l'agence dans le fil. Sinon c'est un envoi de produits (gifting). N'affirme JAMAIS que c'est payé si ça n'a pas été acté.",
+    "RÈGLE BUDGET — comment l'annoncer (FORMULATION OBLIGATOIRE, à respecter à la lettre) :",
+    "  - On n'IMPOSE jamais et on ne REFUSE jamais frontalement. INTERDITS ABSOLUS (ne JAMAIS écrire) : 'on ne pourra pas activer le budget', 'on ne peut pas te rémunérer', 'ce n'est pas rémunéré', 'pas de budget', 'non rémunéré', 'collab non payée', 'en échange de ton contenu'.",
+    "  - On présente le gifting comme un AVANTAGE, avec des tournures TENTATIVES ('nous pensions', 'on pensait partir sur') : ex. 'Nous pensions partir sur un envoi de nos produits afin que tu puisses tester toute la gamme ✨' (mets en avant l'intérêt de recevoir / tester la gamme).",
+    "  - PUIS on suggère le contenu en douceur, jamais en ordre : ex. 'et nous pensions que tu pourrais ensuite donner ton avis dans une vidéo sur [plateforme] 🫶'.",
+    "  - Si le créateur a PROPOSÉ un tarif/budget qu'on ne fait pas : ne refuse pas le montant, n'en parle même pas — réoriente positivement vers l'envoi produits (test de la gamme) + la suggestion de contenu.",
+    "À l'inverse, si le fil parle clairement de factures/paiements déjà actés, tu es sur une collab rémunérée : agis en conséquence (accuser réception de facture, remboursement de produit acheté, etc.).",
     "N'invente JAMAIS un fait précis (montant, date exacte, condition) absent du fil. Si tu ne sais pas, demande.",
     "Reste concis : 3 à 10 lignes. Réponds UNIQUEMENT par le corps du mail, sans objet, sans guillemets, sans commentaire.",
     "",
     "EXEMPLES RÉELS de réponses de Kendia (imite ce style, pas le contenu) :",
     "[Reçu] 'Je suis partante !' → [Kendia] 'Hello [prénom],\\nTrop contente que tu sois partante, ça me fait super plaisir ! 😍\\nQue dirais-tu de prévoir 2 TikTok ce mois-ci autour de la gamme ? Si c'est bon pour toi, pourrais-tu me transmettre tes infos postales (nom, prénom, adresse complète et numéro de téléphone) afin que je programme l'envoi des produits 🫶✨\\nBien à toi,\\n[prénom CP]'",
+    "[Reçu] (le créateur propose un tarif/budget, OU demande 'c'est rémunéré ?', et aucun budget n'a été acté) → [Kendia] 'Hello [prénom],\\nTrop contente que le concept te plaise ! 😊\\nNous pensions partir sur un envoi de toute notre gamme pour que tu puisses la tester tranquillement ✨, et nous pensions que tu pourrais ensuite donner ton avis dans une vidéo sur [plateforme] 🫶\\nSi ça te parle, peux-tu me transmettre tes infos postales (nom, prénom, adresse complète et numéro de téléphone) pour que je lance l'envoi ?\\nHâte de voir ce que tu vas imaginer ✨\\n[prénom CP]'  (NB : on ne parle PAS du budget proposé, on ne refuse rien.)",
     "[Reçu] 'As-tu des nouvelles de l'envoi ?' → [Kendia] 'Hello [prénom],\\nComment vas-tu ? :)\\nVoici ton numéro de suivi : [lien]. Il est dispo en point relais ! Hésite pas à me dire une fois récupéré ;)\\nBelle journée à toi,\\n[prénom CP]'",
     "[Reçu] 'J'ai bien reçu les produits, merci !' → [Kendia] '[prénom],\\nSuper ! Hésite pas à me dire dès que tu auras pu tourner ;)\\nBelle journée,\\n[prénom CP]'",
     "[Reçu] 'Voici la facture pour la vidéo.' → [Kendia] 'Coucou [prénom],\\nMerci beaucoup pour l'envoi de la facture ✨ Je te confirme l'avoir bien reçue et transmise au service concerné pour traitement 😊\\nEncore merci pour cette collaboration, c'était un vrai plaisir de travailler ensemble 🥰\\nÀ très bientôt 🤍\\n[prénom CP]'",
