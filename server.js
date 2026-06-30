@@ -159,6 +159,7 @@ const ADAPTERS = {
     const m = M[statut];
     if (!m) return null;
     return {
+      id: page.id,
       brand,
       name: title(p["Nom"]) || "(sans nom)",
       cp: firstPerson(p["Interlocuteur"]),
@@ -375,6 +376,23 @@ app.post("/api/brief", auth, (req, res) => {
   recordBrief({ creator, brand, cp: req.user.name, at: Date.now() });
   logActivity({ type: "brief", creator, brand, cp: req.user.name });
   res.json({ ok: true });
+});
+// Assignation rapide d'une collab à une CP (pilote) → écrit l'Interlocuteur dans Notion
+app.post("/api/collab/:id/assign", auth, async (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé au pilote" });
+  if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
+  const to = String(req.body?.to || "").trim();
+  try {
+    if (!to) {
+      await notion.pages.update({ page_id: req.params.id, properties: { "Interlocuteur": { people: [] } } });
+    } else {
+      const uid = await userIdByName(to);
+      if (!uid) return res.status(400).json({ error: "CP introuvable dans Notion : " + to });
+      await notion.pages.update({ page_id: req.params.id, properties: { "Interlocuteur": { people: [{ id: uid }] } } });
+    }
+    CACHE = { at: 0, rows: [] }; // force le rafraîchissement des collabs
+    res.json({ ok: true, to });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // --- Visios du jour (Google Agenda de la personne) ----------------------

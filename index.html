@@ -151,6 +151,8 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
 .panel.block{margin-bottom:16px}
 .panelhint{font-size:11.5px;color:var(--gray);margin:-4px 0 12px;line-height:1.4}
 .briefbtn,.replybtn{white-space:nowrap;cursor:pointer}
+.assignsel{font-family:inherit;font-size:11.5px;color:var(--teal);font-weight:600;background:#EAF3F1;border:1px solid #BfE0D9;border-radius:8px;padding:5px 7px;cursor:pointer;max-width:120px}
+.assignsel:hover{background:#dff0eb}
 .naqty{font-size:11px;font-weight:500;color:var(--gray)}
 .pt{font-size:13px;font-weight:700;margin:0 0 12px;display:flex;align-items:center;gap:7px;color:var(--navy)}
 .panel .row{margin-bottom:8px}
@@ -422,13 +424,6 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
     </section>
   </div>
 
-  <!-- Prochaines actions (1 par créateur) -->
-  <section class="panel block hidden" id="nextactionspanel">
-    <p class="pt"><span class="pi">🎯</span> Prochaines actions <span class="naqty">· une par créateur</span></p>
-    <div class="panelhint">Tes mails créateurs regroupés : une seule action à faire par personne, avec la réponse déjà prête. Clique « ✍️ Répondre » → relis → Brouillon ou Envoyer.</div>
-    <div id="nextactions"></div>
-  </section>
-
   <!-- Profils à contacter -->
   <section class="panel block" id="srcpanel">
     <p class="pt"><span class="pi">🔎</span> <span id="srchdr2">Profils à contacter</span></p>
@@ -491,8 +486,8 @@ function setupChrome(){
   const lg=document.querySelector('.sb-logo'); if(lg){ lg.style.cursor='pointer'; lg.title='Retour au cockpit'; lg.onclick=()=>navToView('cockpit'); }
   showView('cockpit');
 }
-const VIEW_MAP={ profils:['srcpanel','brandpanel'], contenus:['listpanel','brandpanel','fillpanel'], messages:['nextactionspanel','mailpanel'] };
-const ALL_BLOCKS=['statcards','agendapanel','todopanel','pipelinepanel','brandpanel','fillpanel','nextactionspanel','srcpanel','listpanel','mailpanel'];
+const VIEW_MAP={ profils:['srcpanel','brandpanel'], contenus:['listpanel','brandpanel','fillpanel'], messages:['mailpanel'] };
+const ALL_BLOCKS=['statcards','agendapanel','todopanel','pipelinepanel','brandpanel','fillpanel','srcpanel','listpanel','mailpanel'];
 function navGo(a){ document.querySelectorAll('.sb-nav .nav').forEach(x=>x.classList.toggle('on',x===a)); showView(a.dataset.go); }
 function navToView(v){ const a=[...document.querySelectorAll('.sb-nav .nav')].find(x=>x.dataset.go===v); if(a)navGo(a); else showView(v); }
 function statCardGo(act){
@@ -811,7 +806,6 @@ function renderNextActions(reps){
 function renderMail(d, who){
   const reps=d.creatorReplies||[];
   if(!who){ try{setPipeReponse(reps.length);}catch(e){} }
-  renderNextActions(reps);
   const sum=`<div class="mailsum">${d.relevant||0} mail(s) liés aux collabs · <b>${reps.length} réponse(s) créateur</b> · ${(d.noise||0)+(d.offTopic||0)} ignoré(s) (pubs, recrutement, newsletters)</div>`;
   if(!reps.length){$('mailbox').innerHTML=sum+'<div class="state">Aucune réponse créateur récente. 👌</div>';return;}
   const CC={facturation:'#C77F2A',preview:'#7A5AA8',logistique:'#2C9087','réponse':'#1C3A44'};
@@ -871,13 +865,28 @@ function render(){
     const extra=[a.label];if(a.date)extra.push(fmtDate(a.date));
     const showOwn=isSup||teamOn();
     const owner=(showOwn&&a.cp)?`<span class="owner" title="Cheffe de projet">${esc(a.cp)}</span>`:(showOwn?`<span class="owner none" title="Personne assignée">— non assigné</span>`:'');
+    const cur=(a.cp||'').toLowerCase().trim();
+    const assignCtl=isSup
+      ? `<select class="assignsel" data-id="${esc(a.id||'')}" title="Assigner cette collab à une CP"><option value="">— non assigné</option>${(TEAM||[]).map(c=>`<option value="${esc(c)}"${(c||'').toLowerCase().trim()===cur?' selected':''}>${esc(c)}</option>`).join('')}</select>`
+      : (showOwn?owner:'');
     const link=a.url?`<a href="${a.url}" target="_blank" rel="noopener">Ouvrir</a>`:'';
     return `<div class="row" data-name="${esc(a.name)}" data-brand="${esc(a.brand)}" data-cp="${esc(a.cp||'')}">
       <span class="rdot" style="background:${a.color}"></span>
       <div class="info"><div class="t">${esc(a.name)}</div><div class="s">${esc(extra.join(' · '))}</div></div>
-      ${owner}<span class="brand">${esc(a.brand)}</span>${link}<button class="lk primary briefbtn">✍️ Brief</button></div>`;
+      ${assignCtl}<span class="brand">${esc(a.brand)}</span>${link}<button class="lk primary briefbtn">✍️ Brief</button></div>`;
   }).join('');
   document.querySelectorAll('#list .briefbtn').forEach(b=>b.onclick=()=>openBrief(b));
+  document.querySelectorAll('#list .assignsel').forEach(s=>s.onchange=()=>assignCollab(s));
+}
+async function assignCollab(sel){
+  const id=sel.dataset.id; const to=sel.value;
+  if(!id){alert('Cette collab n\'a pas d\'identifiant Notion.');return;}
+  sel.disabled=true; const prev=sel.style.borderColor; sel.style.borderColor='#2C9087';
+  try{
+    const r=await api('/api/collab/'+encodeURIComponent(id)+'/assign',{method:'POST',body:JSON.stringify({to})});
+    const d=await r.json().catch(()=>({}));
+    if(d&&d.ok){ setTimeout(load,300); } else { alert(d.error||'Échec de l\'assignation'); sel.disabled=false; sel.style.borderColor=prev; }
+  }catch(e){ sel.disabled=false; sel.style.borderColor=prev; }
 }
 // --- Panneau message générique (Brouillon ou Envoyer) -------------------
 function openMsgPanel(rowEl, opts){
