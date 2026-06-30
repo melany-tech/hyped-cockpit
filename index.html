@@ -461,7 +461,7 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
   <!-- Contenus en cours -->
   <section class="panel block" id="listpanel">
     <p class="pt"><span class="pi">🎬</span> Contenus en cours</p>
-    <div class="panelhint">Les contenus de tes collabs en cours : à lancer, en production, à valider. Clique « ✍️ Brief » pour préparer le brief, ou « Ouvrir » pour aller sur Notion.</div>
+    <div class="panelhint">Les contenus de tes collabs en cours : à lancer, en production, à valider. Clique « Ouvrir » pour aller sur la fiche Notion.</div>
     <div id="list"><div class="state">Chargement…</div></div>
   </section>
 
@@ -913,9 +913,8 @@ function render(){
     return `<div class="row" data-name="${esc(a.name)}" data-brand="${esc(a.brand)}" data-cp="${esc(a.cp||'')}">
       <span class="rdot" style="background:${a.color}"></span>
       <div class="info"><div class="t">${esc(a.name)}</div><div class="s">${esc(extra.join(' · '))}</div></div>
-      ${assignCtl}<span class="brand">${esc(a.brand)}</span>${link}<button class="lk primary briefbtn">✍️ Brief</button></div>`;
+      ${assignCtl}<span class="brand">${esc(a.brand)}</span>${link}</div>`;
   }).join('');
-  document.querySelectorAll('#list .briefbtn').forEach(b=>b.onclick=()=>openBrief(b));
   document.querySelectorAll('#list .assignsel').forEach(s=>s.onchange=()=>assignCollab(s));
 }
 async function assignCollab(sel){
