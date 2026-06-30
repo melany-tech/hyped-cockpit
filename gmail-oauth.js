@@ -133,12 +133,49 @@ async function fetchThreadText(email, threadId) {
   } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
 }
 
+// --- Pièces jointes + liens de transfert (WeTransfer, Drive, Dropbox…) -----
+function humanSize(n) {
+  n = Number(n) || 0;
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + " Go";
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + " Mo";
+  if (n >= 1e3) return Math.round(n / 1e3) + " Ko";
+  return n + " o";
+}
+const TRANSFER_RE = /https?:\/\/[^\s"'<>)]*(?:we\.tl|wetransfer\.com|swisstransfer\.com|grosfichiers\.com|fromsmash\.com|smash\.io|drive\.google\.com|dropbox\.com|dropbox\.io|onedrive\.live\.com|1drv\.ms|mega\.nz|frame\.io|icloud\.com)[^\s"'<>)]*/gi;
+function extractTransferLinks(text) {
+  const set = new Set((String(text || "").match(TRANSFER_RE) || []).map((u) => u.replace(/[.,;)]+$/, "")));
+  return [...set].slice(0, 6);
+}
+/** Pour un message : renvoie ses pièces jointes (nom/type/taille) et ses liens de transfert. */
+async function attachmentsAndLinks(gmail, msgId) {
+  try {
+    const m = await gmail.users.messages.get({ userId: "me", id: msgId, format: "full" });
+    const atts = [];
+    const walk = (p) => {
+      if (!p) return;
+      if (p.filename && p.filename.length && p.body && p.body.attachmentId) {
+        atts.push({ filename: p.filename, mimeType: p.mimeType || "", size: p.body.size || 0, sizeLabel: humanSize(p.body.size) });
+      }
+      (p.parts || []).forEach(walk);
+    };
+    walk(m.data.payload);
+    const links = extractTransferLinks(extractBody(m.data.payload) || m.data.snippet || "");
+    return { attachments: atts.slice(0, 8), links };
+  } catch (e) { return { attachments: [], links: [] }; }
+}
+
 /** Analyse la boîte de `email` avec les créateurs/marques de `collabs`. */
 async function analyzeFor(email, collabs, brandProducts = {}) {
   const gmail = gmailFor(email);
   if (!gmail) return { connected: false };
   const emails = await fetchEmails(gmail);
-  return { connected: true, ...analyzeMailbox(emails, collabs, brandProducts) };
+  const res = analyzeMailbox(emails, collabs, brandProducts);
+  // on n'enrichit (appel full + coûteux) que les réponses créateurs réellement affichées
+  for (const r of res.creatorReplies || []) {
+    const x = await attachmentsAndLinks(gmail, r.id);
+    r.attachments = x.attachments; r.transferLinks = x.links;
+  }
+  return { connected: true, ...res };
 }
 
 // --- Visios du jour : agenda Google de cette personne -------------------
