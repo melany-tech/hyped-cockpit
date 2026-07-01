@@ -822,6 +822,53 @@ app.get("/api/history", auth, (req, res) => {
   out.sort((a, b) => (b.events[0] ? b.events[0].at : 0) - (a.events[0] ? a.events[0].at : 0));
   res.json({ history: out });
 });
+// --- Fiches marques (mémoire partagée de l'agence) -----------------------
+// Fiche d'identité par marque, pensée pour l'onboarding : une nouvelle CP doit
+// comprendre la marque en 2 minutes sans poser de questions.
+// Base (histoire, période, objectifs, réunions, KPIs, pôle, où trouver les contacts) :
+//   modifiable par la responsable (supervisor) uniquement.
+// Interlocuteur principal + notes de contexte : modifiables par toutes les CP (signé, horodaté).
+const BRANDS_STORE = path.join(DATA_DIR, "brands.json");
+const BRAND_BASE_FIELDS = ["histoire", "clientDepuis", "clientJusqua", "objectifs", "reunions", "kpis", "pole", "contactsOu"];
+function loadBrandFiches() { try { return JSON.parse(fs.readFileSync(BRANDS_STORE, "utf8")); } catch (e) { return {}; } }
+function saveBrandFiches(o) { try { fs.writeFileSync(BRANDS_STORE, JSON.stringify(o)); } catch (e) {} }
+app.get("/api/brands", auth, (req, res) => {
+  res.json({ brands: loadBrandFiches(), canEditBase: req.user.role === "supervisor" });
+});
+app.post("/api/brand/:name", auth, (req, res) => {
+  const name = String(req.params.name || "").trim();
+  if (!name) return res.status(400).json({ error: "marque manquante" });
+  const isSup = req.user.role === "supervisor";
+  const body = req.body || {};
+  const all = loadBrandFiches();
+  const rec = all[name] || {};
+  const changes = [];
+  if (body.base) { // socle de la fiche : responsable uniquement
+    if (!isSup) return res.status(403).json({ error: "Seule la responsable peut modifier la base de la fiche" });
+    for (const k of BRAND_BASE_FIELDS) {
+      if (body.base[k] !== undefined) { rec[k] = String(body.base[k]).slice(0, 4000); changes.push(k); }
+    }
+  }
+  if (body.interlocuteur !== undefined) { // contact principal côté marque : toutes les CP
+    const it = body.interlocuteur || {};
+    rec.interlocuteur = { nom: String(it.nom || "").slice(0, 120), email: String(it.email || "").slice(0, 200), role: String(it.role || "").slice(0, 120) };
+    changes.push("interlocuteur");
+  }
+  if (body.note) { // note de contexte : toutes les CP, horodatée et signée
+    rec.notes = (rec.notes || []).concat([{ at: Date.now(), by: req.user.name, text: String(body.note).slice(0, 2000) }]).slice(-100);
+    changes.push("note");
+  }
+  if (body.deleteNoteAt) { // suppression d'une note : responsable uniquement
+    if (!isSup) return res.status(403).json({ error: "Seule la responsable peut supprimer une note" });
+    rec.notes = (rec.notes || []).filter((n) => n.at !== Number(body.deleteNoteAt));
+    changes.push("suppression note");
+  }
+  if (!changes.length) return res.status(400).json({ error: "rien à modifier" });
+  rec.updatedAt = Date.now(); rec.updatedBy = req.user.name;
+  all[name] = rec; saveBrandFiches(all);
+  logActivity({ type: "fiche", creator: name, cp: req.user.name });
+  res.json({ ok: true, brand: rec, changes });
+});
 // Mail de demande de stats/bilan (J+5 après publication)
 function genStatsFR(brand, name, cp) {
   return `Hello ${name} ✨\n\nMerci encore pour ta superbe collab avec ${brand} ! 🤍\n\nPour clôturer la campagne côté marque, est-ce que tu pourrais m'envoyer les statistiques de tes contenus : vues, portée/impressions, likes, partages, enregistrements, et les captures des stories ?\n\nUn petit screenshot de chaque contenu suffit largement. Ça nous permet de faire le bilan avec ${brand}.\n\nMerci d'avance et à très vite,\n${cp}`;

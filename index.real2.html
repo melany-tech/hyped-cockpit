@@ -403,6 +403,27 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .bcsub{font-size:11px;font-weight:700;color:var(--teal);margin-bottom:6px}
 #branddetail .row{padding:8px 11px;margin-bottom:6px}
 .state2{font-size:12px;color:#9aa6a8;padding:6px 2px}
+/* Fiche marque (mémoire partagée de l'agence) */
+.fiche{margin-bottom:14px}
+.fichehead{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.fichehead h4{margin:0}
+.fichegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin-bottom:8px}
+.fitem{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-width:0}
+.fitem.wide{grid-column:1/-1}
+.fk{font-size:10px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
+.fv{font-size:12px;color:var(--navy);white-space:pre-wrap;word-break:break-word}
+.fv .empty{color:#9aa6a8;font-style:italic}
+.fnotes{margin-top:2px}
+.fnote{background:#fff;border:1px solid var(--line);border-radius:10px;padding:7px 10px;margin-bottom:6px;font-size:12px;color:var(--navy);display:flex;gap:8px;align-items:flex-start}
+.fnote .fm{flex:1;white-space:pre-wrap;word-break:break-word}
+.fnote .fs{font-size:10.5px;color:#9aa6a8;white-space:nowrap}
+.fnote .fdel{cursor:pointer;color:#C2553B;font-size:11px;border:none;background:none;padding:0}
+.ficheform{background:#fff;border:1px dashed var(--line);border-radius:10px;padding:9px 10px;margin-bottom:8px}
+.ficheform label{display:block;font-size:10px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.4px;margin:6px 0 2px}
+.ficheform input,.ficheform textarea{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit;font-size:12px;color:var(--navy);background:#fff}
+.ficheform textarea{min-height:52px;resize:vertical}
+.fichebtns{margin-top:8px;display:flex;gap:10px;align-items:center}
+.fichemsg{font-size:11px;color:var(--teal)}
 @media(max-width:900px){.sidebar{display:none}.main{padding:18px 16px 40px;max-width:100%}.bcgrid2{grid-template-columns:1fr}}
 </style>
 </head>
@@ -821,13 +842,84 @@ function openBrand(brand,card){
   document.querySelectorAll('#brandcards .bc').forEach(c=>c.classList.remove('open'));
   if(wasOpen){det.innerHTML='';return;}
   card.classList.add('open');
+  renderBrandDetail(brand).then(()=>det.scrollIntoView({behavior:'smooth',block:'nearest'}));
+}
+// --- Fiche marque : la mémoire partagée de l'agence ----------------------
+// Base (histoire, période, objectifs, réunions, KPIs, pôle, contacts) : Mélany.
+// Interlocuteur principal + notes de contexte : toutes les CP (signé, horodaté).
+let FICHES=null;
+async function getFiches(force){
+  if(!FICHES||force){ try{ const r=await api('/api/brands'); FICHES=r.status===200?await r.json():{brands:{},canEditBase:false}; }catch(e){ FICHES={brands:{},canEditBase:false}; } }
+  return FICHES;
+}
+const FICHE_FIELDS=[
+  ['histoire','📖 Histoire de la marque','Quand elle s\'est lancée, ce qu\'elle vend, son univers…',1],
+  ['objectifs','🎯 Objectifs en cours','Les objectifs de la collaboration en ce moment',1],
+  ['clientDepuis','🤝 Client depuis','ex. mars 2025',0],
+  ['clientJusqua','⏳ Collaboration jusqu\'à','ex. déc. 2026, renouvellement à discuter',0],
+  ['reunions','📅 Réunions régulières','ex. weekly jeudi 15h',0],
+  ['kpis','📈 KPIs suivis','ex. 3 collabs/sem, EMV, vues cumulées',0],
+  ['pole','🧩 Pôle concerné','ex. Influence / UGC',0],
+  ['contactsOu','📇 Où trouver les contacts','ex. lien Notion ou Drive de l\'annuaire marque',1],
+];
+function fnoteDate(ts){ return new Date(ts).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}); }
+function ficheHTML(brand,f,canBase){
+  const it=f.interlocuteur||{};
+  const val=(v)=>v?linkify(v):'<span class="empty">à compléter</span>';
+  const cells=FICHE_FIELDS.map(([k,label,ph,wide])=>`<div class="fitem${wide?' wide':''}"><div class="fk">${label}</div><div class="fv">${val(f[k])}</div></div>`).join('');
+  const itv=(it.nom||it.email||it.role)?`${esc(it.nom||'')}${it.role?(' · '+esc(it.role)):''}${it.email?(' · <a class="todolink" href="mailto:'+esc(it.email)+'">'+esc(it.email)+'</a>'):''}`:'<span class="empty">à compléter</span>';
+  const notes=(f.notes||[]).slice().reverse().map(n=>`<div class="fnote"><div class="fm">${linkify(n.text)}</div><div class="fs">${esc(n.by||'')} · ${fnoteDate(n.at)}</div>${canBase?`<button class="fdel" data-at="${n.at}" title="Supprimer la note">✕</button>`:''}</div>`).join('');
+  return `<div class="fiche">
+    <div class="fichehead"><h4>📁 Fiche marque · ${esc(brand)}</h4><span>${canBase?'<button class="lk" id="fbaseedit">✏️ Modifier la fiche</button>':''}</span></div>
+    <div class="fichegrid">${cells}
+      <div class="fitem wide"><div class="fk">👤 Interlocuteur principal</div><div class="fv" id="fitshow">${itv} <button class="lk" id="fitedit">modifier</button></div>
+        <div id="fitform" style="display:none" class="ficheform">
+          <label>Nom</label><input id="fitnom" value="${esc(it.nom||'')}">
+          <label>Rôle</label><input id="fitrole" value="${esc(it.role||'')}" placeholder="ex. Responsable influence">
+          <label>Email</label><input id="fitemail" value="${esc(it.email||'')}">
+          <div class="fichebtns"><button class="lk primary" id="fitsave">Enregistrer</button><button class="lk" id="fitcancel">Annuler</button></div>
+        </div></div>
+    </div>
+    <div id="fbaseform" style="display:none" class="ficheform">${FICHE_FIELDS.map(([k,label,ph,wide])=>`<label>${label}</label>`+(wide?`<textarea id="fb_${k}" placeholder="${esc(ph)}">${esc(f[k]||'')}</textarea>`:`<input id="fb_${k}" value="${esc(f[k]||'')}" placeholder="${esc(ph)}">`)).join('')}
+      <div class="fichebtns"><button class="lk primary" id="fbasesave">Enregistrer la fiche</button><button class="lk" id="fbasecancel">Annuler</button><span class="fichemsg" id="fbasemsg"></span></div></div>
+    <div class="bcsub">📝 Contexte ajouté par l'équipe</div>
+    <div class="fnotes">${notes||'<div class="state2">Aucune note pour l\'instant. La première info utile que tu apprends sur cette marque, note-la ici pour les copines. 🤍</div>'}</div>
+    <div class="ficheform"><textarea id="fnewnote" placeholder="ex. Clara préfère être appelée le matin · la marque ne veut pas de créateurs gaming…"></textarea>
+      <div class="fichebtns"><button class="lk primary" id="fnoteadd">＋ Ajouter au contexte</button><span class="fichemsg" id="fnotemsg"></span></div></div>
+  </div>`;
+}
+async function fichePost(brand,payload,msgEl){
+  try{
+    const r=await api('/api/brand/'+encodeURIComponent(brand),{method:'POST',body:JSON.stringify(payload)});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ if(msgEl)msgEl.textContent=d.error||'Erreur, réessaie'; return false; }
+    await getFiches(true);
+    return true;
+  }catch(e){ if(msgEl)msgEl.textContent='Erreur réseau, réessaie'; return false; }
+}
+function wireFiche(det,brand){
+  const q=(id)=>det.querySelector('#'+id);
+  const be=q('fbaseedit'); if(be) be.onclick=()=>{ const fm=q('fbaseform'); fm.style.display=fm.style.display==='none'?'block':'none'; };
+  const bs=q('fbasesave'); if(bs) bs.onclick=async()=>{ const base={}; FICHE_FIELDS.forEach(([k])=>{ base[k]=q('fb_'+k).value.trim(); }); if(await fichePost(brand,{base},q('fbasemsg'))) renderBrandDetail(brand); };
+  const bc=q('fbasecancel'); if(bc) bc.onclick=()=>{ q('fbaseform').style.display='none'; };
+  const ie=q('fitedit'); if(ie) ie.onclick=()=>{ q('fitform').style.display='block'; ie.style.display='none'; };
+  const ic2=q('fitcancel'); if(ic2) ic2.onclick=()=>{ q('fitform').style.display='none'; const e2=q('fitedit'); if(e2)e2.style.display=''; };
+  const is=q('fitsave'); if(is) is.onclick=async()=>{ const itv={nom:q('fitnom').value.trim(),role:q('fitrole').value.trim(),email:q('fitemail').value.trim()}; if(await fichePost(brand,{interlocuteur:itv},null)) renderBrandDetail(brand); };
+  const na=q('fnoteadd'); if(na) na.onclick=async()=>{ const t=q('fnewnote').value.trim(); if(!t){ q('fnotemsg').textContent='Écris d\'abord ta note 🙂'; return; } if(await fichePost(brand,{note:t},q('fnotemsg'))) renderBrandDetail(brand); };
+  det.querySelectorAll('.fnote .fdel').forEach(b=>b.onclick=async()=>{ if(confirm('Supprimer cette note ?')&&await fichePost(brand,{deleteNoteAt:Number(b.dataset.at)},null)) renderBrandDetail(brand); });
+}
+async function renderBrandDetail(brand){
+  const det=$('branddetail'); if(!det)return;
   const profs=(SRC_PROFILS||[]).filter(p=>p.projet===brand);
   const cols=(ROWS||[]).filter(r=>r.brand===brand);
   const li=(t,s)=>`<div class="row"><div class="info"><div class="t">${esc(t)}</div><div class="s">${esc(s||'')}</div></div></div>`;
   const colA=profs.length?profs.slice(0,8).map(p=>li(p.task,p.commentaire||'à contacter')).join(''):'<div class="state2">Aucun pour l\'instant</div>';
   const colB=cols.length?cols.slice(0,8).map(c=>li(c.name,[c.label,fmtDate(c.date)].filter(Boolean).join(' · '))).join(''):'<div class="state2">Aucun pour l\'instant</div>';
-  det.innerHTML=`<h4>🏷️ ${esc(brand)} · progression du pôle</h4><div class="bcgrid2"><div><div class="bcsub">À contacter (${profs.length})</div>${colA}</div><div><div class="bcsub">Contenus (${cols.length})</div>${colB}</div></div>`;
-  det.scrollIntoView({behavior:'smooth',block:'nearest'});
+  const fi=await getFiches();
+  const f=(fi.brands||{})[brand]||{};
+  det.innerHTML=ficheHTML(brand,f,fi.canEditBase)
+    +`<h4>🏷️ ${esc(brand)} · progression du pôle</h4><div class="bcgrid2"><div><div class="bcsub">À contacter (${profs.length})</div>${colA}</div><div><div class="bcsub">Contenus (${cols.length})</div>${colB}</div></div>`;
+  wireFiche(det,brand);
 }
 async function loadDrafts(){
   try{
