@@ -1027,7 +1027,7 @@ function render(){
   const todayS=new Date().toISOString().slice(0,10);
   const toPub=list.filter(a=>a.statut==='En validation' && a.date && String(a.date).slice(0,10) < todayS);
   NOTIF.pub=toPub.length;
-  NOTIF.pubItems=toPub.map(a=>({icon:'⏰',text:'À publier : '+(a.name||'contenu'),sub:'validé mais pas encore posté'+(a.brand?(' · '+a.brand):'')+(a.date?(' · prévu '+fmtDate(a.date)):''),go:'listpanel'}));
+  NOTIF.pubItems=toPub.map(a=>({icon:'⏰',text:'À publier : '+(a.name||'contenu')+' — 👤 '+(a.cp||'non assigné'),sub:'validé mais pas encore posté'+(a.brand?(' · '+a.brand):'')+(a.date?(' · prévu '+fmtDate(a.date)):''),go:'listpanel'}));
   updateBell();
   document.querySelectorAll('#list .assignsel').forEach(s=>s.onchange=()=>assignCollab(s));
   document.querySelectorAll('#list .nextbtn').forEach(b=>b.onclick=()=>advanceCollab(b));
