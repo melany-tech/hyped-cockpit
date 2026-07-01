@@ -63,18 +63,20 @@ function gmailFor(email) {
   const c = client(); c.setCredentials(tok);
   return google.gmail({ version: "v1", auth: c });
 }
-async function fetchEmails(gmail, query = "newer_than:30d -in:sent -in:draft -category:promotions -category:social", max = 60) {
+async function fetchEmails(gmail, query = "newer_than:30d -in:sent -in:draft -category:promotions -category:social", max = 50) {
   const list = await gmail.users.threads.list({ userId: "me", q: query, maxResults: max });
-  const out = [];
-  for (const th of list.data.threads || []) {
-    const t = await gmail.users.threads.get({ userId: "me", id: th.id, format: "metadata", metadataHeaders: ["From", "Subject", "Date"] });
-    const msgs = t.data.messages || [];
-    const last = msgs[msgs.length - 1];
-    const h = Object.fromEntries((last.payload?.headers || []).map((x) => [x.name, x.value]));
-    out.push({ id: last.id, threadId: th.id, from: h.From || "", subject: h.Subject || "", snippet: last.snippet || "",
-      date: h.Date || "", url: `https://mail.google.com/mail/u/0/#all/${th.id}` });
-  }
-  return out;
+  // EN PARALLÈLE : on récupère les fils tous en même temps (au lieu d'un par un) — démarrage bien plus rapide
+  const results = await Promise.all((list.data.threads || []).map(async (th) => {
+    try {
+      const t = await gmail.users.threads.get({ userId: "me", id: th.id, format: "metadata", metadataHeaders: ["From", "Subject", "Date"] });
+      const msgs = t.data.messages || [];
+      const last = msgs[msgs.length - 1];
+      const h = Object.fromEntries((last.payload?.headers || []).map((x) => [x.name, x.value]));
+      return { id: last.id, threadId: th.id, from: h.From || "", subject: h.Subject || "", snippet: last.snippet || "",
+        date: h.Date || "", url: `https://mail.google.com/mail/u/0/#all/${th.id}` };
+    } catch (e) { return null; }
+  }));
+  return results.filter(Boolean);
 }
 // --- Lecture du corps complet d'un fil (pour la réponse intelligente) ----
 function b64urlDecode(s) {
@@ -170,11 +172,11 @@ async function analyzeFor(email, collabs, brandProducts = {}) {
   if (!gmail) return { connected: false };
   const emails = await fetchEmails(gmail);
   const res = analyzeMailbox(emails, collabs, brandProducts);
-  // on n'enrichit (appel full + coûteux) que les réponses créateurs réellement affichées
-  for (const r of res.creatorReplies || []) {
+  // EN PARALLÈLE : on enrichit (PJ + liens) toutes les réponses créateurs en même temps
+  await Promise.all((res.creatorReplies || []).map(async (r) => {
     const x = await attachmentsAndLinks(gmail, r.id);
     r.attachments = x.attachments; r.transferLinks = x.links;
-  }
+  }));
   return { connected: true, ...res };
 }
 

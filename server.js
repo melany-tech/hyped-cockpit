@@ -119,21 +119,22 @@ async function buildAlerts() {
   const totalWeeks = 4;
   const weekIdx = (dtISO) => { const day = parseInt(dtISO.slice(8, 10), 10); return Math.min(3, Math.floor((day - 1) / 7)); };
   const fill = [];
-  for (const c of FILL_CHECK) {
-    if (c.unverifiable) { fill.push({ brand: c.brand, status: "inconnu", totalWeeks, minDays: MIN_DAYS }); continue; }
+  // EN PARALLÈLE : on interroge tous les calendriers de marques en même temps
+  const fillArr = await Promise.all(FILL_CHECK.map(async (c) => {
+    if (c.unverifiable) return { brand: c.brand, status: "inconnu", totalWeeks, minDays: MIN_DAYS };
     let dates;
     try { dates = await datesInMonth(c.dbId, c.dateProp, iso(start), iso(end)); }
-    catch (e) { fill.push({ brand: c.brand, status: "erreur", totalWeeks, minDays: MIN_DAYS }); continue; }
+    catch (e) { return { brand: c.brand, status: "erreur", totalWeeks, minDays: MIN_DAYS }; }
     const byWeekDays = [0, 1, 2, 3].map(() => new Set());   // jours distincts couverts
     const byWeekCount = [0, 0, 0, 0];                         // nb de collabs
     dates.forEach((dt) => { const idx = weekIdx(dt); byWeekDays[idx].add(dt); byWeekCount[idx]++; });
-    // une semaine est OK seulement si ≥ MIN_PER_WEEK collabs ET ≥ MIN_DAYS jours différents
     const weeks = [0, 1, 2, 3].map((i) => { const days = byWeekDays[i].size, collabs = byWeekCount[i]; return { label: "Semaine " + (i + 1), days, collabs, ok: collabs >= MIN_PER_WEEK && days >= MIN_DAYS }; });
     const weeksOk = weeks.filter((x) => x.ok).length;
     const totalCollabs = dates.length;
     const status = totalCollabs === 0 ? "vide" : (weeksOk === 0 ? "faible" : (weeksOk < totalWeeks ? "partiel" : "ok"));
-    fill.push({ brand: c.brand, weeks, weeksOk, totalWeeks, totalCollabs, minDays: MIN_DAYS, minCollabs: MIN_PER_WEEK, status });
-  }
+    return { brand: c.brand, weeks, weeksOk, totalWeeks, totalCollabs, minDays: MIN_DAYS, minCollabs: MIN_PER_WEEK, status };
+  }));
+  fill.push(...fillArr);
   return { monthLabel, minDays: MIN_DAYS, fill };
 }
 
@@ -324,8 +325,15 @@ app.get("/api/alerts", auth, async (req, res) => {
     { brand: "Doucéa", status: "vide", weeksOk: 0, totalWeeks: 4, totalCollabs: 0, minDays: 3, minCollabs: 3, weeks: [
       { label: "Semaine 1", days: 0, collabs: 0, ok: false }, { label: "Semaine 2", days: 0, collabs: 0, ok: false }, { label: "Semaine 3", days: 0, collabs: 0, ok: false }, { label: "Semaine 4", days: 0, collabs: 0, ok: false } ] },
     { brand: "Curls Matter", status: "inconnu", totalWeeks: 4, minDays: 3 } ] });
-  try { res.json(await buildAlerts()); } catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    const fresh = req.query.fresh === "1";
+    if (!fresh && ALERTS_CACHE && (Date.now() - ALERTS_CACHE.at) < ALERTS_TTL) return res.json({ cached: true, ...ALERTS_CACHE.data });
+    const data = await buildAlerts();
+    ALERTS_CACHE = { at: Date.now(), data };
+    res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
+let ALERTS_CACHE = null; const ALERTS_TTL = 5 * 60 * 1000; // 5 min (le remplissage bouge lentement)
 // --- Connexion Gmail par personne (réponses créateurs) ------------------
 // Résout quelle boîte regarder : par défaut la sienne ; le PILOTE peut viser une CP (?as=Prénom).
 function inboxTarget(req) {
@@ -348,13 +356,22 @@ app.get("/api/gmail/callback", async (req, res) => {
   try { await gm.handleCallback(req.query.code, req.query.state); res.redirect("/?gmail=ok"); }
   catch (e) { res.redirect("/?gmail=err"); }
 });
+// Cache court de l'analyse Gmail par boîte (évite de tout relire à chaque rechargement)
+const INBOX_CACHE = {}; // email -> { at, data }
+const INBOX_TTL = 60 * 1000; // 60 s
 app.get("/api/gmail/inbox", auth, async (req, res) => {
   if (!gm.ENABLED) return res.json({ enabled: false });
   try {
     const t = inboxTarget(req); // sa boîte, ou celle d'une CP si pilote + ?as=
     if (!gm.isConnected(t.email)) return res.json({ enabled: true, connected: false, viewing: t.viewing });
+    const fresh = req.query.fresh === "1";
+    const c = INBOX_CACHE[t.email];
+    if (!fresh && c && (Date.now() - c.at) < INBOX_TTL) {
+      return res.json({ enabled: true, viewing: t.viewing, cached: true, ...c.data });
+    }
     const collabs = await fetchRows(); // marques + créateurs des calendriers
     const r = await gm.analyzeFor(t.email, collabs);
+    INBOX_CACHE[t.email] = { at: Date.now(), data: r };
     if (!t.viewing) learnAssignments(req.user.name, r); // n'apprend que sur sa propre boîte
     res.json({ enabled: true, viewing: t.viewing, ...r });
   } catch (e) { res.status(500).json({ error: e.message }); }
