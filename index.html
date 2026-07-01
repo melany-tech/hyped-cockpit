@@ -142,9 +142,11 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
 .msgrecv-b{font-size:12px;color:var(--gray);line-height:1.45;white-space:pre-wrap}
 .msgrecv-b a,.msgsnip a{color:var(--teal);font-weight:600;text-decoration:underline}
 .filechips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-.filechip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:#56666D;background:#EEF1F0;border:1px solid var(--line);border-radius:7px;padding:3px 8px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.filechip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:#56666D;background:#EEF1F0;border:1px solid var(--line);border-radius:7px;padding:3px 8px;max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 a.linkchip{color:#0F6E56;background:#E4F1ED;border-color:#BfE0D9;text-decoration:none;cursor:pointer}
 a.linkchip:hover{background:#d6ebe4}
+a.attchip{color:#1C3A44;text-decoration:none;cursor:pointer}
+a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 /* check-list : case à cocher claire */
 .todo .tcheck{width:22px;height:22px;border:2px solid #CFDADA;border-radius:7px;background:#fff;cursor:pointer;flex:none;transition:all .12s;position:relative}
 .todo .tcheck:hover{border-color:var(--teal);background:#EAF3F1}
@@ -878,8 +880,16 @@ function transferName(u){ u=String(u||'').toLowerCase(); if(/we\.tl|wetransfer/.
 function fileChips(atts, lnks){
   atts=atts||[]; lnks=lnks||[];
   if(!atts.length && !lnks.length) return '';
+  const who=(typeof mailAs==='function')?mailAs():'';
   const al=lnks.map(u=>`<a class="filechip linkchip" href="${esc(u)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 ${esc(transferName(u))} ↗</a>`).join('');
-  const af=atts.map(a=>`<span class="filechip" title="${esc(a.filename)}">📎 ${esc(a.filename)}${a.sizeLabel?(' · '+esc(a.sizeLabel)):''}</span>`).join('');
+  const af=atts.map(a=>{
+    const lbl='📎 '+esc(a.filename)+(a.sizeLabel?(' · '+esc(a.sizeLabel)):'');
+    if(a.attId&&a.msgId){
+      const q='msgId='+encodeURIComponent(a.msgId)+'&attId='+encodeURIComponent(a.attId)+'&name='+encodeURIComponent(a.filename)+(who?('&as='+encodeURIComponent(who)):'');
+      return `<a class="filechip attchip" href="/api/gmail/attachment?${q}" target="_blank" rel="noopener" download="${esc(a.filename)}" title="Télécharger ${esc(a.filename)}" onclick="event.stopPropagation()">${lbl} ⬇</a>`;
+    }
+    return `<span class="filechip" title="${esc(a.filename)}">${lbl}</span>`;
+  }).join('');
   return `<div class="filechips">${al}${af}</div>`;
 }
 function renderMail(d, who){
@@ -1011,7 +1021,9 @@ function openMsgPanel(rowEl, opts){
         const d=await r.json().catch(()=>({}));
         if(d&&d.ok&&d.body){ ta.value=d.body; st.textContent='✨ Réponse adaptée au message reçu'; st.className='aistatus ok'; }
         else if(d&&d.reason==='nokey'){ st.textContent='💤 Cerveau IA non activé — template par défaut'; st.className='aistatus'; }
-        else { st.textContent='Réponse auto indisponible — template gardé'; st.className='aistatus'; }
+        else if(d&&d.reason==='api'&&(d.status===429||/quota|insufficient|billing/i.test(d.detail||''))){ st.innerHTML='⚠️ Crédit OpenAI épuisé — recharge sur <a href="https://platform.openai.com/account/billing" target="_blank" rel="noopener">platform.openai.com</a> (template gardé)'; st.className='aistatus'; }
+        else if(d&&d.reason==='api'&&d.status===401){ st.textContent='⚠️ Clé OpenAI invalide — vérifie la clé dans Render (template gardé)'; st.className='aistatus'; }
+        else { st.textContent='Réponse IA indisponible pour l\'instant — template gardé'; st.className='aistatus'; }
       }catch(e){ st.textContent='Réponse auto indisponible — template gardé'; st.className='aistatus'; }
       gb.disabled=false;
     };

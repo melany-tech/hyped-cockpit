@@ -349,6 +349,21 @@ app.get("/api/gmail/status", auth, (req, res) => {
   const t = inboxTarget(req);
   res.json({ enabled: gm.ENABLED, connected: gm.ENABLED ? gm.isConnected(t.email) : false, viewing: t.viewing });
 });
+app.get("/api/gmail/attachment", auth, async (req, res) => {
+  if (!gm.ENABLED) return res.status(400).send("Gmail non configuré");
+  const { msgId, attId } = req.query;
+  const name = String(req.query.name || "piece-jointe").replace(/[\r\n"]/g, "");
+  if (!msgId || !attId) return res.status(400).send("paramètres manquants");
+  try {
+    const t = inboxTarget(req);
+    if (!gm.isConnected(t.email)) return res.status(403).send("Gmail non connecté");
+    const buf = await gm.getAttachment(t.email, String(msgId), String(attId));
+    if (!buf) return res.status(404).send("pièce jointe introuvable");
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Content-Disposition", 'attachment; filename="' + encodeURIComponent(name) + '"');
+    res.send(buf);
+  } catch (e) { res.status(500).send("erreur"); }
+});
 app.get("/api/gmail/signature", auth, async (req, res) => {
   if (!gm.ENABLED) return res.json({ enabled: false });
   const t = inboxTarget(req);

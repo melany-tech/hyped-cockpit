@@ -157,7 +157,7 @@ async function attachmentsAndLinks(gmail, msgId) {
     const walk = (p) => {
       if (!p) return;
       if (p.filename && p.filename.length && p.body && p.body.attachmentId) {
-        atts.push({ filename: p.filename, mimeType: p.mimeType || "", size: p.body.size || 0, sizeLabel: humanSize(p.body.size) });
+        atts.push({ filename: p.filename, mimeType: p.mimeType || "", size: p.body.size || 0, sizeLabel: humanSize(p.body.size), msgId, attId: p.body.attachmentId });
       }
       (p.parts || []).forEach(walk);
     };
@@ -165,6 +165,17 @@ async function attachmentsAndLinks(gmail, msgId) {
     const links = extractTransferLinks(extractBody(m.data.payload) || m.data.snippet || "");
     return { attachments: atts.slice(0, 8), links };
   } catch (e) { return { attachments: [], links: [] }; }
+}
+
+/** Télécharge le contenu binaire d'une pièce jointe. */
+async function getAttachment(email, msgId, attId) {
+  const gmail = gmailFor(email);
+  if (!gmail || !msgId || !attId) return null;
+  try {
+    const r = await gmail.users.messages.attachments.get({ userId: "me", messageId: msgId, id: attId });
+    const data = r.data && r.data.data ? Buffer.from(String(r.data.data).replace(/-/g, "+").replace(/_/g, "/"), "base64") : null;
+    return data;
+  } catch (e) { return null; }
 }
 
 /** Analyse la boîte de `email` avec les créateurs/marques de `collabs`. */
@@ -302,4 +313,4 @@ async function draftsToValidate(email) {
   return { count: keep.length };
 }
 
-module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, analyzeFor, calendarToday, createDraft, sendEmail, draftsToValidate, fetchThreadText, getSignature, SCOPES };
+module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, analyzeFor, calendarToday, createDraft, sendEmail, draftsToValidate, fetchThreadText, getSignature, getAttachment, SCOPES };
