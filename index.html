@@ -871,9 +871,10 @@ const FICHE_FIELDS=[
   ['siteweb','🌐 Site web','ex. https://lamarque.com',0],
 ];
 function fnoteDate(ts){ return new Date(ts).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}); }
+function mailify(h){ return String(h||'').replace(/([\w.+-]+@[\w-]+(?:\.[\w-]+)+)/g,'<a class="todolink" href="mailto:$1">$1</a>'); }
 function ficheHTML(brand,f,canBase){
   const it=f.interlocuteur||{};
-  const val=(v)=>v?linkify(v):'<span class="empty">à compléter</span>';
+  const val=(v)=>v?mailify(linkify(v)):'<span class="empty">à compléter</span>';
   const cells=FICHE_FIELDS.map(([k,label,ph,wide])=>`<div class="fitem${wide?' wide':''}"><div class="fk">${label}</div><div class="fv">${val(f[k])}</div></div>`).join('');
   const itv=(it.nom||it.email||it.role)?`${esc(it.nom||'')}${it.role?(' · '+esc(it.role)):''}${it.email?(' · <a class="todolink" href="mailto:'+esc(it.email)+'">'+esc(it.email)+'</a>'):''}`:'<span class="empty">à compléter</span>';
   const notes=(f.notes||[]).slice().reverse().map(n=>`<div class="fnote"><div class="fm">${linkify(n.text)}</div><div class="fs">${esc(n.by||'')} · ${fnoteDate(n.at)}</div>${canBase?`<button class="fdel" data-at="${n.at}" title="Supprimer la note">✕</button>`:''}</div>`).join('');
