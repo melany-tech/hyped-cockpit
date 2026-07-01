@@ -1075,8 +1075,8 @@ function openMsgPanel(rowEl, opts){
         const d=await r.json().catch(()=>({}));
         if(d&&d.ok&&d.body){ ta.value=d.body; st.textContent='✨ Réponse adaptée au message reçu'; st.className='aistatus ok'; }
         else if(d&&d.reason==='nokey'){ st.textContent='💤 Cerveau IA non activé — template par défaut'; st.className='aistatus'; }
-        else if(d&&d.reason==='api'&&(d.status===429||/quota|insufficient|billing/i.test(d.detail||''))){ st.innerHTML='⚠️ Crédit OpenAI épuisé — recharge sur <a href="https://platform.openai.com/account/billing" target="_blank" rel="noopener">platform.openai.com</a> (template gardé)'; st.className='aistatus'; }
-        else if(d&&d.reason==='api'&&d.status===401){ st.textContent='⚠️ Clé OpenAI invalide — vérifie la clé dans Render (template gardé)'; st.className='aistatus'; }
+        else if(d&&d.reason==='api'&&(d.status===429||/quota|insufficient|billing/i.test(d.detail||''))){ st.textContent='⚠️ Crédit IA épuisé, préviens Mélany (elle fera le nécessaire). Template gardé.'; st.className='aistatus'; }
+        else if(d&&d.reason==='api'&&d.status===401){ st.textContent='⚠️ Souci de clé IA, préviens Mélany. Template gardé.'; st.className='aistatus'; }
         else { st.textContent='Réponse IA indisponible pour l\'instant — template gardé'; st.className='aistatus'; }
       }catch(e){ st.textContent='Réponse auto indisponible — template gardé'; st.className='aistatus'; }
       gb.disabled=false;
