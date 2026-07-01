@@ -136,6 +136,11 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
 .msgsend{color:#fff;background:var(--teal);border-color:var(--teal)}
 .msgsend:hover{background:#247a72}
 .msgsnip{font-size:11px;color:#7C8A86;margin-top:3px;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:560px}
+.treatedbadge{display:inline-block;margin-left:8px;font-size:10px;font-weight:700;color:#1E7A54;background:#E4F5EC;border:1px solid #B7E4CC;border-radius:20px;padding:1px 8px;vertical-align:middle}
+.row.treated{opacity:.62}
+.row.treated:hover{opacity:.85}
+.lk.treatbtn,.lk.reopenbtn{border:1px solid var(--line);background:#fff;color:var(--navy);font-size:11px}
+.lk.reopenbtn{color:#1E7A54}
 .msgrecv{background:#F4F7F7;border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:10px}
 .msgrecv-h{font-size:11px;font-weight:700;color:var(--navy);margin-bottom:5px}
 .msgrecv-h a{color:var(--teal);text-decoration:none;font-weight:600}
@@ -929,7 +934,7 @@ function openReply(btn){
   const row=btn.closest('[data-email]'); if(!row)return;
   const subj=row.dataset.subject||''; const re=/^re\s*:/i.test(subj)?subj:('Re: '+subj);
   let files={a:[],l:[]}; try{files=JSON.parse(row.dataset.files||'{}');}catch(e){}
-  openMsgPanel(row,{ to:row.dataset.email||'', subject:re||'Re:', body:genReplyFR(row.dataset.cat||'', row.dataset.creator||''), received:row.dataset.snippet||'', threadUrl:row.dataset.url||'', files:files, onSent:()=>loadActivity(),
+  openMsgPanel(row,{ to:row.dataset.email||'', subject:re||'Re:', body:genReplyFR(row.dataset.cat||'', row.dataset.creator||''), received:row.dataset.snippet||'', threadUrl:row.dataset.url||'', threadId:row.dataset.thread||'', files:files, onSent:()=>{loadActivity();loadMail(true);},
     aiSuggest:{ threadId:row.dataset.thread||'', creator:row.dataset.creator||'', brand:row.dataset.brand||'', category:row.dataset.cat||'', subject:row.dataset.subject||'', snippet:row.dataset.snippet||'' } });
 }
 function renderNextActions(reps){
@@ -975,11 +980,21 @@ function renderMail(d, who){
     const link=m.url?`<a href="${m.url}" target="_blank" rel="noopener">Ouvrir</a>`:'';
     const email=emailFromHeader(m.from); const snip=(m.snippet||'');
     const filesJson=esc(JSON.stringify({a:m.attachments||[],l:m.transferLinks||[]}));
-    return `<div class="row" data-email="${esc(email)}" data-subject="${esc(m.subject||'')}" data-cat="${esc(m.category||'')}" data-creator="${esc(m.créateur||'')}" data-brand="${esc(m.brand||'')}" data-thread="${esc(m.threadId||'')}" data-snippet="${esc(snip.slice(0,400))}" data-url="${esc(m.url||'')}" data-files="${filesJson}"><span class="rdot" style="background:${c}"></span>
-      <div class="info"><div class="t">${esc(m.subject)||'(sans objet)'}</div><div class="s">${esc(m.from)} · ${esc(m.category)}</div>${snip?`<div class="msgsnip">${esc(snip.slice(0,130))}${snip.length>130?'…':''}</div>`:''}${fileChips(m.attachments,m.transferLinks)}</div>
-      <span class="brand">${esc(m.brand)}</span>${ownerTag}<button class="lk primary replybtn">✍️ Répondre</button>${link}</div>`;
+    const tr=m.treated; const trLbl=tr?({'répondu':'Répondu','brouillon':'Brouillon en cours','programmé':'Envoi programmé','manuel':'Traité'}[tr.action]||'Traité'):'';
+    const trBadge=tr?`<span class="treatedbadge" title="${esc(trLbl)} par ${esc(tr.by||'—')}">✓ ${esc(trLbl)}${tr.by?(' · '+esc(tr.by)):''}</span>`:'';
+    const treatBtns=tr?`<button class="lk reopenbtn" data-thread="${esc(m.threadId||'')}" title="Rouvrir : remet ce mail à traiter">Rouvrir</button>`:`<button class="lk treatbtn" data-thread="${esc(m.threadId||'')}" title="Marquer comme traité (déjà répondu)">✓ Traité</button>`;
+    return `<div class="row${tr?' treated':''}" data-email="${esc(email)}" data-subject="${esc(m.subject||'')}" data-cat="${esc(m.category||'')}" data-creator="${esc(m.créateur||'')}" data-brand="${esc(m.brand||'')}" data-thread="${esc(m.threadId||'')}" data-snippet="${esc(snip.slice(0,400))}" data-url="${esc(m.url||'')}" data-files="${filesJson}"><span class="rdot" style="background:${c}"></span>
+      <div class="info"><div class="t">${esc(m.subject)||'(sans objet)'}${trBadge}</div><div class="s">${esc(m.from)} · ${esc(m.category)}</div>${snip?`<div class="msgsnip">${esc(snip.slice(0,130))}${snip.length>130?'…':''}</div>`:''}${fileChips(m.attachments,m.transferLinks)}</div>
+      <span class="brand">${esc(m.brand)}</span>${ownerTag}<button class="lk primary replybtn">✍️ Répondre</button>${treatBtns}${link}</div>`;
   }).join('');
   document.querySelectorAll('#mailbox .replybtn').forEach(b=>b.onclick=()=>openReply(b));
+  document.querySelectorAll('#mailbox .treatbtn').forEach(b=>b.onclick=()=>setTreated(b.dataset.thread,true));
+  document.querySelectorAll('#mailbox .reopenbtn').forEach(b=>b.onclick=()=>setTreated(b.dataset.thread,false));
+}
+async function setTreated(threadId, treated){
+  if(!threadId)return;
+  try{ await api('/api/mail/treated',{method:'POST',body:JSON.stringify({threadId,treated})}); }catch(e){}
+  loadMail(true);
 }
 // Une ligne marque : segments par semaine (jours couverts), vert si ≥3 collabs ET ≥3 jours.
 function fillHeadHTML(tw){
@@ -1117,12 +1132,12 @@ function openMsgPanel(rowEl, opts){
   const cpbtn=panel.querySelector('.msgcopy');
   cpbtn.onclick=()=>{ta.select();try{document.execCommand('copy');}catch(e){}cpbtn.textContent='Copié ✓';setTimeout(()=>cpbtn.textContent='Copier',1500);};
   const dbtn=panel.querySelector('.msgdraft');
-  dbtn.onclick=async()=>{ dbtn.textContent='…'; const r=await api('/api/gmail/draft',{method:'POST',body:JSON.stringify({to:(panel.querySelector('.msgto').value||'').trim(),subject:subjOf(),body:ta.value})}); const d=await r.json().catch(()=>({})); if(d&&d.ok){dbtn.textContent='Brouillon créé ✓';loadDrafts();if(opts.onSent)opts.onSent('brouillon');} else dbtn.textContent='↻ Reconnecte ton Gmail'; setTimeout(()=>{dbtn.textContent='📧 Brouillon';},2600); };
+  dbtn.onclick=async()=>{ dbtn.textContent='…'; const r=await api('/api/gmail/draft',{method:'POST',body:JSON.stringify({to:(panel.querySelector('.msgto').value||'').trim(),subject:subjOf(),body:ta.value,threadId:opts.threadId||''})}); const d=await r.json().catch(()=>({})); if(d&&d.ok){dbtn.textContent='Brouillon créé ✓';loadDrafts();if(opts.onSent)opts.onSent('brouillon');} else dbtn.textContent='↻ Reconnecte ton Gmail'; setTimeout(()=>{dbtn.textContent='📧 Brouillon';},2600); };
   const sbtn=panel.querySelector('.msgsend');
-  sbtn.onclick=async()=>{ const to=(panel.querySelector('.msgto').value||'').trim(); if(!to){sbtn.textContent='Ajoute un destinataire';setTimeout(()=>sbtn.textContent='✉️ Envoyer',2200);return;} if(!confirm('Envoyer ce mail à '+to+' ?'))return; sbtn.textContent='Envoi…'; const r=await api('/api/gmail/send',{method:'POST',body:JSON.stringify({to,subject:subjOf(),body:ta.value})}); const d=await r.json().catch(()=>({})); sbtn.textContent=(d&&d.ok)?'Envoyé ✓':(d.error||'↻ Reconnecte ton Gmail'); if(d&&d.ok&&opts.onSent)opts.onSent('email'); setTimeout(()=>{sbtn.textContent='✉️ Envoyer';},2800); };
+  sbtn.onclick=async()=>{ const to=(panel.querySelector('.msgto').value||'').trim(); if(!to){sbtn.textContent='Ajoute un destinataire';setTimeout(()=>sbtn.textContent='✉️ Envoyer',2200);return;} if(!confirm('Envoyer ce mail à '+to+' ?'))return; sbtn.textContent='Envoi…'; const r=await api('/api/gmail/send',{method:'POST',body:JSON.stringify({to,subject:subjOf(),body:ta.value,threadId:opts.threadId||''})}); const d=await r.json().catch(()=>({})); sbtn.textContent=(d&&d.ok)?'Envoyé ✓':(d.error||'↻ Reconnecte ton Gmail'); if(d&&d.ok&&opts.onSent)opts.onSent('email'); setTimeout(()=>{sbtn.textContent='✉️ Envoyer';},2800); };
   const schbtn=panel.querySelector('.msgsched'), schrow=panel.querySelector('.schedrow'), schat=panel.querySelector('.schedat'), schok=panel.querySelector('.schedok'), schmsg=panel.querySelector('.schedmsg');
   schbtn.onclick=()=>{ const show=schrow.style.display==='none'; schrow.style.display=show?'flex':'none'; if(show&&!schat.value){ const d=new Date(Date.now()+3600000); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); schat.value=d.toISOString().slice(0,16); } };
-  schok.onclick=async()=>{ const to=(panel.querySelector('.msgto').value||'').trim(); if(!to){schmsg.textContent='Ajoute un destinataire';return;} if(!schat.value){schmsg.textContent='Choisis une date/heure';return;} const at=new Date(schat.value).getTime(); if(!at||at<Date.now()+30000){schmsg.textContent='Choisis un horaire futur';return;} if(!confirm('Programmer l\'envoi à '+to+' le '+new Date(at).toLocaleString('fr-FR')+' ?'))return; schok.textContent='…'; const r=await api('/api/gmail/schedule',{method:'POST',body:JSON.stringify({to,subject:subjOf(),body:ta.value,at})}); const d=await r.json().catch(()=>({})); if(d&&d.ok){ schmsg.textContent='✓ Programmé'; if(opts.onSent)opts.onSent('programme'); loadScheduled(); setTimeout(()=>{panel.remove();},900); } else { schok.textContent='Programmer l\'envoi'; schmsg.textContent=(d&&d.error)||'Échec'; } };
+  schok.onclick=async()=>{ const to=(panel.querySelector('.msgto').value||'').trim(); if(!to){schmsg.textContent='Ajoute un destinataire';return;} if(!schat.value){schmsg.textContent='Choisis une date/heure';return;} const at=new Date(schat.value).getTime(); if(!at||at<Date.now()+30000){schmsg.textContent='Choisis un horaire futur';return;} if(!confirm('Programmer l\'envoi à '+to+' le '+new Date(at).toLocaleString('fr-FR')+' ?'))return; schok.textContent='…'; const r=await api('/api/gmail/schedule',{method:'POST',body:JSON.stringify({to,subject:subjOf(),body:ta.value,at,threadId:opts.threadId||''})}); const d=await r.json().catch(()=>({})); if(d&&d.ok){ schmsg.textContent='✓ Programmé'; if(opts.onSent)opts.onSent('programme'); loadScheduled(); setTimeout(()=>{panel.remove();},900); } else { schok.textContent='Programmer l\'envoi'; schmsg.textContent=(d&&d.error)||'Échec'; } };
 }
 function genBriefFR(brand, name){
   const cp=(VIEWER&&VIEWER.name)||'';

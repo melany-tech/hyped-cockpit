@@ -389,22 +389,41 @@ app.get("/api/gmail/inbox", auth, async (req, res) => {
     if (!gm.isConnected(t.email)) return res.json({ enabled: true, connected: false, viewing: t.viewing });
     const fresh = req.query.fresh === "1";
     const c = INBOX_CACHE[t.email];
-    if (!fresh && c && (Date.now() - c.at) < INBOX_TTL) {
-      return res.json({ enabled: true, viewing: t.viewing, cached: true, ...c.data });
+    let r, cached = false;
+    if (!fresh && c && (Date.now() - c.at) < INBOX_TTL) { r = c.data; cached = true; }
+    else {
+      const collabs = await fetchRows(); // marques + créateurs des calendriers
+      r = await gm.analyzeFor(t.email, collabs);
+      INBOX_CACHE[t.email] = { at: Date.now(), data: r };
+      if (!t.viewing) learnAssignments(req.user.name, r); // n'apprend que sur sa propre boîte
     }
-    const collabs = await fetchRows(); // marques + créateurs des calendriers
-    const r = await gm.analyzeFor(t.email, collabs);
-    INBOX_CACHE[t.email] = { at: Date.now(), data: r };
-    if (!t.viewing) learnAssignments(req.user.name, r); // n'apprend que sur sa propre boîte
-    res.json({ enabled: true, viewing: t.viewing, ...r });
+    // état « traité » (par qui/quand) appliqué à chaque réponse créateur, toujours à jour
+    const tt = treatedFor(t.email);
+    if (r.creatorReplies) r.creatorReplies.forEach((x) => { x.treated = (x.threadId && tt[x.threadId]) ? tt[x.threadId] : null; });
+    res.json({ enabled: true, viewing: t.viewing, cached, ...r });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// --- Mails « traités » (évite les réponses en double) --------------------
+const TREATED_STORE = path.join(DATA_DIR, "treated.json");
+function loadTreated() { try { return JSON.parse(fs.readFileSync(TREATED_STORE, "utf8")); } catch (e) { return {}; } }
+function saveTreated(o) { try { fs.writeFileSync(TREATED_STORE, JSON.stringify(o)); } catch (e) {} }
+function markTreated(email, threadId, meta) { if (!email || !threadId) return; const o = loadTreated(); o[email + "|" + threadId] = { by: (meta && meta.by) || "", action: (meta && meta.action) || "répondu", at: Date.now() }; saveTreated(o); }
+function unmarkTreated(email, threadId) { if (!email || !threadId) return; const o = loadTreated(); delete o[email + "|" + threadId]; saveTreated(o); }
+function treatedFor(email) { const o = loadTreated(); const out = {}; const pre = email + "|"; for (const k in o) { if (k.indexOf(pre) === 0) out[k.slice(pre.length)] = o[k]; } return out; }
+app.post("/api/mail/treated", auth, (req, res) => {
+  const t = inboxTarget(req);
+  const threadId = String(req.body?.threadId || "").trim();
+  const treated = req.body?.treated !== false;
+  if (!threadId) return res.status(400).json({ error: "threadId manquant" });
+  if (treated) markTreated(t.email, threadId, { by: req.user.name, action: "manuel" }); else unmarkTreated(t.email, threadId);
+  res.json({ ok: true, treated });
 });
 // --- Brouillons mail (le cockpit prépare, la CP relit et envoie) ---------
 app.post("/api/gmail/draft", auth, async (req, res) => {
   if (!gm.ENABLED) return res.status(400).json({ error: "Gmail non configuré" });
   const { to, subject, body } = req.body || {};
   if (!subject && !body) return res.status(400).json({ error: "message vide" });
-  try { const r = await gm.createDraft(req.user.email, { to, subject, body }); if (r && r.ok) logActivity({ type: "brouillon", creator: to || null, cp: req.user.name }); res.json(r); }
+  try { const r = await gm.createDraft(req.user.email, { to, subject, body }); if (r && r.ok) { logActivity({ type: "brouillon", creator: to || null, cp: req.user.name }); if (req.body?.threadId) markTreated(inboxTarget(req).email, String(req.body.threadId), { by: req.user.name, action: "brouillon" }); } res.json(r); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.get("/api/gmail/drafts", auth, async (req, res) => {
@@ -416,7 +435,7 @@ app.post("/api/gmail/send", auth, async (req, res) => {
   if (!gm.ENABLED) return res.status(400).json({ error: "Gmail non configuré" });
   const { to, subject, body } = req.body || {};
   if (!to) return res.status(400).json({ error: "destinataire manquant" });
-  try { const r = await gm.sendEmail(req.user.email, { to, subject, body }); if (r && r.ok) logActivity({ type: "email", creator: to, cp: req.user.name }); res.json(r); }
+  try { const r = await gm.sendEmail(req.user.email, { to, subject, body }); if (r && r.ok) { logActivity({ type: "email", creator: to, cp: req.user.name }); if (req.body?.threadId) markTreated(inboxTarget(req).email, String(req.body.threadId), { by: req.user.name, action: "répondu" }); } res.json(r); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 // --- Envois programmés (le cockpit envoie à l'heure dite, même hors ligne) ---
@@ -434,6 +453,7 @@ app.post("/api/gmail/schedule", auth, (req, res) => {
   const item = { id: "s_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), email: req.user.email, by: req.user.name, to, subject, body, at, createdAt: Date.now(), attempts: 0 };
   const a = loadScheduled(); a.push(item); saveScheduled(a);
   logActivity({ type: "programme", creator: to, cp: req.user.name, extra: new Date(at).toISOString() });
+  if (req.body?.threadId) markTreated(inboxTarget(req).email, String(req.body.threadId), { by: req.user.name, action: "programmé" });
   res.json({ ok: true, id: item.id, at });
 });
 app.get("/api/gmail/scheduled", auth, (req, res) => {
