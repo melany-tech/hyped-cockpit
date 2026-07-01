@@ -173,6 +173,7 @@ const ADAPTERS = {
       brand,
       name: title(p["Nom"]) || "(sans nom)",
       cp: firstPerson(p["Interlocuteur"]),
+      statut,
       grp: m.grp, label: m.label, color: m.color, urgent: false,
       date: p["Date"]?.date?.start || null,
       url: page.url,
@@ -545,6 +546,25 @@ app.post("/api/collab/:id/assign", auth, async (req, res) => {
     }
     CACHE = { at: 0, rows: [] }; // force le rafraîchissement des collabs
     res.json({ ok: true, to });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Fait avancer une collab à l'étape suivante du pipeline (met à jour le Statut Notion)
+const STAGE_ORDER = ["Non posté", "En production", "En validation", "Posté"];
+const STAGE_LABEL = { "Non posté": "À lancer", "En production": "En cours de production", "En validation": "Contenu à valider", "Posté": "Publié / terminé" };
+app.post("/api/collab/:id/advance", auth, async (req, res) => {
+  if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
+  try {
+    const pg = await notion.pages.retrieve({ page_id: req.params.id });
+    const cur = pg.properties?.["Statut"]?.select?.name || "";
+    const i = STAGE_ORDER.indexOf(cur);
+    if (i < 0) return res.status(400).json({ error: "statut inconnu : " + cur });
+    if (i >= STAGE_ORDER.length - 1) return res.json({ ok: false, done: true, message: "déjà à la dernière étape" });
+    const next = STAGE_ORDER[i + 1];
+    await notion.pages.update({ page_id: req.params.id, properties: { "Statut": { select: { name: next } } } });
+    CACHE = { at: 0, rows: [] }; // force le rafraîchissement des collabs
+    logActivity({ type: "etape", creator: title(pg.properties?.["Nom"]) || null, cp: req.user.name, extra: STAGE_LABEL[next] });
+    res.json({ ok: true, from: cur, to: next, toLabel: STAGE_LABEL[next], last: (i + 1) >= STAGE_ORDER.length - 1 });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
