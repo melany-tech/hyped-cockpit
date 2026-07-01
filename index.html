@@ -428,6 +428,17 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .fdlrow input{flex:1;min-width:150px}
 .fdlrow input[type=file]{flex:1;min-width:150px;border:none;padding:4px 0;font-size:11px}
 .fdlrow .lk{white-space:nowrap}
+/* Vue Marques : liste latérale + fiche */
+.mqlayout{display:flex;gap:14px;align-items:flex-start}
+.mqlist{width:195px;flex-shrink:0;display:flex;flex-direction:column;gap:6px;position:sticky;top:14px}
+.mqitem{display:flex;align-items:center;gap:9px;padding:9px 11px;border:1px solid var(--line);border-radius:11px;background:#fff;cursor:pointer;font:inherit;font-size:12.5px;font-weight:600;color:var(--navy);text-align:left}
+.mqitem:hover{border-color:var(--teal)}
+.mqitem.on{border-color:var(--teal);background:#F4FAF8}
+.mqitem .mqn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mqdetail{flex:1;min-width:0;border:1px solid var(--line);border-radius:12px;padding:12px 13px;background:var(--soft)}
+.mqdetail h4{font-size:12px;color:var(--navy);margin:0 0 9px}
+.mqdetail .row{padding:8px 11px;margin-bottom:6px}
+@media(max-width:900px){.mqlayout{flex-direction:column}.mqlist{width:100%;flex-direction:row;flex-wrap:wrap;position:static}}
 @media(max-width:900px){.sidebar{display:none}.main{padding:18px 16px 40px;max-width:100%}.bcgrid2{grid-template-columns:1fr}}
 </style>
 </head>
@@ -455,6 +466,7 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
       <a class="nav" data-go="profils"><span class="ni">☺</span> Profils</a>
       <a class="nav" data-go="campagnes"><span class="ni">📣</span> Campagnes</a>
       <a class="nav" data-go="contenus"><span class="ni">🎬</span> Contenus</a>
+      <a class="nav" data-go="marques"><span class="ni">🏷️</span> Marques</a>
       <a class="nav" data-go="contacts"><span class="ni">👥</span> Contacts</a>
       <a class="nav" data-go="calendrier"><span class="ni">📅</span> Calendrier</a>
       <a class="nav" data-go="messages"><span class="ni">💬</span> Messages</a>
@@ -550,6 +562,7 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
     <section id="contactsview" style="display:none"><p class="pt"><span class="pi">👥</span> Contacts créateurs</p><div id="contactsbox"><div class="state">Chargement…</div></div></section>
     <section id="rapportsview" style="display:none"><p class="pt"><span class="pi">📊</span> Rapports</p><div id="rapportsbox"><div class="state">Chargement…</div></div></section>
     <section id="calendrierview" style="display:none"><p class="pt"><span class="pi">📅</span> Calendrier</p><div id="calendrierbox"><div class="state">Chargement…</div></div></section>
+    <section id="marquesview" style="display:none"><p class="pt"><span class="pi">🏷️</span> Marques</p><div class="panelhint">La fiche d'identité de chaque marque : contexte, période, contacts, docs & liens, et la progression du pôle. Clique une marque à gauche.</div><div class="mqlayout"><div id="mqlist" class="mqlist"></div><div id="mqdetail" class="mqdetail"><div class="state">Chargement…</div></div></div></section>
     <section id="historiqueview" style="display:none"><button class="lk backbtn" onclick="showView('cockpit')">← Retour au cockpit</button><p class="pt"><span class="pi">📜</span> Historique &amp; traçabilité</p><div class="panelhint">Chaque collab et son fil d'étapes : qui a fait quoi, quand, avec les liens vers les mails et la fiche Notion.</div><div class="ctsearch"><input id="histsearch" placeholder="🔍 Rechercher un créateur, une marque, une CP…"></div><div id="historiquebox"><div class="state">Chargement…</div></div></section>
     <div id="activitybar" class="actbar hidden"></div>
     <div class="foot">Clients actifs uniquement · filtré par interlocutrice.</div>
@@ -603,14 +616,15 @@ function statCardGo(act){
   else { navToView('cockpit'); setTimeout(()=>{const el=$('todopanel'); if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},220); } // à traiter / relances → priorités
 }
 let CURRENT_VIEW='cockpit';
-const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview',historique:'historiqueview'};
-function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','historiqueview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
+const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview',historique:'historiqueview',marques:'marquesview'};
+function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','historiqueview','marquesview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
 function refreshCustomView(){
   if(CURRENT_VIEW==='campagnes')renderCampagnes();
   else if(CURRENT_VIEW==='contacts')renderContacts();
   else if(CURRENT_VIEW==='rapports')renderRapports();
   else if(CURRENT_VIEW==='calendrier')renderCalendrier();
   else if(CURRENT_VIEW==='historique')renderHistorique();
+  else if(CURRENT_VIEW==='marques')renderMarques();
 }
 function showView(v){
   CURRENT_VIEW=v;
@@ -916,34 +930,35 @@ async function fichePost(brand,payload,msgEl){
     return true;
   }catch(e){ if(msgEl)msgEl.textContent='Erreur réseau, réessaie'; return false; }
 }
-function wireFiche(det,brand){
+function wireFiche(det,brand,rerender){
+  const R=rerender||(()=>renderBrandDetail(brand));
   const q=(id)=>det.querySelector('#'+id);
   // le formulaire d'édition REMPLACE la fiche affichée (pas de doublon à l'écran)
   const grid=det.querySelector('.fichegrid');
   const toggleBase=(edit)=>{ const fm=q('fbaseform'); if(!fm||!grid)return; fm.style.display=edit?'block':'none'; grid.style.display=edit?'none':''; const be2=q('fbaseedit'); if(be2) be2.textContent=edit?'👁 Revoir la fiche':'✏️ Modifier la fiche'; };
   const be=q('fbaseedit'); if(be) be.onclick=()=>toggleBase(q('fbaseform').style.display==='none');
-  const bs=q('fbasesave'); if(bs) bs.onclick=async()=>{ const base={}; FICHE_FIELDS.forEach(([k])=>{ base[k]=q('fb_'+k).value.trim(); }); if(await fichePost(brand,{base},q('fbasemsg'))) renderBrandDetail(brand); };
+  const bs=q('fbasesave'); if(bs) bs.onclick=async()=>{ const base={}; FICHE_FIELDS.forEach(([k])=>{ base[k]=q('fb_'+k).value.trim(); }); if(await fichePost(brand,{base},q('fbasemsg'))) R(); };
   const bc=q('fbasecancel'); if(bc) bc.onclick=()=>toggleBase(false);
-  const la=q('flinkadd'); if(la) la.onclick=async()=>{ const url=q('flinkurl').value.trim(); if(!url){ q('fdlmsg').textContent='Il me faut au moins l\'URL 🙂'; return; } if(await fichePost(brand,{link:{label:q('flinklabel').value.trim(),url}},q('fdlmsg'))) renderBrandDetail(brand); };
+  const la=q('flinkadd'); if(la) la.onclick=async()=>{ const url=q('flinkurl').value.trim(); if(!url){ q('fdlmsg').textContent='Il me faut au moins l\'URL 🙂'; return; } if(await fichePost(brand,{link:{label:q('flinklabel').value.trim(),url}},q('fdlmsg'))) R(); };
   const da=q('fdocadd'); if(da) da.onclick=()=>{
     const fi=q('fdocfile'); const file=fi&&fi.files&&fi.files[0];
     if(!file){ q('fdlmsg').textContent='Choisis d\'abord un fichier 🙂'; return; }
     if(file.size>10*1024*1024){ q('fdlmsg').textContent='Fichier trop lourd (10 Mo max)'; return; }
     q('fdlmsg').textContent='Envoi en cours…';
     const rd=new FileReader();
-    rd.onload=async()=>{ if(await fichePost(brand,{doc:{label:q('fdoclabel').value.trim(),filename:file.name,data:rd.result}},q('fdlmsg'))) renderBrandDetail(brand); };
+    rd.onload=async()=>{ if(await fichePost(brand,{doc:{label:q('fdoclabel').value.trim(),filename:file.name,data:rd.result}},q('fdlmsg'))) R(); };
     rd.readAsDataURL(file);
   };
-  det.querySelectorAll('.fnote .fdellink').forEach(b=>b.onclick=async()=>{ if(confirm('Supprimer ce lien ?')&&await fichePost(brand,{deleteLinkAt:Number(b.dataset.at)},null)) renderBrandDetail(brand); });
-  det.querySelectorAll('.fnote .fdeldoc').forEach(b=>b.onclick=async()=>{ if(confirm('Supprimer ce document ?')&&await fichePost(brand,{deleteDocId:b.dataset.id},null)) renderBrandDetail(brand); });
+  det.querySelectorAll('.fnote .fdellink').forEach(b=>b.onclick=async()=>{ if(confirm('Supprimer ce lien ?')&&await fichePost(brand,{deleteLinkAt:Number(b.dataset.at)},null)) R(); });
+  det.querySelectorAll('.fnote .fdeldoc').forEach(b=>b.onclick=async()=>{ if(confirm('Supprimer ce document ?')&&await fichePost(brand,{deleteDocId:b.dataset.id},null)) R(); });
   const ie=q('fitedit'); if(ie) ie.onclick=()=>{ q('fitform').style.display='block'; ie.style.display='none'; };
   const ic2=q('fitcancel'); if(ic2) ic2.onclick=()=>{ q('fitform').style.display='none'; const e2=q('fitedit'); if(e2)e2.style.display=''; };
-  const is=q('fitsave'); if(is) is.onclick=async()=>{ const itv={nom:q('fitnom').value.trim(),role:q('fitrole').value.trim(),email:q('fitemail').value.trim()}; if(await fichePost(brand,{interlocuteur:itv},null)) renderBrandDetail(brand); };
-  const na=q('fnoteadd'); if(na) na.onclick=async()=>{ const t=q('fnewnote').value.trim(); if(!t){ q('fnotemsg').textContent='Écris d\'abord ta note 🙂'; return; } if(await fichePost(brand,{note:t},q('fnotemsg'))) renderBrandDetail(brand); };
-  det.querySelectorAll('.fnote .fdel:not(.fdellink):not(.fdeldoc)').forEach(b=>b.onclick=async()=>{ if(confirm('Supprimer cette note ?')&&await fichePost(brand,{deleteNoteAt:Number(b.dataset.at)},null)) renderBrandDetail(brand); });
+  const is=q('fitsave'); if(is) is.onclick=async()=>{ const itv={nom:q('fitnom').value.trim(),role:q('fitrole').value.trim(),email:q('fitemail').value.trim()}; if(await fichePost(brand,{interlocuteur:itv},null)) R(); };
+  const na=q('fnoteadd'); if(na) na.onclick=async()=>{ const t=q('fnewnote').value.trim(); if(!t){ q('fnotemsg').textContent='Écris d\'abord ta note 🙂'; return; } if(await fichePost(brand,{note:t},q('fnotemsg'))) R(); };
+  det.querySelectorAll('.fnote .fdel:not(.fdellink):not(.fdeldoc)').forEach(b=>b.onclick=async()=>{ if(confirm('Supprimer cette note ?')&&await fichePost(brand,{deleteNoteAt:Number(b.dataset.at)},null)) R(); });
 }
-async function renderBrandDetail(brand){
-  const det=$('branddetail'); if(!det)return;
+async function renderBrandDetail(brand,target){
+  const det=target||$('branddetail'); if(!det)return;
   const profs=(SRC_PROFILS||[]).filter(p=>p.projet===brand);
   const cols=(ROWS||[]).filter(r=>r.brand===brand);
   const li=(t,s)=>`<div class="row"><div class="info"><div class="t">${esc(t)}</div><div class="s">${esc(s||'')}</div></div></div>`;
@@ -953,7 +968,18 @@ async function renderBrandDetail(brand){
   const f=(fi.brands||{})[brand]||{};
   det.innerHTML=ficheHTML(brand,f,fi.canEditBase)
     +`<h4>🏷️ ${esc(brand)} · progression du pôle</h4><div class="bcgrid2"><div><div class="bcsub">À contacter (${profs.length})</div>${colA}</div><div><div class="bcsub">Contenus (${cols.length})</div>${colB}</div></div>`;
-  wireFiche(det,brand);
+  wireFiche(det,brand,()=>renderBrandDetail(brand,target));
+}
+// ===== Vue Marques (menu latéral) : liste à gauche, fiche à droite =====
+let MQ_SELECTED=null;
+function renderMarques(){
+  const list=$('mqlist'), det=$('mqdetail'); if(!list||!det)return;
+  const brands=brandUnion();
+  if(!brands.length){ list.innerHTML=''; det.innerHTML='<div class="state">Aucune marque pour le moment.</div>'; return; }
+  if(!MQ_SELECTED||!brands.includes(MQ_SELECTED)) MQ_SELECTED=brands[0];
+  list.innerHTML=brands.map(b=>`<button class="mqitem${b===MQ_SELECTED?' on':''}" data-b="${esc(b)}"><span class="bav">${esc(brandIni(b))}</span><span class="mqn">${esc(b)}</span></button>`).join('');
+  list.querySelectorAll('.mqitem').forEach(x=>x.onclick=()=>{ MQ_SELECTED=x.dataset.b; renderMarques(); });
+  renderBrandDetail(MQ_SELECTED,det);
 }
 async function loadDrafts(){
   try{
