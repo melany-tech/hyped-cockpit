@@ -184,6 +184,8 @@ a.linkchip:hover{background:#d6ebe4}
 .panel.block{margin-bottom:16px}
 .panelhint{font-size:11.5px;color:var(--gray);margin:-4px 0 12px;line-height:1.4}
 .briefbtn,.replybtn{white-space:nowrap;cursor:pointer}
+.sighint{background:#FBF3E6;border:1px solid #EBD9B6;color:#7A5B18;border-radius:9px;padding:9px 12px;font-size:12px;margin-bottom:10px}
+.sighint a{color:#0F6E56;font-weight:600}
 .nextbtn{white-space:nowrap;cursor:pointer;background:#EAF3F1;color:#0F6E56;border:1px solid #BfE0D9;font-weight:600}
 .nextbtn:hover{background:#ddf0eb}
 .nextbtn:disabled{opacity:.6;cursor:default}
@@ -494,7 +496,7 @@ a.linkchip:hover{background:#d6ebe4}
 </div><!-- /#app -->
 
 <script>
-const PREF=['À lancer','À transmettre','Négo','À valider','En production','Previews','À cadrer','À facturer'];
+const PREF=['Planifié','À transmettre','Négo','À valider','En production','Previews','À cadrer','À facturer'];
 let ROWS=[], VIEWER=null, TEAM=[];
 const $=(id)=>document.getElementById(id);
 function fmtDate(s){if(!s)return'';return new Date(s).toLocaleDateString('fr-FR',{day:'numeric',month:'short'});}
@@ -596,11 +598,11 @@ function renderCampagnes(){
 }
 function renderContacts(){
   const map={};
-  (ROWS||[]).forEach(r=>{ const name=r.name; if(!name)return; const k=name+'|'+(r.brand||''); const statut=r.grp==='À valider'?'Contenu à valider':(r.grp==='À lancer'?'À lancer':'En production'); map[k]={name,brand:r.brand||'—',statut,cp:r.cp||'—'}; });
+  (ROWS||[]).forEach(r=>{ const name=r.name; if(!name)return; const k=name+'|'+(r.brand||''); const statut=r.grp==='À valider'?'Contenu à valider':(r.grp==='Planifié'?'Le contenu est planifié':'En production'); map[k]={name,brand:r.brand||'—',statut,cp:r.cp||'—'}; });
   (SRC_PROFILS||[]).forEach(p=>{ const name=infName(p.task); if(!name)return; const k=name+'|'+(p.projet||''); if(!map[k]) map[k]={name,brand:p.projet||'—',statut:'À contacter',cp:p.responsable||'—'}; });
   const list=Object.values(map).sort((a,b)=>(a.brand+a.name).localeCompare(b.brand+b.name));
   if(!list.length){$('contactsbox').innerHTML='<div class="state">Aucun contact pour le moment.</div>';return;}
-  const stcol={'À contacter':'#C77F2A','À lancer':'#C77F2A','En production':'#7A5AA8','Contenu à valider':'#C2553B'};
+  const stcol={'À contacter':'#C77F2A','Le contenu est planifié':'#C77F2A','En production':'#7A5AA8','Contenu à valider':'#C2553B'};
   $('contactsbox').innerHTML='<div class="ctcount">'+list.length+' créateur'+(list.length>1?'s':'')+' suivis</div><div class="ctsearch"><input id="ctsearchinput" placeholder="🔍 Rechercher un créateur, une marque, une CP…"></div><div id="ctlist">'+list.map(c=>`<div class="row ctrow"><span class="rdot" style="background:${stcol[c.statut]||'#888'}"></span><div class="info"><div class="t">${esc(c.name)}</div><div class="s">${esc(c.statut)}</div></div><span class="brand">${esc(c.brand)}</span><span class="owner">${esc(c.cp)}</span></div>`).join('')+'</div>';
   const si=$('ctsearchinput'); if(si) si.oninput=()=>{const q=si.value.toLowerCase();document.querySelectorAll('#ctlist .ctrow').forEach(r=>{r.style.display=(!q||r.textContent.toLowerCase().includes(q))?'':'none';});};
 }
@@ -822,7 +824,22 @@ async function loadMail(fresh){
       return;
     }
     renderMail(d, who);
+    if(!who) checkSignature();
   }catch(e){show($('mailpanel'),false);}
+}
+let SIG_CHECKED=false;
+async function checkSignature(){
+  if(SIG_CHECKED)return; SIG_CHECKED=true;
+  try{
+    const r=await api('/api/gmail/signature');const d=await r.json();
+    if(d&&d.enabled&&d.connected&&!d.has){
+      const box=$('mailbox'); if(!box)return;
+      const hint=document.createElement('div'); hint.className='sighint';
+      hint.innerHTML='✍️ Pour ajouter <b>ta signature Gmail</b> en bas des mails envoyés d\'ici, reconnecte ton Gmail une fois (nouvelle autorisation). <a href="#" id="sigreco">Reconnecter mon Gmail ↗</a>';
+      box.parentNode.insertBefore(hint, box);
+      $('sigreco').onclick=async(e)=>{ e.preventDefault(); const rr=await api('/api/gmail/connect');const dd=await rr.json(); if(dd.url)window.location.href=dd.url; };
+    }
+  }catch(e){}
 }
 function emailFromHeader(from){ const m=String(from||'').match(/<([^>]+)>/); return m?m[1]:(String(from||'').includes('@')?String(from).trim():''); }
 function genReplyFR(category, creator){
@@ -942,7 +959,7 @@ function render(){
       ? `<select class="assignsel" data-id="${esc(a.id||'')}" title="Assigner cette collab à une CP"><option value="">— non assigné</option>${(TEAM||[]).map(c=>`<option value="${esc(c)}"${(c||'').toLowerCase().trim()===cur?' selected':''}>${esc(c)}</option>`).join('')}</select>`
       : (showOwn?owner:'');
     const link=a.url?`<a href="${a.url}" target="_blank" rel="noopener">Ouvrir</a>`:'';
-    const NEXT={'Non posté':'→ En production','En production':'→ En validation','En validation':'✓ Marquer publié'};
+    const NEXT={'Non posté':'→ En cours de production','En production':'→ En validation','En validation':'✓ Marquer publié'};
     const nb=(a.id&&NEXT[a.statut])?`<button class="lk nextbtn" data-id="${esc(a.id)}" data-statut="${esc(a.statut)}" title="Faire passer à l'étape suivante">${NEXT[a.statut]}</button>`:'';
     return `<div class="row" data-name="${esc(a.name)}" data-brand="${esc(a.brand)}" data-cp="${esc(a.cp||'')}">
       <span class="rdot" style="background:${a.color}"></span>

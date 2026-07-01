@@ -163,7 +163,7 @@ const ADAPTERS = {
     const M = {
       "En validation": { grp: "À valider", label: "Contenu à valider", color: "#C2553B" },
       "En production": { grp: "En production", label: "En cours de production", color: "#7A5AA8" },
-      "Non posté":     { grp: "À lancer", label: "À lancer", color: "#C77F2A" },
+      "Non posté":     { grp: "Planifié", label: "Le contenu est planifié", color: "#C77F2A" },
       // "Posté" -> rien (terminé)
     };
     const m = M[statut];
@@ -348,6 +348,13 @@ function inboxTarget(req) {
 app.get("/api/gmail/status", auth, (req, res) => {
   const t = inboxTarget(req);
   res.json({ enabled: gm.ENABLED, connected: gm.ENABLED ? gm.isConnected(t.email) : false, viewing: t.viewing });
+});
+app.get("/api/gmail/signature", auth, async (req, res) => {
+  if (!gm.ENABLED) return res.json({ enabled: false });
+  const t = inboxTarget(req);
+  if (!gm.isConnected(t.email)) return res.json({ enabled: true, connected: false });
+  try { const html = await gm.getSignature(t.email); res.json({ enabled: true, connected: true, has: !!(html && html.trim()) }); }
+  catch (e) { res.json({ enabled: true, connected: true, has: false }); }
 });
 app.get("/api/gmail/connect", auth, (req, res) => {
   if (!gm.ENABLED) return res.status(400).json({ error: "Connexion Gmail non configurée." });
@@ -551,7 +558,7 @@ app.post("/api/collab/:id/assign", auth, async (req, res) => {
 
 // Fait avancer une collab à l'étape suivante du pipeline (met à jour le Statut Notion)
 const STAGE_ORDER = ["Non posté", "En production", "En validation", "Posté"];
-const STAGE_LABEL = { "Non posté": "À lancer", "En production": "En cours de production", "En validation": "Contenu à valider", "Posté": "Publié / terminé" };
+const STAGE_LABEL = { "Non posté": "Le contenu est planifié", "En production": "En cours de production", "En validation": "Contenu à valider", "Posté": "Publié / terminé" };
 app.post("/api/collab/:id/advance", auth, async (req, res) => {
   if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
   try {

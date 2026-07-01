@@ -14,6 +14,7 @@ const SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/calendar.readonly", // visios du jour (lecture seule)
   "https://www.googleapis.com/auth/gmail.compose",     // créer des brouillons (jamais d'envoi auto)
+  "https://www.googleapis.com/auth/gmail.settings.basic", // lire la signature Gmail de la personne
 ];
 // Choix du dossier de stockage : on PRÉFÈRE le disque persistant monté sur /var/data
 // (les jetons survivent alors aux redéploiements), peu importe la variable DATA_DIR.
@@ -216,21 +217,64 @@ function loadDrafts() { try { return JSON.parse(fs.readFileSync(DRAFTS_STORE, "u
 function saveDrafts(s) { try { fs.writeFileSync(DRAFTS_STORE, JSON.stringify(s)); } catch (e) {} }
 function b64url(s) { return Buffer.from(s, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
 function encSubject(s) { return "=?UTF-8?B?" + Buffer.from(s || "", "utf8").toString("base64") + "?="; }
-function mime({ to, subject, body }) {
-  return [
+function htmlEsc(s) { return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+// --- Signature Gmail réelle de la personne (lue via l'API, mise en cache) ---
+const SIG_CACHE = {}; // email -> { at, html }
+const SIG_TTL = 60 * 60 * 1000; // 1 h
+async function getSignature(email) {
+  const c = SIG_CACHE[email];
+  if (c && (Date.now() - c.at) < SIG_TTL) return c.html;
+  try {
+    const gmail = gmailFor(email);
+    if (!gmail) return "";
+    const r = await gmail.users.settings.sendAs.list({ userId: "me" });
+    const list = r.data.sendAs || [];
+    const mine = String(email || "").toLowerCase();
+    const pick = list.find((s) => String(s.sendAsEmail || "").toLowerCase() === mine)
+      || list.find((s) => s.isPrimary) || list.find((s) => s.isDefault) || list[0];
+    const html = (pick && pick.signature) ? String(pick.signature) : "";
+    SIG_CACHE[email] = { at: Date.now(), html };
+    return html;
+  } catch (e) { return ""; } // scope pas encore accordé, ou pas de signature
+}
+
+// Construit le MIME. Avec signature HTML -> multipart/alternative (texte + HTML).
+function mime({ to, subject, body, sigHtml }) {
+  const headers = [
     "To: " + (to || ""),
     "Subject: " + encSubject(subject || ""),
     "MIME-Version: 1.0",
+  ];
+  if (!sigHtml) {
+    return headers.concat(["Content-Type: text/plain; charset=UTF-8", "", body || ""]).join("\r\n");
+  }
+  const bnd = "hyped_" + Date.now().toString(36);
+  const textPart = (body || "") + "\r\n\r\n" + htmlToText(sigHtml);
+  const htmlPart = htmlEsc(body || "").replace(/\r?\n/g, "<br>") + "<br><br>" + sigHtml;
+  return headers.concat([
+    'Content-Type: multipart/alternative; boundary="' + bnd + '"',
+    "",
+    "--" + bnd,
     "Content-Type: text/plain; charset=UTF-8",
     "",
-    body || "",
-  ].join("\r\n");
+    textPart,
+    "",
+    "--" + bnd,
+    "Content-Type: text/html; charset=UTF-8",
+    "",
+    htmlPart,
+    "",
+    "--" + bnd + "--",
+    "",
+  ]).join("\r\n");
 }
 /** Crée un brouillon dans la boîte de `email`. N'envoie rien. */
 async function createDraft(email, { to, subject, body }) {
   const gmail = gmailFor(email);
   if (!gmail) return { ok: false, error: "non connecté" };
-  const raw = b64url(mime({ to, subject, body }));
+  const sigHtml = await getSignature(email);
+  const raw = b64url(mime({ to, subject, body, sigHtml }));
   const r = await gmail.users.drafts.create({ userId: "me", requestBody: { message: { raw } } });
   const s = loadDrafts(); (s[email] = s[email] || []).push(r.data.id); saveDrafts(s);
   return { ok: true, id: r.data.id };
@@ -240,7 +284,8 @@ async function sendEmail(email, { to, subject, body }) {
   const gmail = gmailFor(email);
   if (!gmail) return { ok: false, error: "non connecté" };
   if (!to) return { ok: false, error: "destinataire manquant" };
-  const raw = b64url(mime({ to, subject, body }));
+  const sigHtml = await getSignature(email);
+  const raw = b64url(mime({ to, subject, body, sigHtml }));
   const r = await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
   return { ok: true, id: r.data.id };
 }
@@ -257,4 +302,4 @@ async function draftsToValidate(email) {
   return { count: keep.length };
 }
 
-module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, analyzeFor, calendarToday, createDraft, sendEmail, draftsToValidate, fetchThreadText, SCOPES };
+module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, analyzeFor, calendarToday, createDraft, sendEmail, draftsToValidate, fetchThreadText, getSignature, SCOPES };
