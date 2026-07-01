@@ -251,12 +251,15 @@ async function getSignature(email) {
 }
 
 // Construit le MIME. Avec signature HTML -> multipart/alternative (texte + HTML).
-function mime({ to, subject, body, sigHtml }) {
+function mime({ to, cc, subject, body, sigHtml }) {
   const headers = [
     "To: " + (to || ""),
+  ];
+  if (cc) headers.push("Cc: " + cc);
+  headers.push(
     "Subject: " + encSubject(subject || ""),
     "MIME-Version: 1.0",
-  ];
+  );
   if (!sigHtml) {
     return headers.concat(["Content-Type: text/plain; charset=UTF-8", "", body || ""]).join("\r\n");
   }
@@ -281,22 +284,22 @@ function mime({ to, subject, body, sigHtml }) {
   ]).join("\r\n");
 }
 /** Crée un brouillon dans la boîte de `email`. N'envoie rien. */
-async function createDraft(email, { to, subject, body }) {
+async function createDraft(email, { to, cc, subject, body }) {
   const gmail = gmailFor(email);
   if (!gmail) return { ok: false, error: "non connecté" };
   const sigHtml = await getSignature(email);
-  const raw = b64url(mime({ to, subject, body, sigHtml }));
+  const raw = b64url(mime({ to, cc, subject, body, sigHtml }));
   const r = await gmail.users.drafts.create({ userId: "me", requestBody: { message: { raw } } });
   const s = loadDrafts(); (s[email] = s[email] || []).push(r.data.id); saveDrafts(s);
   return { ok: true, id: r.data.id };
 }
 /** Envoie un mail (sur clic explicite de la CP). Nécessite un destinataire. */
-async function sendEmail(email, { to, subject, body }) {
+async function sendEmail(email, { to, cc, subject, body }) {
   const gmail = gmailFor(email);
   if (!gmail) return { ok: false, error: "non connecté" };
   if (!to) return { ok: false, error: "destinataire manquant" };
   const sigHtml = await getSignature(email);
-  const raw = b64url(mime({ to, subject, body, sigHtml }));
+  const raw = b64url(mime({ to, cc, subject, body, sigHtml }));
   const r = await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
   return { ok: true, id: r.data.id };
 }

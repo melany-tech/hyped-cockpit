@@ -132,6 +132,9 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
 .msgcopy{margin-top:8px}
 .msgdraft{margin-top:8px}
 .msgto{width:100%;font-family:inherit;font-size:13px;color:var(--navy);background:var(--bg);border:1px solid #CFDADA;border-radius:9px;padding:9px 11px;margin:8px 0}
+.msgcc{width:100%;font-family:inherit;font-size:13px;color:var(--navy);background:var(--bg);border:1px solid #CFDADA;border-radius:9px;padding:9px 11px;margin:0 0 8px}
+.cctoggle{margin:-2px 0 6px}
+.cctoggle .cclink{border:none;background:none;color:var(--teal);font-size:12px;padding:0;cursor:pointer}
 .msgbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
 .msgsend{color:#fff;background:var(--teal);border-color:var(--teal)}
 .msgsend:hover{background:#247a72}
@@ -1107,7 +1110,7 @@ function openMsgPanel(rowEl, opts){
   const f=opts.files||{}; const fchips=fileChips(f.a,f.l);
   const recv = (opts.received||fchips) ? `<div class="msgrecv"><div class="msgrecv-h">📨 Message reçu${opts.threadUrl?` · <a href="${esc(opts.threadUrl)}" target="_blank" rel="noopener">Ouvrir le fil dans Gmail ↗</a>`:''}</div><div class="msgrecv-b">${linkify(opts.received||'')}</div>${fchips}</div>` : '';
   const aibar = opts.aiSuggest ? `<div class="aibar"><button class="lk ai aigen">✨ Régénérer la réponse</button><span class="aistatus"></span></div>` : '';
-  panel.innerHTML=recv+aibar+'<input class="msgto" type="email" placeholder="Email du destinataire (requis pour envoyer)"><textarea class="msgtxt" rows="12"></textarea><div class="msgbtns"><button class="lk msgcopy">Copier</button> <button class="lk msgdraft">📧 Brouillon</button> <button class="lk msgsched">⏱ Programmer</button> <button class="lk msgsend">✉️ Envoyer</button></div><div class="schedrow" style="display:none"><span class="schedlbl">Envoyer le :</span> <input type="datetime-local" class="schedat"> <button class="lk primary schedok">Programmer l\'envoi</button> <span class="schedmsg"></span></div>';
+  panel.innerHTML=recv+aibar+'<input class="msgto" type="email" placeholder="Email du destinataire (requis pour envoyer)"><div class="cctoggle"><button type="button" class="lk cclink">＋ Ajouter en copie (Cc)</button></div><input class="msgcc" type="text" placeholder="Cc — séparez plusieurs emails par une virgule" style="display:none"><textarea class="msgtxt" rows="12"></textarea><div class="msgbtns"><button class="lk msgcopy">Copier</button> <button class="lk msgdraft">📧 Brouillon</button> <button class="lk msgsched">⏱ Programmer</button> <button class="lk msgsend">✉️ Envoyer</button></div><div class="schedrow" style="display:none"><span class="schedlbl">Envoyer le :</span> <input type="datetime-local" class="schedat"> <button class="lk primary schedok">Programmer l\'envoi</button> <span class="schedmsg"></span></div>';
   rowEl.after(panel);
   const ta=panel.querySelector('.msgtxt'); ta.value=opts.body||'';
   if(opts.aiSuggest){
@@ -1128,16 +1131,20 @@ function openMsgPanel(rowEl, opts){
     gb.onclick=runAI; runAI();
   }
   if(opts.to) panel.querySelector('.msgto').value=opts.to;
+  const ccInput=panel.querySelector('.msgcc'), ccLink=panel.querySelector('.cclink');
+  if(opts.cc){ ccInput.value=opts.cc; ccInput.style.display=''; panel.querySelector('.cctoggle').style.display='none'; }
+  ccLink.onclick=()=>{ ccInput.style.display=''; panel.querySelector('.cctoggle').style.display='none'; ccInput.focus(); };
+  const ccOf=()=>(ccInput.value||'').trim();
   const subjOf=()=>opts.subject||'Message — Hyped Agency';
   const cpbtn=panel.querySelector('.msgcopy');
   cpbtn.onclick=()=>{ta.select();try{document.execCommand('copy');}catch(e){}cpbtn.textContent='Copié ✓';setTimeout(()=>cpbtn.textContent='Copier',1500);};
   const dbtn=panel.querySelector('.msgdraft');
-  dbtn.onclick=async()=>{ dbtn.textContent='…'; const r=await api('/api/gmail/draft',{method:'POST',body:JSON.stringify({to:(panel.querySelector('.msgto').value||'').trim(),subject:subjOf(),body:ta.value,threadId:opts.threadId||''})}); const d=await r.json().catch(()=>({})); if(d&&d.ok){dbtn.textContent='Brouillon créé ✓';loadDrafts();if(opts.onSent)opts.onSent('brouillon');} else dbtn.textContent='↻ Reconnecte ton Gmail'; setTimeout(()=>{dbtn.textContent='📧 Brouillon';},2600); };
+  dbtn.onclick=async()=>{ dbtn.textContent='…'; const r=await api('/api/gmail/draft',{method:'POST',body:JSON.stringify({to:(panel.querySelector('.msgto').value||'').trim(),cc:ccOf(),subject:subjOf(),body:ta.value,threadId:opts.threadId||''})}); const d=await r.json().catch(()=>({})); if(d&&d.ok){dbtn.textContent='Brouillon créé ✓';loadDrafts();if(opts.onSent)opts.onSent('brouillon');} else dbtn.textContent='↻ Reconnecte ton Gmail'; setTimeout(()=>{dbtn.textContent='📧 Brouillon';},2600); };
   const sbtn=panel.querySelector('.msgsend');
-  sbtn.onclick=async()=>{ const to=(panel.querySelector('.msgto').value||'').trim(); if(!to){sbtn.textContent='Ajoute un destinataire';setTimeout(()=>sbtn.textContent='✉️ Envoyer',2200);return;} if(!confirm('Envoyer ce mail à '+to+' ?'))return; sbtn.textContent='Envoi…'; const r=await api('/api/gmail/send',{method:'POST',body:JSON.stringify({to,subject:subjOf(),body:ta.value,threadId:opts.threadId||''})}); const d=await r.json().catch(()=>({})); sbtn.textContent=(d&&d.ok)?'Envoyé ✓':(d.error||'↻ Reconnecte ton Gmail'); if(d&&d.ok&&opts.onSent)opts.onSent('email'); setTimeout(()=>{sbtn.textContent='✉️ Envoyer';},2800); };
+  sbtn.onclick=async()=>{ const to=(panel.querySelector('.msgto').value||'').trim(); if(!to){sbtn.textContent='Ajoute un destinataire';setTimeout(()=>sbtn.textContent='✉️ Envoyer',2200);return;} if(!confirm('Envoyer ce mail à '+to+(ccOf()?' (Cc : '+ccOf()+')':'')+' ?'))return; sbtn.textContent='Envoi…'; const r=await api('/api/gmail/send',{method:'POST',body:JSON.stringify({to,cc:ccOf(),subject:subjOf(),body:ta.value,threadId:opts.threadId||''})}); const d=await r.json().catch(()=>({})); sbtn.textContent=(d&&d.ok)?'Envoyé ✓':(d.error||'↻ Reconnecte ton Gmail'); if(d&&d.ok&&opts.onSent)opts.onSent('email'); setTimeout(()=>{sbtn.textContent='✉️ Envoyer';},2800); };
   const schbtn=panel.querySelector('.msgsched'), schrow=panel.querySelector('.schedrow'), schat=panel.querySelector('.schedat'), schok=panel.querySelector('.schedok'), schmsg=panel.querySelector('.schedmsg');
   schbtn.onclick=()=>{ const show=schrow.style.display==='none'; schrow.style.display=show?'flex':'none'; if(show&&!schat.value){ const d=new Date(Date.now()+3600000); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); schat.value=d.toISOString().slice(0,16); } };
-  schok.onclick=async()=>{ const to=(panel.querySelector('.msgto').value||'').trim(); if(!to){schmsg.textContent='Ajoute un destinataire';return;} if(!schat.value){schmsg.textContent='Choisis une date/heure';return;} const at=new Date(schat.value).getTime(); if(!at||at<Date.now()+30000){schmsg.textContent='Choisis un horaire futur';return;} if(!confirm('Programmer l\'envoi à '+to+' le '+new Date(at).toLocaleString('fr-FR')+' ?'))return; schok.textContent='…'; const r=await api('/api/gmail/schedule',{method:'POST',body:JSON.stringify({to,subject:subjOf(),body:ta.value,at,threadId:opts.threadId||''})}); const d=await r.json().catch(()=>({})); if(d&&d.ok){ schmsg.textContent='✓ Programmé'; if(opts.onSent)opts.onSent('programme'); loadScheduled(); setTimeout(()=>{panel.remove();},900); } else { schok.textContent='Programmer l\'envoi'; schmsg.textContent=(d&&d.error)||'Échec'; } };
+  schok.onclick=async()=>{ const to=(panel.querySelector('.msgto').value||'').trim(); if(!to){schmsg.textContent='Ajoute un destinataire';return;} if(!schat.value){schmsg.textContent='Choisis une date/heure';return;} const at=new Date(schat.value).getTime(); if(!at||at<Date.now()+30000){schmsg.textContent='Choisis un horaire futur';return;} if(!confirm('Programmer l\'envoi à '+to+' le '+new Date(at).toLocaleString('fr-FR')+' ?'))return; schok.textContent='…'; const r=await api('/api/gmail/schedule',{method:'POST',body:JSON.stringify({to,cc:ccOf(),subject:subjOf(),body:ta.value,at,threadId:opts.threadId||''})}); const d=await r.json().catch(()=>({})); if(d&&d.ok){ schmsg.textContent='✓ Programmé'; if(opts.onSent)opts.onSent('programme'); loadScheduled(); setTimeout(()=>{panel.remove();},900); } else { schok.textContent='Programmer l\'envoi'; schmsg.textContent=(d&&d.error)||'Échec'; } };
 }
 function genBriefFR(brand, name){
   const cp=(VIEWER&&VIEWER.name)||'';
@@ -1295,8 +1302,10 @@ function openMessage(btn){
   const cp=p.responsable||(VIEWER&&VIEWER.name)||'';
   const brand=p.projet||'';
   const panel=document.createElement('div'); panel.className='msgpanel';
-  panel.innerHTML='<div class="msgbar"><span class="seg"><button data-l="fr" class="on">FR</button><button data-l="en">EN</button></span><input class="msgdisp" value="1 Reel + 1 set de stories"></div><input class="msgto" type="email" placeholder="Email du destinataire (requis pour envoyer)"><textarea class="msgtxt" rows="12"></textarea><div class="msgbtns"><button class="lk msgcopy">Copier</button> <button class="lk msgdraft">📧 Brouillon</button> <button class="lk msgsend">✉️ Envoyer</button></div>';
+  panel.innerHTML='<div class="msgbar"><span class="seg"><button data-l="fr" class="on">FR</button><button data-l="en">EN</button></span><input class="msgdisp" value="1 Reel + 1 set de stories"></div><input class="msgto" type="email" placeholder="Email du destinataire (requis pour envoyer)"><div class="cctoggle"><button type="button" class="lk cclink">＋ Ajouter en copie (Cc)</button></div><input class="msgcc" type="text" placeholder="Cc — séparez plusieurs emails par une virgule" style="display:none"><textarea class="msgtxt" rows="12"></textarea><div class="msgbtns"><button class="lk msgcopy">Copier</button> <button class="lk msgdraft">📧 Brouillon</button> <button class="lk msgsend">✉️ Envoyer</button></div>';
   row.after(panel);
+  const ccInput=panel.querySelector('.msgcc'); const ccOf=()=>(ccInput.value||'').trim();
+  panel.querySelector('.cclink').onclick=()=>{ ccInput.style.display=''; panel.querySelector('.cctoggle').style.display='none'; ccInput.focus(); };
   let lang='fr';
   const ta=panel.querySelector('.msgtxt'), disp=panel.querySelector('.msgdisp');
   const regen=()=>{ta.value=genMessage(brand,inf,cp,disp.value,lang);};
@@ -1308,7 +1317,7 @@ function openMessage(btn){
   const dbtn=panel.querySelector('.msgdraft');
   dbtn.onclick=async()=>{
     dbtn.textContent='…';
-    const r=await api('/api/gmail/draft',{method:'POST',body:JSON.stringify({to:(panel.querySelector('.msgto').value||'').trim(),subject:subjOf(),body:ta.value})});
+    const r=await api('/api/gmail/draft',{method:'POST',body:JSON.stringify({to:(panel.querySelector('.msgto').value||'').trim(),cc:ccOf(),subject:subjOf(),body:ta.value})});
     const d=await r.json().catch(()=>({}));
     if(d&&d.ok){dbtn.textContent='Brouillon créé ✓';loadDrafts();}
     else dbtn.textContent='↻ Reconnecte ton Gmail';
@@ -1318,9 +1327,9 @@ function openMessage(btn){
   sbtn.onclick=async()=>{
     const to=(panel.querySelector('.msgto').value||'').trim();
     if(!to){sbtn.textContent='Ajoute un destinataire';setTimeout(()=>sbtn.textContent='✉️ Envoyer',2200);return;}
-    if(!confirm('Envoyer ce mail à '+to+' ?'))return;
+    if(!confirm('Envoyer ce mail à '+to+(ccOf()?' (Cc : '+ccOf()+')':'')+' ?'))return;
     sbtn.textContent='Envoi…';
-    const r=await api('/api/gmail/send',{method:'POST',body:JSON.stringify({to,subject:subjOf(),body:ta.value})});
+    const r=await api('/api/gmail/send',{method:'POST',body:JSON.stringify({to,cc:ccOf(),subject:subjOf(),body:ta.value})});
     const d=await r.json().catch(()=>({}));
     sbtn.textContent=(d&&d.ok)?'Envoyé ✓':(d.error||'↻ Reconnecte ton Gmail');
     setTimeout(()=>{sbtn.textContent='✉️ Envoyer';},2800);
