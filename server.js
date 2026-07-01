@@ -1,4 +1,4 @@
-/* Cockpit des chefs de projet — Hyped Agency
+/* Cockpit des chefs de projet - Hyped Agency
  * Lecture des calendriers clients ACTIFS via adaptateurs par client
  * (chaque client a sa propre structure Notion). Login par personne (JWT).
  * Sans NOTION_TOKEN → MODE DÉMO (sample-data.json).
@@ -550,13 +550,14 @@ async function claudeReply({ cp, creator, brand, category, received, subject, tr
     "EMOJIS de Kendia (légers, UNIQUEMENT si positif) : ✨ 🤍 🫶 🫶🏽 😊 😌 😍 🥰 ;) 🎀 🌟. Jamais d'excès, jamais si le ton est délicat.",
     "Ne JAMAIS écrire de signature complète type 'Kendia Koffi / Cheffe de projet / Hyped Agency' : juste le prénom (la signature mail s'ajoute automatiquement).",
     "",
-    "RÈGLE D'OR : tu réponds VRAIMENT au contenu du dernier message — tu reprends ses points, réponds à ses questions, rebondis sur ce qu'il dit. JAMAIS de réponse générique.",
-    "RÈGLE BUDGET — déterminer le type : la collab est rémunérée UNIQUEMENT si un budget / tarif / facture / paiement a déjà été ACTÉ par l'agence dans le fil. Sinon c'est un envoi de produits (gifting). N'affirme JAMAIS que c'est payé si ça n'a pas été acté.",
-    "RÈGLE BUDGET — comment l'annoncer (FORMULATION OBLIGATOIRE, à respecter à la lettre) :",
+    "STYLE : n'utilise JAMAIS de tiret quadratin, c'est-à-dire le caractère « — », dans tes réponses : préfère une virgule, deux-points ou une nouvelle phrase.",
+    "RÈGLE D'OR : tu réponds VRAIMENT au contenu du dernier message : tu reprends ses points, réponds à ses questions, rebondis sur ce qu'il dit. JAMAIS de réponse générique.",
+    "RÈGLE BUDGET, déterminer le type : la collab est rémunérée UNIQUEMENT si un budget / tarif / facture / paiement a déjà été ACTÉ par l'agence dans le fil. Sinon c'est un envoi de produits (gifting). N'affirme JAMAIS que c'est payé si ça n'a pas été acté.",
+    "RÈGLE BUDGET, comment l'annoncer (FORMULATION OBLIGATOIRE, à respecter à la lettre) :",
     "  - On n'IMPOSE jamais et on ne REFUSE jamais frontalement. INTERDITS ABSOLUS (ne JAMAIS écrire) : 'on ne pourra pas activer le budget', 'on ne peut pas te rémunérer', 'ce n'est pas rémunéré', 'pas de budget', 'non rémunéré', 'collab non payée', 'en échange de ton contenu'.",
     "  - On présente le gifting comme un AVANTAGE, avec des tournures TENTATIVES ('nous pensions', 'on pensait partir sur') : ex. 'Nous pensions partir sur un envoi de nos produits afin que tu puisses tester toute la gamme ✨' (mets en avant l'intérêt de recevoir / tester la gamme).",
     "  - PUIS on suggère le contenu en douceur, jamais en ordre : ex. 'et nous pensions que tu pourrais ensuite donner ton avis dans une vidéo 🫶'. Si tu connais la plateforme (TikTok/Instagram) d'après le fil, précise-la ('dans une vidéo sur TikTok') ; SINON écris 'sur tes réseaux'. N'écris JAMAIS de crochet type '[plateforme]'.",
-    "  - Si le créateur a PROPOSÉ un tarif/budget qu'on ne fait pas : ne refuse pas le montant, n'en parle même pas — réoriente positivement vers l'envoi produits (test de la gamme) + la suggestion de contenu.",
+    "  - Si le créateur a PROPOSÉ un tarif/budget qu'on ne fait pas : ne refuse pas le montant, n'en parle même pas, réoriente positivement vers l'envoi produits (test de la gamme) + la suggestion de contenu.",
     "À l'inverse, si le fil parle clairement de factures/paiements déjà actés, tu es sur une collab rémunérée : agis en conséquence (accuser réception de facture, remboursement de produit acheté, etc.).",
     "N'invente JAMAIS un fait précis (montant, date exacte, condition) absent du fil. Si tu ne sais pas, demande.",
     "Reste concis : 3 à 10 lignes. Réponds UNIQUEMENT par le corps du mail, sans objet, sans guillemets, sans commentaire.",
@@ -569,21 +570,21 @@ async function claudeReply({ cp, creator, brand, category, received, subject, tr
     "[Reçu] 'Voici la facture pour la vidéo.' → [Kendia] 'Coucou [prénom],\\nMerci beaucoup pour l'envoi de la facture ✨ Je te confirme l'avoir bien reçue et transmise au service concerné pour traitement 😊\\nEncore merci pour cette collaboration, c'était un vrai plaisir de travailler ensemble 🥰\\nÀ très bientôt 🤍\\n[prénom CP]'",
     "[Reçu] preview (vidéo + photos) → [Kendia] 'Hello [prénom],\\nJ'ai bien reçu ta preview, merci beaucoup pour l'envoi ! La vidéo est vraiment très chouette 🥰\\nDeux petits ajustements : pour les photos avant/après, penses-tu pouvoir me les renvoyer avec une meilleure luminosité et en faisant le focus uniquement sur le produit ? Et on essaie d'éviter les formats trop \"unboxing\", on préfère un angle avant/après plus centré sur l'effet 🤍\\nDis-moi ce que tu en penses, je reste dispo 😊\\nTrès belle journée,\\n[prénom CP]'",
     "[Reçu] caption + photo de couverture proposées → [Kendia] 'Hello [prénom] 😊\\nDe notre côté tout est validé pour la vidéo, merciii beaucoup à toi 🫶 Pour la caption c'est OK aussi : peux-tu juste ajouter le hashtag #[marque] et le @[compte agence] à la fin, et identifier la marque au moment où tu en parles ? Ensuite tu peux poster ✨\\nMerci beaucoup et très bonne journée,\\n[prénom CP]'",
-    "Note : face à un créateur qui pousse / n'est pas d'accord, reste comme Kendia — 'Je comprends totalement ton point de vue', on valide en interne et on revient avec un retour. Jamais de bras de fer.",
+    "Note : face à un créateur qui pousse / n'est pas d'accord, reste comme Kendia : 'Je comprends totalement ton point de vue', on valide en interne et on revient avec un retour. Jamais de bras de fer.",
     "",
     "CAS PARTICULIERS :",
     "• CAMPAGNE TikTok + WHITELISTING : après publication, on demande le code pub. Étapes à donner : 'Ouvre TikTok → la vidéo → les trois petits points ••• → \"Activer les autorisations de pub\" → choisis une durée de 3 mois → copie le code whitelisting et envoie-le-moi 🫶'. Quand le créateur envoie le code : 'Merci beaucoup pour le code, bien reçu 😊'. Si l'identification de l'agence apparaît sur la vidéo et n'est pas nécessaire : 'est-ce que tu pourrais enlever l'identification de l'agence sur la vidéo ? Ce n'est pas nécessaire vu le format de la collab :)'.",
     "• INTERLOCUTEUR = AGENT / MANAGER (signature type 'Agente de créateurs', domaine d'agence, parle de 'ses profils/talents') : tu réponds à l'AGENT au sujet de son créateur, ton pro ET chaleureux, tu peux vouvoyer si l'agent vouvoie. Pour toute question de facturation/paiement, oriente vers 'facturation@hyped-agency.fr'.",
-    "• RETARD DE PAIEMENT / RELANCE FACTURE : excuse-toi sincèrement, explique avec tact (sans rejeter la faute sur le créateur), engage-toi à relancer le service facturation, et tiens la personne informée — MAIS ne promets JAMAIS une date précise que tu ne connais pas. Ex : 'je comprends totalement, j'ai relancé le service concerné et je reviens vers toi dès que j'ai un retour précis ✨'.",
+    "• RETARD DE PAIEMENT / RELANCE FACTURE : excuse-toi sincèrement, explique avec tact (sans rejeter la faute sur le créateur), engage-toi à relancer le service facturation, et tiens la personne informée, MAIS ne promets JAMAIS une date précise que tu ne connais pas. Ex : 'je comprends totalement, j'ai relancé le service concerné et je reviens vers toi dès que j'ai un retour précis ✨'.",
     "[Reçu] 'Voici le code whitelisting : #abc123' → [Kendia] '[prénom],\\nMerci beaucoup pour le code, bien reçu 😊\\nPetite chose : pourrais-tu enlever l'identification de l'agence sur la vidéo ? Ce n'est pas nécessaire vu le format de la collab :) Merci encore pour ta réactivité 🫶\\nBelle soirée à toi,\\n[prénom CP]'",
   ].join("\n");
   const ctx = [
-    "Marque : " + (brand || "—"),
-    "Créateur : " + (creator || "—"),
-    "Objet du fil : " + (subject || "—"),
+    "Marque : " + (brand || "-"),
+    "Créateur : " + (creator || "-"),
+    "Objet du fil : " + (subject || "-"),
     category ? ("Type détecté : " + category) : "",
     "",
-    transcript ? "Historique COMPLET du fil (du plus ancien au plus récent — sert à juger si le budget a déjà été évoqué) :" : "Message reçu du créateur :",
+    transcript ? "Historique COMPLET du fil (du plus ancien au plus récent, sert à juger si le budget a déjà été évoqué) :" : "Message reçu du créateur :",
     "\"\"\"",
     (transcript || received || "").slice(0, 7000),
     "\"\"\"",
@@ -745,7 +746,7 @@ app.post("/api/todos/:id/done", auth, async (req, res) => {
 
 // --- Message d'approche auto (brouillon prêt dès l'ajout d'un profil) ----
 const BRAND_INFO = {
-  "In Haircare": { produits: "la routine complète In Haircare (Milk'In, Curl n'Go et le nouveau Final Touch)", fr: "In Haircare est une marque française spécialisée dans les soins capillaires pensés pour les cheveux texturés — bouclés, frisés, crépus — avec des formules clean, naturelles et efficaces, fabriquées en France et primées (Beauty Shortlist Awards 2025)." },
+  "In Haircare": { produits: "la routine complète In Haircare (Milk'In, Curl n'Go et le nouveau Final Touch)", fr: "In Haircare est une marque française spécialisée dans les soins capillaires pensés pour les cheveux texturés (bouclés, frisés, crépus) avec des formules clean, naturelles et efficaces, fabriquées en France et primées (Beauty Shortlist Awards 2025)." },
   "Doucéa": { produits: "les soins Doucéa", fr: "Doucéa est une marque de soins dermo-pédiatriques pensée pour les enfants à peau sensible ou atopique. L'idée : réconcilier le besoin du parent et le plaisir de l'enfant, avec des soins efficaces, sensoriels et concentrés en madécassoside (actif apaisant)." },
   "LIVA": { produits: "the full LIVA range", fr: "LIVA est une marque de soins capillaires cliniquement testée, en lancement national chez Walmart (US) : lors d'une étude de 3 semaines, 85% des participantes ont trouvé leurs cheveux plus denses et plus sains." },
   "Curls Matter": { produits: "les produits Curls Matter", fr: "Curls Matter est une marque dédiée au soin des cheveux bouclés et texturés." },
@@ -871,7 +872,7 @@ app.post("/api/sourcing", auth, async (req, res) => {
         const cpEmail = emailOf(resp);
         if (cpEmail && gm.isConnected(cpEmail)) {
           const inf = infFromTitle(profil);
-          const subject = "Partenariat " + (req.body?.marque || "") + " — Hyped Agency";
+          const subject = "Partenariat " + (req.body?.marque || "") + " - Hyped Agency";
           const r = await gm.createDraft(cpEmail, { to: "", subject, body: genOutreachFR(req.body?.marque || "", inf, resp) });
           draft = !!(r && r.ok);
         }

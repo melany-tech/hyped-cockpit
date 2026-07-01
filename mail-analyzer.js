@@ -1,4 +1,4 @@
-/* Moteur d'analyse des mails — Hyped Agency
+/* Moteur d'analyse des mails - Hyped Agency
  * Capture par marque + détection des réponses créateurs, à partir des calendriers.
  *
  * PRÊT À BRANCHER : ce module est indépendant de la source des mails.
@@ -7,8 +7,8 @@
  * (voir `fetchGmail` plus bas) et de passer le résultat à `analyzeMailbox`.
  *
  * Aucun mot générique (« influence », « collab ») : on n'utilise que des termes
- * PRÉCIS — nom de la marque + pseudos des créateurs réellement présents dans les
- * calendriers — pour éviter le bruit (annonces d'emploi, newsletters, recruteurs).
+ * PRÉCIS (nom de la marque + pseudos des créateurs réellement présents dans les
+ * calendriers) pour éviter le bruit (annonces d'emploi, newsletters, recruteurs).
  */
 
 // --- Normalisation -------------------------------------------------------

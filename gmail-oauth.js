@@ -1,4 +1,4 @@
-/* Connexion Gmail PAR PERSONNE — Hyped Agency
+/* Connexion Gmail PAR PERSONNE - Hyped Agency
  * Chaque cheffe de projet connecte SA propre boîte ; on ne lit JAMAIS la boîte d'une autre.
  * Scope minimal : lecture seule (gmail.readonly). Aucun mail n'est envoyé ni modifié.
  *
@@ -66,7 +66,7 @@ function gmailFor(email) {
 }
 async function fetchEmails(gmail, query = "newer_than:30d -in:sent -in:draft -category:promotions -category:social", max = 50) {
   const list = await gmail.users.threads.list({ userId: "me", q: query, maxResults: max });
-  // EN PARALLÈLE : on récupère les fils tous en même temps (au lieu d'un par un) — démarrage bien plus rapide
+  // EN PARALLÈLE : on récupère les fils tous en même temps (au lieu d'un par un), démarrage bien plus rapide
   const results = await Promise.all((list.data.threads || []).map(async (th) => {
     try {
       const t = await gmail.users.threads.get({ userId: "me", id: th.id, format: "metadata", metadataHeaders: ["From", "Subject", "Date"] });

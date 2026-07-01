@@ -525,7 +525,7 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
     <section id="contactsview" style="display:none"><p class="pt"><span class="pi">👥</span> Contacts créateurs</p><div id="contactsbox"><div class="state">Chargement…</div></div></section>
     <section id="rapportsview" style="display:none"><p class="pt"><span class="pi">📊</span> Rapports</p><div id="rapportsbox"><div class="state">Chargement…</div></div></section>
     <section id="calendrierview" style="display:none"><p class="pt"><span class="pi">📅</span> Calendrier</p><div id="calendrierbox"><div class="state">Chargement…</div></div></section>
-    <section id="historiqueview" style="display:none"><button class="lk backbtn" onclick="showView('cockpit')">← Retour au cockpit</button><p class="pt"><span class="pi">📜</span> Historique &amp; traçabilité</p><div class="panelhint">Chaque collab et son fil d'étapes : qui a fait quoi, quand — avec les liens vers les mails et la fiche Notion.</div><div class="ctsearch"><input id="histsearch" placeholder="🔍 Rechercher un créateur, une marque, une CP…"></div><div id="historiquebox"><div class="state">Chargement…</div></div></section>
+    <section id="historiqueview" style="display:none"><button class="lk backbtn" onclick="showView('cockpit')">← Retour au cockpit</button><p class="pt"><span class="pi">📜</span> Historique &amp; traçabilité</p><div class="panelhint">Chaque collab et son fil d'étapes : qui a fait quoi, quand, avec les liens vers les mails et la fiche Notion.</div><div class="ctsearch"><input id="histsearch" placeholder="🔍 Rechercher un créateur, une marque, une CP…"></div><div id="historiquebox"><div class="state">Chargement…</div></div></section>
     <div id="activitybar" class="actbar hidden"></div>
     <div class="foot">Clients actifs uniquement · filtré par interlocutrice.</div>
   </div><!-- /.main -->
@@ -637,8 +637,8 @@ function renderCampagnes(){
 }
 function renderContacts(){
   const map={};
-  (ROWS||[]).forEach(r=>{ const name=r.name; if(!name)return; const k=name+'|'+(r.brand||''); const statut=r.grp==='Validé'?'Contenu validé':(r.grp==='Planifié'?'Le contenu est planifié':'En production'); map[k]={name,brand:r.brand||'—',statut,cp:r.cp||'—'}; });
-  (SRC_PROFILS||[]).forEach(p=>{ const name=infName(p.task); if(!name)return; const k=name+'|'+(p.projet||''); if(!map[k]) map[k]={name,brand:p.projet||'—',statut:'À contacter',cp:p.responsable||'—'}; });
+  (ROWS||[]).forEach(r=>{ const name=r.name; if(!name)return; const k=name+'|'+(r.brand||''); const statut=r.grp==='Validé'?'Contenu validé':(r.grp==='Planifié'?'Le contenu est planifié':'En production'); map[k]={name,brand:r.brand||'-',statut,cp:r.cp||'-'}; });
+  (SRC_PROFILS||[]).forEach(p=>{ const name=infName(p.task); if(!name)return; const k=name+'|'+(p.projet||''); if(!map[k]) map[k]={name,brand:p.projet||'-',statut:'À contacter',cp:p.responsable||'-'}; });
   const list=Object.values(map).sort((a,b)=>(a.brand+a.name).localeCompare(b.brand+b.name));
   if(!list.length){$('contactsbox').innerHTML='<div class="state">Aucun contact pour le moment.</div>';return;}
   const stcol={'À contacter':'#C77F2A','Le contenu est planifié':'#C77F2A','En production':'#7A5AA8','Contenu validé':'#C2553B'};
@@ -651,10 +651,10 @@ function renderRapports(){
   let t1='<div class="rsec"><div class="rsec-h">📊 Remplissage des calendriers'+(ALERTS_MONTH?(' · '+esc(ALERTS_MONTH)):'')+' · objectif ≥3 collabs ET ≥3 jours/sem</div>';
   const rhead=fillRows.find(f=>f.weeks)?fillHeadHTML((fillRows.find(f=>f.weeks)||{}).totalWeeks):'';
   t1+= fillRows.length? (rhead+fillRows.map(fillRowHTML).join('')) : '<div class="state2">Données de remplissage indisponibles.</div>';
-  t1+='<div class="filllegend"><span class="wk ok">3</span> semaine OK · <span class="wk low">1</span> incomplète · <span class="wk none">0</span> vide — le chiffre = jours couverts</div>';
+  t1+='<div class="filllegend"><span class="wk ok">3</span> semaine OK · <span class="wk low">1</span> incomplète · <span class="wk none">0</span> vide, le chiffre = jours couverts</div>';
   t1+='</div>';
   let t2='<div class="rsec"><div class="rsec-h">🔭 Pipeline par marque</div><table class="rtab"><tr><th>Marque</th><th>À contacter</th><th>Relances</th><th>Attendus</th><th>Reçus</th></tr>'+
-    (brands.length?brands.map(b=>`<tr><td>${esc(b.brand)}</td><td>${b.aContacter}</td><td>${b.relances}</td><td>${b.contenus}</td><td>${b.recus}</td></tr>`).join(''):'<tr><td colspan="5" style="color:#9aa6a8">—</td></tr>')+'</table></div>';
+    (brands.length?brands.map(b=>`<tr><td>${esc(b.brand)}</td><td>${b.aContacter}</td><td>${b.relances}</td><td>${b.contenus}</td><td>${b.recus}</td></tr>`).join(''):'<tr><td colspan="5" style="color:#9aa6a8">-</td></tr>')+'</table></div>';
   const tot=brands.reduce((a,b)=>({c:a.c+b.aContacter,r:a.r+b.relances,at:a.at+b.contenus,re:a.re+b.recus}),{c:0,r:0,at:0,re:0});
   let t3=`<div class="rsec"><div class="rsec-h">∑ Totaux équipe</div><div class="rtot"><div><b>${tot.c}</b><span>à contacter</span></div><div><b>${tot.r}</b><span>relances</span></div><div><b>${tot.at}</b><span>contenus attendus</span></div><div><b>${tot.re}</b><span>reçus</span></div></div></div>`;
   $('rapportsbox').innerHTML=t1+t2+t3;
@@ -680,7 +680,7 @@ function drawHist(q){
     const gmail='https://mail.google.com/mail/u/0/#search/'+encodeURIComponent(c.name||'');
     const notion=c.url?`<a href="${esc(c.url)}" target="_blank" rel="noopener">Fiche Notion ↗</a>`:'';
     const mails=c.name?`<a href="${gmail}" target="_blank" rel="noopener">Voir les mails ↗</a>`:'';
-    const tl=(c.events||[]).map(e=>`<div class="histrow"><span class="histic">${HIST_ICON[e.action]||'•'}</span><div class="histinfo"><div class="histt">${esc(e.detail||e.action||'')}</div><div class="hists">par ${esc(e.by||'—')} · ${histDate(e.at)}</div></div></div>`).join('');
+    const tl=(c.events||[]).map(e=>`<div class="histrow"><span class="histic">${HIST_ICON[e.action]||'•'}</span><div class="histinfo"><div class="histt">${esc(e.detail||e.action||'')}</div><div class="hists">par ${esc(e.by||'-')} · ${histDate(e.at)}</div></div></div>`).join('');
     return `<div class="histcard"${hidden}><div class="histhead"><div><div class="histname">${esc(c.name||'(sans nom)')}</div>${c.brand?`<span class="brand">${esc(c.brand)}</span>`:''}</div><div class="histlinks">${notion}${notion&&mails?' · ':''}${mails}</div></div>${tl}</div>`;
   }).join('');
 }
@@ -697,7 +697,7 @@ function renderCalendrier(){
   const todayISO=now.toISOString().slice(0,10);
   const up=(ROWS||[]).filter(r=>r.date&&r.date.slice(0,10)>=todayISO).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,25);
   let evHtml='';
-  if(CAL_EVENTS&&CAL_EVENTS.length){ evHtml='<div class="calsub">📹 Visios aujourd’hui'+(CAL_VIEWING?(' — '+esc(CAL_VIEWING)):'')+'</div>'+CAL_EVENTS.map(e=>`<div class="row"><span class="rdot" style="background:${e.meet?'#2C9087':'#7A5AA8'}"></span><div class="info"><div class="t">${esc(e.title)}</div><div class="s">${e.allDay?'journée':fmtTime(e.start)}</div></div>${e.meet?'<span class="brand" style="color:#0F6E56;background:#E4F1ED">Meet</span>':''}</div>`).join(''); }
+  if(CAL_EVENTS&&CAL_EVENTS.length){ evHtml='<div class="calsub">📹 Visios aujourd’hui'+(CAL_VIEWING?(' · '+esc(CAL_VIEWING)):'')+'</div>'+CAL_EVENTS.map(e=>`<div class="row"><span class="rdot" style="background:${e.meet?'#2C9087':'#7A5AA8'}"></span><div class="info"><div class="t">${esc(e.title)}</div><div class="s">${e.allDay?'journée':fmtTime(e.start)}</div></div>${e.meet?'<span class="brand" style="color:#0F6E56;background:#E4F1ED">Meet</span>':''}</div>`).join(''); }
   const upHtml = up.length? up.map(r=>`<div class="row"><span class="rdot" style="background:${r.color||'#7A5AA8'}"></span><div class="info"><div class="t">${esc(r.name)}</div><div class="s">${esc(r.label||'')}${r.brand?(' · '+esc(r.brand)):''}</div></div>${r.cp&&(VIEWER&&(VIEWER.role==='supervisor'||teamOn()))?`<span class="owner">${esc(r.cp)}</span>`:''}<span class="brand">${fmtDate(r.date)}</span></div>`).join('') : '<div class="state2">Aucune échéance à venir dans les calendriers clients.</div>';
   $('calendrierbox').innerHTML=`<div class="calwrap"><div class="calmonth"><div class="cmtitle">${monthName}</div><div class="cmgrid">${wd}${cells}</div><div class="cmlegend"><span class="cmdot" style="position:static;display:inline-flex">n</span> = collabs prévues ce jour</div></div><div class="callist">${evHtml}<div class="calsub">📅 Prochaines échéances</div>${upHtml}</div></div>`;
 }
@@ -750,7 +750,7 @@ function updateBell(){
   const b=$('bellcount'); if(b){b.textContent=n;show(b,n>0);}
   const menu=$('bellmenu'); if(!menu)return;
   const items=[...(NOTIF.pubItems||[]),...(NOTIF.lateItems||[]),...(NOTIF.draftItems||[])];
-  if(!items.length){ menu.innerHTML='<div class="bn-empty">Rien d\'urgent — tout est à jour ✨</div>'; return; }
+  if(!items.length){ menu.innerHTML='<div class="bn-empty">Rien d\'urgent, tout est à jour ✨</div>'; return; }
   menu.innerHTML='<div class="bn-h">Notifications · '+items.length+'</div>'+items.map((it,i)=>`<div class="bn-item" data-i="${i}"><span class="bn-ic">${it.icon}</span><div class="bn-tx"><div class="bn-t">${esc(it.text)}</div><div class="bn-s">${esc(it.sub||'')}</div></div></div>`).join('');
   menu.querySelectorAll('.bn-item').forEach(el=>{ el.onclick=()=>{ const it=items[+el.dataset.i]; menu.classList.add('hidden'); if(it.url) window.open(it.url,'_blank'); else { const t=$(it.go||'todopanel'); if(t)t.scrollIntoView({behavior:'smooth',block:'start'}); } }; });
 }
@@ -791,8 +791,8 @@ function renderPipeline(pipe){
   const ic={a_contacter:'🛫',contacte:'💬',reponse:'😊',brief:'📄',contenu:'🎬',publie:'✅'};
   const soonAny=pipe.some(s=>s.soon);
   $('pipeline').innerHTML='<div class="pipe">'+pipe.map(s=>{
-    const n=s.soon?'—':(s.count||0);
-    const tt=s.soon?' title="Bientôt — dès qu’on trace cette étape"':'';
+    const n=s.soon?'-':(s.count||0);
+    const tt=s.soon?' title="Bientôt, dès qu’on trace cette étape"':'';
     return `<div class="step${s.soon?' soon':''}" data-k="${s.key}"${tt}><div class="si">${ic[s.key]||'•'}</div><div class="sn">${n}</div><div class="sl">${esc(s.label)}</div></div>`;
   }).join('')+'</div>'+(soonAny?'<div class="pipenote">Les étapes grisées s’allument dès qu’on les trace (réponses, briefs, publications).</div>':'');
 }
@@ -826,7 +826,7 @@ function openBrand(brand,card){
   const li=(t,s)=>`<div class="row"><div class="info"><div class="t">${esc(t)}</div><div class="s">${esc(s||'')}</div></div></div>`;
   const colA=profs.length?profs.slice(0,8).map(p=>li(p.task,p.commentaire||'à contacter')).join(''):'<div class="state2">Aucun pour l\'instant</div>';
   const colB=cols.length?cols.slice(0,8).map(c=>li(c.name,[c.label,fmtDate(c.date)].filter(Boolean).join(' · '))).join(''):'<div class="state2">Aucun pour l\'instant</div>';
-  det.innerHTML=`<h4>🏷️ ${esc(brand)} — progression du pôle</h4><div class="bcgrid2"><div><div class="bcsub">À contacter (${profs.length})</div>${colA}</div><div><div class="bcsub">Contenus (${cols.length})</div>${colB}</div></div>`;
+  det.innerHTML=`<h4>🏷️ ${esc(brand)} · progression du pôle</h4><div class="bcgrid2"><div><div class="bcsub">À contacter (${profs.length})</div>${colA}</div><div><div class="bcsub">Contenus (${cols.length})</div>${colB}</div></div>`;
   det.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 async function loadDrafts(){
@@ -836,7 +836,7 @@ async function loadDrafts(){
     NOTIF.draftItems=NOTIF.drafts>0?[{icon:'📧',text:NOTIF.drafts+' brouillon'+(NOTIF.drafts>1?'s':'')+' à valider',sub:'relire et envoyer depuis Gmail',url:'https://mail.google.com/mail/u/0/#drafts'}]:[];
     updateBell();
     if(d&&d.count>0){
-      $('draftbanner').textContent='📧 '+d.count+' brouillon'+(d.count>1?'s':'')+' à valider — clique pour les relire et les envoyer depuis Gmail';
+      $('draftbanner').textContent='📧 '+d.count+' brouillon'+(d.count>1?'s':'')+' à valider, clique pour les relire et les envoyer depuis Gmail';
       show($('draftbanner'),true);
     } else show($('draftbanner'),false);
   }catch(e){show($('draftbanner'),false);}
@@ -876,7 +876,7 @@ function mailAs(){
   const v=(isSup&&$('cpfilter'))?$('cpfilter').value:'';
   return (isSup&&v&&v!=='ALL')?v:null; // pilote qui regarde une CP précise
 }
-function setMailTitle(who){ const hdr=$('mailpanel')&&$('mailpanel').querySelector('.pt'); if(hdr) hdr.innerHTML='<span class="pi">✉️</span> '+(who?('Mails créateurs — '+esc(who)):'Mes mails créateurs'); }
+function setMailTitle(who){ const hdr=$('mailpanel')&&$('mailpanel').querySelector('.pt'); if(hdr) hdr.innerHTML='<span class="pi">✉️</span> '+(who?('Mails créateurs · '+esc(who)):'Mes mails créateurs'); }
 async function refreshAll(btn){
   if(btn){ if(btn.dataset.busy==='1')return; btn.dataset.busy='1'; btn.classList.add('spin'); }
   try{
@@ -892,8 +892,8 @@ async function loadMail(fresh){
     if(!s.enabled){show($('mailpanel'),false);return;}
     show($('mailpanel'),true); setMailTitle(who);
     if(!s.connected){
-      if(who){ $('mailbox').innerHTML='<div class="mailconnect"><p><b>'+esc(who)+'</b> n\'a pas encore connecté son Gmail. Elle doit le faire elle-même depuis son propre compte cockpit — tu ne peux pas le connecter à sa place.</p></div>'; return; }
-      $('mailbox').innerHTML='<div class="mailconnect"><p>Connecte ta boîte Gmail pour faire remonter ici les <b>réponses de tes créateurs</b>, classées par marque (réponses, previews, factures, logistique). Lecture seule — aucun mail n\'est envoyé ni modifié.</p><button class="btn gmailbtn" id="gmailconnect">Connecter mon Gmail</button></div>';
+      if(who){ $('mailbox').innerHTML='<div class="mailconnect"><p><b>'+esc(who)+'</b> n\'a pas encore connecté son Gmail. Elle doit le faire elle-même depuis son propre compte cockpit, tu ne peux pas le connecter à sa place.</p></div>'; return; }
+      $('mailbox').innerHTML='<div class="mailconnect"><p>Connecte ta boîte Gmail pour faire remonter ici les <b>réponses de tes créateurs</b>, classées par marque (réponses, previews, factures, logistique). Lecture seule : aucun mail n\'est envoyé ni modifié.</p><button class="btn gmailbtn" id="gmailconnect">Connecter mon Gmail</button></div>';
       $('gmailconnect').onclick=async()=>{ $('gmailconnect').textContent='Redirection…'; const rr=await api('/api/gmail/connect');const dd=await rr.json(); if(dd.url)window.location.href=dd.url;else{$('gmailconnect').textContent='Connecter mon Gmail';alert(dd.error||'Indisponible');} };
       return;
     }
@@ -984,7 +984,7 @@ function renderMail(d, who){
     const email=emailFromHeader(m.from); const snip=(m.snippet||'');
     const filesJson=esc(JSON.stringify({a:m.attachments||[],l:m.transferLinks||[]}));
     const tr=m.treated; const trLbl=tr?({'répondu':'Répondu','brouillon':'Brouillon en cours','programmé':'Envoi programmé','manuel':'Traité'}[tr.action]||'Traité'):'';
-    const trBadge=tr?`<span class="treatedbadge" title="${esc(trLbl)} par ${esc(tr.by||'—')}">✓ ${esc(trLbl)}${tr.by?(' · '+esc(tr.by)):''}</span>`:'';
+    const trBadge=tr?`<span class="treatedbadge" title="${esc(trLbl)} par ${esc(tr.by||'-')}">✓ ${esc(trLbl)}${tr.by?(' · '+esc(tr.by)):''}</span>`:'';
     const treatBtns=tr?`<button class="lk reopenbtn" data-thread="${esc(m.threadId||'')}" title="Rouvrir : remet ce mail à traiter">Rouvrir</button>`:`<button class="lk treatbtn" data-thread="${esc(m.threadId||'')}" title="Marquer comme traité (déjà répondu)">✓ Traité</button>`;
     return `<div class="row${tr?' treated':''}" data-email="${esc(email)}" data-subject="${esc(m.subject||'')}" data-cat="${esc(m.category||'')}" data-creator="${esc(m.créateur||'')}" data-brand="${esc(m.brand||'')}" data-thread="${esc(m.threadId||'')}" data-snippet="${esc(snip.slice(0,400))}" data-url="${esc(m.url||'')}" data-files="${filesJson}"><span class="rdot" style="background:${c}"></span>
       <div class="info"><div class="t">${esc(m.subject)||'(sans objet)'}${trBadge}</div><div class="s">${esc(m.from)} · ${esc(m.category)}</div>${snip?`<div class="msgsnip">${esc(snip.slice(0,130))}${snip.length>130?'…':''}</div>`:''}${fileChips(m.attachments,m.transferLinks)}</div>
@@ -1024,7 +1024,7 @@ async function loadAlerts(fresh){
     if(!fill.length){show($('fillpanel'),false);return;}
     show($('fillpanel'),true);
     const head=fill.find(f=>f.weeks)?fillHeadHTML((fill.find(f=>f.weeks)||{}).totalWeeks):'';
-    $('alertsbox').innerHTML='<div class="alerthdr">'+(d.monthLabel||'')+' · objectif : ≥3 collabs ET ≥3 jours différents / semaine</div>'+head+fill.map(fillRowHTML).join('')+'<div class="filllegend"><span class="wk ok">3</span> semaine OK · <span class="wk low">1</span> incomplète · <span class="wk none">0</span> vide — le chiffre dans la case = nombre de jours couverts cette semaine-là</div>';
+    $('alertsbox').innerHTML='<div class="alerthdr">'+(d.monthLabel||'')+' · objectif : ≥3 collabs ET ≥3 jours différents / semaine</div>'+head+fill.map(fillRowHTML).join('')+'<div class="filllegend"><span class="wk ok">3</span> semaine OK · <span class="wk low">1</span> incomplète · <span class="wk none">0</span> vide, le chiffre dans la case = nombre de jours couverts cette semaine-là</div>';
   }catch(e){show($('fillpanel'),false);}
 }
 function render(){
@@ -1044,23 +1044,23 @@ function render(){
   const total=list.length;
   $('totalchip').textContent=total?(total+' à traiter'):'Tout est à jour ✅';
   const dstr=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
-  if(isSup&&(!f||f==='ALL')){$('greeting').textContent='Vue pilote — toute l\'équipe';$('subtitle').textContent=total+' actions · clients actifs · '+dstr;}
+  if(isSup&&(!f||f==='ALL')){$('greeting').textContent='Vue pilote · toute l\'équipe';$('subtitle').textContent=total+' actions · clients actifs · '+dstr;}
   else{const who=isSup?f:VIEWER.name;$('greeting').textContent='Bonjour '+who+' 👋';$('subtitle').textContent='Voici tes priorités du jour · '+dstr;}
   if($('avname')){$('avname').textContent=VIEWER.name||'';$('avini').textContent=((VIEWER.name||'·').trim()[0]||'·').toUpperCase();}
   updateStats();
-  if(!total){$('list').innerHTML='<div class="state">Rien en attente — tout est à jour 🎉</div>';return;}
+  if(!total){$('list').innerHTML='<div class="state">Rien en attente, tout est à jour 🎉</div>';return;}
   $('list').innerHTML=list.map(a=>{
     const extra=[a.label];if(a.date)extra.push(fmtDate(a.date));
     const showOwn=isSup||teamOn();
-    const owner=(showOwn&&a.cp)?`<span class="owner" title="Cheffe de projet">${esc(a.cp)}</span>`:(showOwn?`<span class="owner none" title="Personne assignée">— non assigné</span>`:'');
+    const owner=(showOwn&&a.cp)?`<span class="owner" title="Cheffe de projet">${esc(a.cp)}</span>`:(showOwn?`<span class="owner none" title="Personne assignée">non assigné</span>`:'');
     const cur=(a.cp||'').toLowerCase().trim();
     // Assignable par tout le monde depuis Contenus en cours (écrit l'Interlocuteur + trace dans l'historique)
     const assignCtl=a.id
-      ? `<select class="assignsel" data-id="${esc(a.id)}" data-name="${esc(a.name||'')}" data-brand="${esc(a.brand||'')}" title="Assigner / changer la personne responsable"><option value="">— non assigné</option>${(TEAM||[]).map(c=>`<option value="${esc(c)}"${(c||'').toLowerCase().trim()===cur?' selected':''}>${esc(c)}</option>`).join('')}</select>`
+      ? `<select class="assignsel" data-id="${esc(a.id)}" data-name="${esc(a.name||'')}" data-brand="${esc(a.brand||'')}" title="Assigner / changer la personne responsable"><option value="">non assigné</option>${(TEAM||[]).map(c=>`<option value="${esc(c)}"${(c||'').toLowerCase().trim()===cur?' selected':''}>${esc(c)}</option>`).join('')}</select>`
       : (showOwn?owner:'');
     const today=new Date().toISOString().slice(0,10);
     const overdue=(a.statut==='En validation' && a.date && String(a.date).slice(0,10) < today);
-    const pubchip=overdue?`<span class="pubchip" title="Contenu validé mais pas encore publié — la date de mise en ligne est passée">⏰ à publier</span>`:'';
+    const pubchip=overdue?`<span class="pubchip" title="Contenu validé mais pas encore publié, la date de mise en ligne est passée">⏰ à publier</span>`:'';
     const link=a.url?`<a href="${a.url}" target="_blank" rel="noopener">Ouvrir</a>`:'';
     const hist=a.id?`<button class="lk histrowbtn" title="Voir l'historique de cette collab">📜</button>`:'';
     const NEXT={'Non posté':'→ En cours de production','En production':'→ Contenu validé','En validation':'✓ Marquer publié'};
@@ -1074,7 +1074,7 @@ function render(){
   const todayS=new Date().toISOString().slice(0,10);
   const toPub=list.filter(a=>a.statut==='En validation' && a.date && String(a.date).slice(0,10) < todayS);
   NOTIF.pub=toPub.length;
-  NOTIF.pubItems=toPub.map(a=>({icon:'⏰',text:'À publier : '+(a.name||'contenu')+' — 👤 '+(a.cp||'non assigné'),sub:'validé mais pas encore posté'+(a.brand?(' · '+a.brand):'')+(a.date?(' · prévu '+fmtDate(a.date)):''),go:'listpanel'}));
+  NOTIF.pubItems=toPub.map(a=>({icon:'⏰',text:'À publier : '+(a.name||'contenu')+' · 👤 '+(a.cp||'non assigné'),sub:'validé mais pas encore posté'+(a.brand?(' · '+a.brand):'')+(a.date?(' · prévu '+fmtDate(a.date)):''),go:'listpanel'}));
   updateBell();
   document.querySelectorAll('#list .assignsel').forEach(s=>s.onchange=()=>assignCollab(s));
   document.querySelectorAll('#list .nextbtn').forEach(b=>b.onclick=()=>advanceCollab(b));
@@ -1110,7 +1110,7 @@ function openMsgPanel(rowEl, opts){
   const f=opts.files||{}; const fchips=fileChips(f.a,f.l);
   const recv = (opts.received||fchips) ? `<div class="msgrecv"><div class="msgrecv-h">📨 Message reçu${opts.threadUrl?` · <a href="${esc(opts.threadUrl)}" target="_blank" rel="noopener">Ouvrir le fil dans Gmail ↗</a>`:''}</div><div class="msgrecv-b">${linkify(opts.received||'')}</div>${fchips}</div>` : '';
   const aibar = opts.aiSuggest ? `<div class="aibar"><button class="lk ai aigen">✨ Régénérer la réponse</button><span class="aistatus"></span></div>` : '';
-  panel.innerHTML=recv+aibar+'<input class="msgto" type="email" placeholder="Email du destinataire (requis pour envoyer)"><div class="cctoggle"><button type="button" class="lk cclink">＋ Ajouter Cc / Cci</button></div><input class="msgcc" type="text" placeholder="Cc — visible par tous, séparez par une virgule" style="display:none"><input class="msgbcc" type="text" placeholder="Cci — copie cachée, séparez par une virgule" style="display:none"><textarea class="msgtxt" rows="12"></textarea><div class="msgbtns"><button class="lk msgcopy">Copier</button> <button class="lk msgdraft">📧 Brouillon</button> <button class="lk msgsched">⏱ Programmer</button> <button class="lk msgsend">✉️ Envoyer</button></div><div class="schedrow" style="display:none"><span class="schedlbl">Envoyer le :</span> <input type="datetime-local" class="schedat"> <button class="lk primary schedok">Programmer l\'envoi</button> <span class="schedmsg"></span></div>';
+  panel.innerHTML=recv+aibar+'<input class="msgto" type="email" placeholder="Email du destinataire (requis pour envoyer)"><div class="cctoggle"><button type="button" class="lk cclink">＋ Ajouter Cc / Cci</button></div><input class="msgcc" type="text" placeholder="Cc : visible par tous, séparez par une virgule" style="display:none"><input class="msgbcc" type="text" placeholder="Cci : copie cachée, séparez par une virgule" style="display:none"><textarea class="msgtxt" rows="12"></textarea><div class="msgbtns"><button class="lk msgcopy">Copier</button> <button class="lk msgdraft">📧 Brouillon</button> <button class="lk msgsched">⏱ Programmer</button> <button class="lk msgsend">✉️ Envoyer</button></div><div class="schedrow" style="display:none"><span class="schedlbl">Envoyer le :</span> <input type="datetime-local" class="schedat"> <button class="lk primary schedok">Programmer l\'envoi</button> <span class="schedmsg"></span></div>';
   rowEl.after(panel);
   const ta=panel.querySelector('.msgtxt'); ta.value=opts.body||'';
   if(opts.aiSuggest){
@@ -1121,11 +1121,11 @@ function openMsgPanel(rowEl, opts){
         const r=await api('/api/reply/suggest',{method:'POST',body:JSON.stringify(opts.aiSuggest)});
         const d=await r.json().catch(()=>({}));
         if(d&&d.ok&&d.body){ ta.value=d.body; st.textContent='✨ Réponse adaptée au message reçu'; st.className='aistatus ok'; }
-        else if(d&&d.reason==='nokey'){ st.textContent='💤 Cerveau IA non activé — template par défaut'; st.className='aistatus'; }
+        else if(d&&d.reason==='nokey'){ st.textContent='💤 Cerveau IA non activé, template par défaut'; st.className='aistatus'; }
         else if(d&&d.reason==='api'&&(d.status===429||/quota|insufficient|billing/i.test(d.detail||''))){ st.textContent='⚠️ Crédit IA épuisé, préviens Mélany (elle fera le nécessaire). Template gardé.'; st.className='aistatus'; }
         else if(d&&d.reason==='api'&&d.status===401){ st.textContent='⚠️ Souci de clé IA, préviens Mélany. Template gardé.'; st.className='aistatus'; }
-        else { st.textContent='Réponse IA indisponible pour l\'instant — template gardé'; st.className='aistatus'; }
-      }catch(e){ st.textContent='Réponse auto indisponible — template gardé'; st.className='aistatus'; }
+        else { st.textContent='Réponse IA indisponible pour l\'instant, template gardé'; st.className='aistatus'; }
+      }catch(e){ st.textContent='Réponse auto indisponible, template gardé'; st.className='aistatus'; }
       gb.disabled=false;
     };
     gb.onclick=runAI; runAI();
@@ -1137,7 +1137,7 @@ function openMsgPanel(rowEl, opts){
   ccLink.onclick=()=>{ showCc(); ccInput.focus(); };
   const ccOf=()=>(ccInput.value||'').trim();
   const bccOf=()=>(bccInput.value||'').trim();
-  const subjOf=()=>opts.subject||'Message — Hyped Agency';
+  const subjOf=()=>opts.subject||'Message - Hyped Agency';
   const cpbtn=panel.querySelector('.msgcopy');
   cpbtn.onclick=()=>{ta.select();try{document.execCommand('copy');}catch(e){}cpbtn.textContent='Copié ✓';setTimeout(()=>cpbtn.textContent='Copier',1500);};
   const dbtn=panel.querySelector('.msgdraft');
@@ -1154,7 +1154,7 @@ function genBriefFR(brand, name){
 }
 function openBrief(btn){
   const row=btn.closest('.row'); const name=row.dataset.name||''; const brand=row.dataset.brand||'';
-  openMsgPanel(row,{ subject:'Brief — '+brand+' x '+name, body:genBriefFR(brand,name), onSent:async()=>{ try{ await api('/api/brief',{method:'POST',body:JSON.stringify({creator:name,brand})}); loadOverview(); loadActivity(); }catch(e){} } });
+  openMsgPanel(row,{ subject:'Brief - '+brand+' x '+name, body:genBriefFR(brand,name), onSent:async()=>{ try{ await api('/api/brief',{method:'POST',body:JSON.stringify({creator:name,brand})}); loadOverview(); loadActivity(); }catch(e){} } });
 }
 // --- Visios du jour (Google Agenda) -------------------------------------
 function fmtTime(s){if(!s)return'';const d=new Date(s);return d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
@@ -1187,7 +1187,7 @@ async function loadVisios(){
     const r=await api('/api/calendar'+q);const d=await r.json();
     if(!d.enabled||!d.connected){ show($('agendapanel'),false); CAL_EVENTS=[]; CAL_VIEWING=who; if(CURRENT_VIEW==='calendrier')renderCalendrier(); return; }
     show($('agendapanel'),true);
-    const hdr=$('agendapanel')&&$('agendapanel').querySelector('.pt'); if(hdr) hdr.innerHTML='<span class="pi">📅</span> '+(who?('Agenda — '+esc(who)):'Agenda du jour');
+    const hdr=$('agendapanel')&&$('agendapanel').querySelector('.pt'); if(hdr) hdr.innerHTML='<span class="pi">📅</span> '+(who?('Agenda · '+esc(who)):'Agenda du jour');
     CAL_VIEWING=who;
     renderAgenda(d.events||[]);
   }catch(e){show($('agendapanel'),false);}
@@ -1201,7 +1201,7 @@ async function loadTodo(){
     const r=await api('/api/todos'+(qs.length?('?'+qs.join('&')):''));const d=await r.json();
     if(!d.enabled){show($('todopanel'),false);TODO_COUNT=0;updateStats();return;}
     let hdr='Mes priorités';
-    if(isSup) hdr=(!view||view==='ALL')?'Priorités équipe':'Priorités — '+view;
+    if(isSup) hdr=(!view||view==='ALL')?'Priorités équipe':'Priorités · '+view;
     else if(teamOn()) hdr='Priorités équipe (vue congés)';
     $('todohdr2').textContent=hdr;
     show($('todopanel'),true);
@@ -1230,7 +1230,7 @@ function renderTodo(tasks, showOwner, addFor){
   let late=0; const lateItems=[];
   const add='<div class="todoadd"><input id="todoinput" placeholder="Ajouter une tâche'+(addFor?(' pour '+addFor):'')+'… puis Entrée"><button class="lk" id="todobtn">+ Ajouter</button></div>';
   let rows;
-  if(!tasks.length) rows='<div class="state" style="padding:14px">Rien à faire — to-do à jour ✨</div>';
+  if(!tasks.length) rows='<div class="state" style="padding:14px">Rien à faire, to-do à jour ✨</div>';
   else rows=tasks.map(t=>{
     const isLate=t.echeance&&t.echeance<today, due=t.echeance===today;
     if(isLate||due){ late++; lateItems.push({icon:isLate?'⚠️':'🔔',text:t.task,sub:(isLate?'en retard':'aujourd\'hui')+(t.projet?(' · '+t.projet):''),go:'todopanel'}); }
@@ -1239,7 +1239,7 @@ function renderTodo(tasks, showOwner, addFor){
     const chip=prio?'<span class="tchip prioc">Priorité</span>':'<span class="tchip todoc">À faire</span>';
     const own=(showOwner&&t.responsable)?`<span class="owner">${esc(t.responsable)}</span>`:'';
     return `<div class="todo" data-id="${t.id}"><button class="tcheck" title="Cliquer = terminé ✓"></button>
-      <div class="info"><div class="t"><span class="ti-emoji">${taskIcon(t)}</span>${linkify(t.task)}</div><div class="s" style="${isLate?'color:#C2553B':''}">${meta.join(' · ')||'—'}</div></div>${own}${chip}</div>`;
+      <div class="info"><div class="t"><span class="ti-emoji">${taskIcon(t)}</span>${linkify(t.task)}</div><div class="s" style="${isLate?'color:#C2553B':''}">${meta.join(' · ')||'-'}</div></div>${own}${chip}</div>`;
   }).join('');
   $('todobox').innerHTML=add+rows;
   NOTIF.late=late; NOTIF.lateItems=lateItems; updateBell();
@@ -1274,11 +1274,11 @@ let SRC_PROFILS=[];
 // Pitchs marque (calés sur tes vrais messages) pour le générateur de message d'approche
 const BRAND_INFO={
  'In Haircare':{produits:"la routine complète In Haircare (Milk'In, Curl n'Go et le nouveau Final Touch)",
-   fr:"In Haircare est une marque française spécialisée dans les soins capillaires pensés pour les cheveux texturés — bouclés, frisés, crépus — avec des formules clean, naturelles et efficaces, fabriquées en France et primées (Beauty Shortlist Awards 2025).",
+   fr:"In Haircare est une marque française spécialisée dans les soins capillaires pensés pour les cheveux texturés (bouclés, frisés, crépus) avec des formules clean, naturelles et efficaces, fabriquées en France et primées (Beauty Shortlist Awards 2025).",
    en:"In Haircare is a French haircare brand made for textured hair (curly, coily), with clean, natural and effective formulas, made in France and award-winning."},
  'Doucéa':{produits:"les soins Doucéa",
    fr:"Doucéa est une marque de soins dermo-pédiatriques pensée pour les enfants à peau sensible ou atopique. L'idée : réconcilier le besoin du parent et le plaisir de l'enfant, avec des soins efficaces, sensoriels et concentrés en madécassoside (actif apaisant).",
-   en:"Doucéa is a dermo-pediatric skincare brand for children with sensitive or atopic skin — effective, sensory care that kids actually enjoy."},
+   en:"Doucéa is a dermo-pediatric skincare brand for children with sensitive or atopic skin: effective, sensory care that kids actually enjoy."},
  'LIVA':{produits:"the full LIVA range",
    fr:"LIVA est une marque de soins capillaires cliniquement testée, en lancement national chez Walmart (US) : lors d'une étude de 3 semaines, 85% des participantes ont trouvé leurs cheveux plus denses et plus sains.",
    en:"LIVA is a clinically tested hair regrowth brand launching nationwide at Walmart. In a 3-week study, 85% of participants said their hair looked fuller and healthier."},
@@ -1289,7 +1289,7 @@ const BRAND_INFO={
 function genMessage(brand,inf,cp,disp,lang){
   const b=BRAND_INFO[brand]||{produits:(lang==='en'?'our products':'nos produits'),fr:brand+" est une marque que nous accompagnons chez Hyped Agency.",en:brand+" is a brand we work with at Hyped Agency."};
   const who=inf||(lang==='en'?'there':'');
-  if(lang==='en') return `Hi ${who} ✨\n\nI'm ${cp} from Hyped Agency, and we're currently working with ${brand}.\n\n${b.en}\n\nI'm reaching out because we really love your content — we find it so qualitative and a great fit with the brand's universe. ✨\n\nWe'd love to send you ${b.produits} and explore a partnership around ${disp}.\n\nWould you be open to discovering the products and featuring them on your socials with ${brand}? If so, feel free to send me your full name, postal address and phone number so I can add you to our shipment.\n\nLooking forward to hearing from you,\n${cp}`;
+  if(lang==='en') return `Hi ${who} ✨\n\nI'm ${cp} from Hyped Agency, and we're currently working with ${brand}.\n\n${b.en}\n\nI'm reaching out because we really love your content, we find it so qualitative and a great fit with the brand's universe. ✨\n\nWe'd love to send you ${b.produits} and explore a partnership around ${disp}.\n\nWould you be open to discovering the products and featuring them on your socials with ${brand}? If so, feel free to send me your full name, postal address and phone number so I can add you to our shipment.\n\nLooking forward to hearing from you,\n${cp}`;
   return `Hello ${who} ✨\n\nJe suis ${cp}, cheffe de projet chez Hyped Agency, et je représente la marque ${brand}.\n\n${b.fr}\n\nJe te contacte car nous aimons beaucoup ton contenu, que nous trouvons très qualitatif et en parfaite adéquation avec l'univers de la marque. ✨\n\nL'idée serait de te faire découvrir ${b.produits} et de mettre en avant ${disp} dans le cadre d'un partenariat avec ${brand}.\n\nSerais-tu partante ? Je reste bien sûr disponible pour la moindre question et serais ravie d'échanger avec toi. 🤍\n\nAu plaisir de te lire,\n${cp}`;
 }
 function openMessage(btn){
@@ -1304,7 +1304,7 @@ function openMessage(btn){
   const cp=p.responsable||(VIEWER&&VIEWER.name)||'';
   const brand=p.projet||'';
   const panel=document.createElement('div'); panel.className='msgpanel';
-  panel.innerHTML='<div class="msgbar"><span class="seg"><button data-l="fr" class="on">FR</button><button data-l="en">EN</button></span><input class="msgdisp" value="1 Reel + 1 set de stories"></div><input class="msgto" type="email" placeholder="Email du destinataire (requis pour envoyer)"><div class="cctoggle"><button type="button" class="lk cclink">＋ Ajouter Cc / Cci</button></div><input class="msgcc" type="text" placeholder="Cc — visible par tous, séparez par une virgule" style="display:none"><input class="msgbcc" type="text" placeholder="Cci — copie cachée, séparez par une virgule" style="display:none"><textarea class="msgtxt" rows="12"></textarea><div class="msgbtns"><button class="lk msgcopy">Copier</button> <button class="lk msgdraft">📧 Brouillon</button> <button class="lk msgsend">✉️ Envoyer</button></div>';
+  panel.innerHTML='<div class="msgbar"><span class="seg"><button data-l="fr" class="on">FR</button><button data-l="en">EN</button></span><input class="msgdisp" value="1 Reel + 1 set de stories"></div><input class="msgto" type="email" placeholder="Email du destinataire (requis pour envoyer)"><div class="cctoggle"><button type="button" class="lk cclink">＋ Ajouter Cc / Cci</button></div><input class="msgcc" type="text" placeholder="Cc : visible par tous, séparez par une virgule" style="display:none"><input class="msgbcc" type="text" placeholder="Cci : copie cachée, séparez par une virgule" style="display:none"><textarea class="msgtxt" rows="12"></textarea><div class="msgbtns"><button class="lk msgcopy">Copier</button> <button class="lk msgdraft">📧 Brouillon</button> <button class="lk msgsend">✉️ Envoyer</button></div>';
   row.after(panel);
   const ccInput=panel.querySelector('.msgcc'), bccInput=panel.querySelector('.msgbcc'); const ccOf=()=>(ccInput.value||'').trim(), bccOf=()=>(bccInput.value||'').trim();
   panel.querySelector('.cclink').onclick=()=>{ ccInput.style.display=''; bccInput.style.display=''; panel.querySelector('.cctoggle').style.display='none'; ccInput.focus(); };
@@ -1315,7 +1315,7 @@ function openMessage(btn){
   disp.oninput=regen;
   const cpbtn=panel.querySelector('.msgcopy');
   cpbtn.onclick=()=>{ta.select();try{document.execCommand('copy');}catch(e){}cpbtn.textContent='Copié ✓';setTimeout(()=>cpbtn.textContent='Copier',1500);};
-  const subjOf=()=>(lang==='en'?'Partnership with ':'Partenariat ')+brand+' — Hyped Agency';
+  const subjOf=()=>(lang==='en'?'Partnership with ':'Partenariat ')+brand+' - Hyped Agency';
   const dbtn=panel.querySelector('.msgdraft');
   dbtn.onclick=async()=>{
     dbtn.textContent='…';
@@ -1355,7 +1355,7 @@ function renderSourcing(profils){
   const cpsel=isSup?('<select id="srccp" title="Chef de projet à allouer">'+cpopts+'</select>'):'';
   const add='<div class="srcadd"><input id="srcprofil" placeholder="@profil ou lien"><select id="srcmarque">'+opts+'</select>'+cpsel+'<button class="lk" id="srcbtn">+ Ajouter</button></div>';
   let rows;
-  if(!profils.length) rows='<div class="state" style="padding:14px">Aucun profil à contacter — ajoute-en un, ou ils arriveront via la veille. 🔎</div>';
+  if(!profils.length) rows='<div class="state" style="padding:14px">Aucun profil à contacter, ajoute-en un, ou ils arriveront via la veille. 🔎</div>';
   else rows=profils.map(p=>{
     const link=p.lien?`<a href="${esc(p.lien)}" target="_blank" rel="noopener">Profil</a>`:'';
     const who=p.responsable?`<span class="owner">${esc(p.responsable)}</span>`:'<span class="owner none">à attribuer</span>';
