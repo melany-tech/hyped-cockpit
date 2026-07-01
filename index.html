@@ -186,6 +186,8 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .panel.block{margin-bottom:16px}
 .panelhint{font-size:11.5px;color:var(--gray);margin:-4px 0 12px;line-height:1.4}
 .briefbtn,.replybtn{white-space:nowrap;cursor:pointer}
+.backbtn{cursor:pointer;color:var(--teal);font-weight:600;margin-bottom:8px;display:inline-block}
+.pubchip{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;font-size:11px;font-weight:700;color:#B23A2E;background:#FCE7E3;border:1px solid #F3C6BF;border-radius:8px;padding:3px 9px}
 .histcard{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;background:#fff}
 .histhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #EFF3F3}
 .histname{font-size:14px;font-weight:700;color:var(--navy)}
@@ -435,7 +437,7 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
         <span id="demobadge" class="demo hidden">Mode démo</span>
         <span class="chip" id="totalchip">…</span>
         <button class="iconbtn" id="refreshbtn" title="Actualiser (recharge mails, calendriers, pipeline)">↻</button>
-        <button class="iconbtn" id="histbtn" title="Historique &amp; traçabilité">🕘</button>
+        <button class="iconbtn" id="histbtn" title="Historique &amp; traçabilité">📜</button>
         <a class="iconbtn" id="guidebtn" href="/guide" target="_blank" rel="noopener" title="Guide du cockpit" style="text-decoration:none">📖</a>
         <button class="iconbtn" id="searchbtn" title="Rechercher">🔍</button>
         <button class="iconbtn" id="bellbtn" title="Notifications">🔔<span class="badge hidden" id="bellcount">0</span></button>
@@ -503,7 +505,7 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
     <section id="contactsview" style="display:none"><p class="pt"><span class="pi">👥</span> Contacts créateurs</p><div id="contactsbox"><div class="state">Chargement…</div></div></section>
     <section id="rapportsview" style="display:none"><p class="pt"><span class="pi">📊</span> Rapports</p><div id="rapportsbox"><div class="state">Chargement…</div></div></section>
     <section id="calendrierview" style="display:none"><p class="pt"><span class="pi">📅</span> Calendrier</p><div id="calendrierbox"><div class="state">Chargement…</div></div></section>
-    <section id="historiqueview" style="display:none"><p class="pt"><span class="pi">🕘</span> Historique &amp; traçabilité</p><div class="panelhint">Chaque collab et son fil d'étapes : qui a fait quoi, quand — avec les liens vers les mails et la fiche Notion.</div><div class="ctsearch"><input id="histsearch" placeholder="🔍 Rechercher un créateur, une marque, une CP…"></div><div id="historiquebox"><div class="state">Chargement…</div></div></section>
+    <section id="historiqueview" style="display:none"><button class="lk backbtn" onclick="showView('cockpit')">← Retour au cockpit</button><p class="pt"><span class="pi">📜</span> Historique &amp; traçabilité</p><div class="panelhint">Chaque collab et son fil d'étapes : qui a fait quoi, quand — avec les liens vers les mails et la fiche Notion.</div><div class="ctsearch"><input id="histsearch" placeholder="🔍 Rechercher un créateur, une marque, une CP…"></div><div id="historiquebox"><div class="state">Chargement…</div></div></section>
     <div id="activitybar" class="actbar hidden"></div>
     <div class="foot">Clients actifs uniquement · filtré par interlocutrice.</div>
   </div><!-- /.main -->
@@ -722,12 +724,12 @@ async function load(){
 }
 // --- Indicateurs (4 cartes du haut) -------------------------------------
 let OVERVIEW=null, TODO_COUNT=0;
-let NOTIF={drafts:0,late:0,draftItems:[],lateItems:[]};
+let NOTIF={drafts:0,late:0,pub:0,draftItems:[],lateItems:[],pubItems:[]};
 function updateBell(){
-  const n=(NOTIF.drafts||0)+(NOTIF.late||0);
+  const n=(NOTIF.drafts||0)+(NOTIF.late||0)+(NOTIF.pub||0);
   const b=$('bellcount'); if(b){b.textContent=n;show(b,n>0);}
   const menu=$('bellmenu'); if(!menu)return;
-  const items=[...(NOTIF.draftItems||[]),...(NOTIF.lateItems||[])];
+  const items=[...(NOTIF.pubItems||[]),...(NOTIF.lateItems||[]),...(NOTIF.draftItems||[])];
   if(!items.length){ menu.innerHTML='<div class="bn-empty">Rien d\'urgent — tout est à jour ✨</div>'; return; }
   menu.innerHTML='<div class="bn-h">Notifications · '+items.length+'</div>'+items.map((it,i)=>`<div class="bn-item" data-i="${i}"><span class="bn-ic">${it.icon}</span><div class="bn-tx"><div class="bn-t">${esc(it.text)}</div><div class="bn-s">${esc(it.sub||'')}</div></div></div>`).join('');
   menu.querySelectorAll('.bn-item').forEach(el=>{ el.onclick=()=>{ const it=items[+el.dataset.i]; menu.classList.add('hidden'); if(it.url) window.open(it.url,'_blank'); else { const t=$(it.go||'todopanel'); if(t)t.scrollIntoView({behavior:'smooth',block:'start'}); } }; });
@@ -1009,15 +1011,24 @@ function render(){
     const assignCtl=a.id
       ? `<select class="assignsel" data-id="${esc(a.id)}" data-name="${esc(a.name||'')}" data-brand="${esc(a.brand||'')}" title="Assigner / changer la personne responsable"><option value="">— non assigné</option>${(TEAM||[]).map(c=>`<option value="${esc(c)}"${(c||'').toLowerCase().trim()===cur?' selected':''}>${esc(c)}</option>`).join('')}</select>`
       : (showOwn?owner:'');
+    const today=new Date().toISOString().slice(0,10);
+    const overdue=(a.statut==='En validation' && a.date && String(a.date).slice(0,10) < today);
+    const pubchip=overdue?`<span class="pubchip" title="Contenu validé mais pas encore publié — la date de mise en ligne est passée">⏰ à publier</span>`:'';
     const link=a.url?`<a href="${a.url}" target="_blank" rel="noopener">Ouvrir</a>`:'';
-    const hist=a.id?`<button class="lk histrowbtn" title="Voir l'historique de cette collab">🕘</button>`:'';
+    const hist=a.id?`<button class="lk histrowbtn" title="Voir l'historique de cette collab">📜</button>`:'';
     const NEXT={'Non posté':'→ En cours de production','En production':'→ Contenu validé','En validation':'✓ Marquer publié'};
     const nb=(a.id&&NEXT[a.statut])?`<button class="lk nextbtn" data-id="${esc(a.id)}" data-statut="${esc(a.statut)}" data-name="${esc(a.name||'')}" data-brand="${esc(a.brand||'')}" title="Faire passer à l'étape suivante">${NEXT[a.statut]}</button>`:'';
     return `<div class="row" data-name="${esc(a.name)}" data-brand="${esc(a.brand)}" data-cp="${esc(a.cp||'')}">
       <span class="rdot" style="background:${a.color}"></span>
       <div class="info"><div class="t">${esc(a.name)}</div><div class="s">${esc(extra.join(' · '))}</div></div>
-      ${assignCtl}<span class="brand">${esc(a.brand)}</span>${nb}${hist}${link}</div>`;
+      ${pubchip}${assignCtl}<span class="brand">${esc(a.brand)}</span>${nb}${hist}${link}</div>`;
   }).join('');
+  // Ping « validé mais pas posté » : contenus validés dont la date de mise en ligne est dépassée
+  const todayS=new Date().toISOString().slice(0,10);
+  const toPub=list.filter(a=>a.statut==='En validation' && a.date && String(a.date).slice(0,10) < todayS);
+  NOTIF.pub=toPub.length;
+  NOTIF.pubItems=toPub.map(a=>({icon:'⏰',text:'À publier : '+(a.name||'contenu'),sub:'validé mais pas encore posté'+(a.brand?(' · '+a.brand):'')+(a.date?(' · prévu '+fmtDate(a.date)):''),go:'listpanel'}));
+  updateBell();
   document.querySelectorAll('#list .assignsel').forEach(s=>s.onchange=()=>assignCollab(s));
   document.querySelectorAll('#list .nextbtn').forEach(b=>b.onclick=()=>advanceCollab(b));
   document.querySelectorAll('#list .histrowbtn').forEach(b=>b.onclick=()=>{ const nm=b.closest('.row').dataset.name||''; showView('historique'); setTimeout(()=>{const si=$('histsearch');if(si){si.value=nm;drawHist(nm.toLowerCase());}},250); });
