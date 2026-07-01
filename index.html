@@ -477,7 +477,7 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
   <!-- Contenus en cours -->
   <section class="panel block" id="listpanel">
     <p class="pt"><span class="pi">🎬</span> Contenus en cours</p>
-    <div class="panelhint">Les contenus de tes collabs en cours : à lancer, en production, à valider. Clique « Ouvrir » pour aller sur la fiche Notion.</div>
+    <div class="panelhint">Les contenus de tes collabs en cours : planifié, en production, validé. Clique « Ouvrir » pour aller sur la fiche Notion.</div>
     <div id="list"><div class="state">Chargement…</div></div>
   </section>
 
@@ -498,7 +498,7 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 </div><!-- /#app -->
 
 <script>
-const PREF=['Planifié','À transmettre','Négo','À valider','En production','Previews','À cadrer','À facturer'];
+const PREF=['Planifié','À transmettre','Négo','Validé','En production','Previews','À cadrer','À facturer'];
 let ROWS=[], VIEWER=null, TEAM=[];
 const $=(id)=>document.getElementById(id);
 function fmtDate(s){if(!s)return'';return new Date(s).toLocaleDateString('fr-FR',{day:'numeric',month:'short'});}
@@ -585,8 +585,8 @@ function renderCampagnes(){
   $('campagnesbox').innerHTML='<div class="campgrid">'+brands.map(brand=>{
     const ov=((OVERVIEW&&OVERVIEW.brands)||[]).find(b=>b.brand===brand)||{};
     const cols=(ROWS||[]).filter(r=>r.brand===brand);
-    const enProd=cols.filter(r=>r.grp!=='À valider').length;
-    const aValider=cols.filter(r=>r.grp==='À valider').length;
+    const enProd=cols.filter(r=>r.grp!=='Validé').length;
+    const aValider=cols.filter(r=>r.grp==='Validé').length;
     const cps=[...new Set([...cols.map(r=>r.cp).filter(Boolean),...(SRC_PROFILS||[]).filter(p=>p.projet===brand).map(p=>p.responsable).filter(Boolean)])];
     const fill=(ALERTS||[]).find(a=>a.brand===brand);
     let bar='';
@@ -594,17 +594,17 @@ function renderCampagnes(){
     else if(fill) bar='<div class="csub">remplissage non vérifié</div>';
     return `<div class="campcard">
       <div class="camph"><div class="bav">${esc(brandIni(brand))}</div><div><div class="campn">${esc(brand)}</div><div class="campcp">${cps.length?('CP : '+cps.map(esc).join(', ')):'CP à attribuer'}</div></div></div>
-      <div class="campmetrics"><div><b>${ov.aContacter||0}</b><span>à contacter</span></div><div><b>${enProd}</b><span>en production</span></div><div><b>${aValider}</b><span>à valider</span></div><div><b>${ov.recus||0}</b><span>reçus</span></div></div>
+      <div class="campmetrics"><div><b>${ov.aContacter||0}</b><span>à contacter</span></div><div><b>${enProd}</b><span>en production</span></div><div><b>${aValider}</b><span>validé</span></div><div><b>${ov.recus||0}</b><span>reçus</span></div></div>
       ${bar}</div>`;
   }).join('')+'</div>';
 }
 function renderContacts(){
   const map={};
-  (ROWS||[]).forEach(r=>{ const name=r.name; if(!name)return; const k=name+'|'+(r.brand||''); const statut=r.grp==='À valider'?'Contenu à valider':(r.grp==='Planifié'?'Le contenu est planifié':'En production'); map[k]={name,brand:r.brand||'—',statut,cp:r.cp||'—'}; });
+  (ROWS||[]).forEach(r=>{ const name=r.name; if(!name)return; const k=name+'|'+(r.brand||''); const statut=r.grp==='Validé'?'Contenu validé':(r.grp==='Planifié'?'Le contenu est planifié':'En production'); map[k]={name,brand:r.brand||'—',statut,cp:r.cp||'—'}; });
   (SRC_PROFILS||[]).forEach(p=>{ const name=infName(p.task); if(!name)return; const k=name+'|'+(p.projet||''); if(!map[k]) map[k]={name,brand:p.projet||'—',statut:'À contacter',cp:p.responsable||'—'}; });
   const list=Object.values(map).sort((a,b)=>(a.brand+a.name).localeCompare(b.brand+b.name));
   if(!list.length){$('contactsbox').innerHTML='<div class="state">Aucun contact pour le moment.</div>';return;}
-  const stcol={'À contacter':'#C77F2A','Le contenu est planifié':'#C77F2A','En production':'#7A5AA8','Contenu à valider':'#C2553B'};
+  const stcol={'À contacter':'#C77F2A','Le contenu est planifié':'#C77F2A','En production':'#7A5AA8','Contenu validé':'#C2553B'};
   $('contactsbox').innerHTML='<div class="ctcount">'+list.length+' créateur'+(list.length>1?'s':'')+' suivis</div><div class="ctsearch"><input id="ctsearchinput" placeholder="🔍 Rechercher un créateur, une marque, une CP…"></div><div id="ctlist">'+list.map(c=>`<div class="row ctrow"><span class="rdot" style="background:${stcol[c.statut]||'#888'}"></span><div class="info"><div class="t">${esc(c.name)}</div><div class="s">${esc(c.statut)}</div></div><span class="brand">${esc(c.brand)}</span><span class="owner">${esc(c.cp)}</span></div>`).join('')+'</div>';
   const si=$('ctsearchinput'); if(si) si.oninput=()=>{const q=si.value.toLowerCase();document.querySelectorAll('#ctlist .ctrow').forEach(r=>{r.style.display=(!q||r.textContent.toLowerCase().includes(q))?'':'none';});};
 }
@@ -698,7 +698,7 @@ function updateStats(){
   const aTraiter = s?s.aTraiter:TODO_COUNT;
   const aContacter = s?s.aContacter:g('a_contacter');
   const relances = s?s.relances:(o.relances||0);
-  const aValider = s?s.aValider:ROWS.filter(r=>r.grp==='À valider').length;
+  const aValider = s?s.aValider:ROWS.filter(r=>r.grp==='Validé').length;
   const d=o.deltas||null;
   const delta=(k)=>{ if(!d) return ''; const v=d[k]; if(v>0) return '<div class="dl chg">▴ '+v+' vs hier</div>'; if(v<0) return '<div class="dl chg">▾ '+Math.abs(v)+' vs hier</div>'; return '<div class="dl eq">= stable</div>'; };
   const card=(ic,bg,col,lbl,num,dk,act)=>`<div class="scard" data-act="${act||''}" tabindex="0" role="button" title="Voir ${esc(lbl)}"><div class="sic" style="background:${bg};color:${col}">${ic}</div><div class="slbl">${lbl}</div><div class="snum">${num}</div>${delta(dk)}</div>`;
@@ -706,7 +706,7 @@ function updateStats(){
     card('🗒️','#E4F0EA','#2C9087','À traiter aujourd\'hui',aTraiter,'aTraiter','todo')+
     card('👥','#EDE7F5','#7A5AA8','Profils à contacter',aContacter,'aContacter','profils')+
     card('⏱️','#FBEBDD','#C77F2A','Relances en attente',relances,'relances','relances')+
-    card('📄','#FCF3DC','#B98A12','Contenus à valider',aValider,'aValider','contenus');
+    card('📄','#FCF3DC','#B98A12','Contenus validés',aValider,'aValider','contenus');
   updateBell();
 }
 // --- Pipeline + vue par marque ------------------------------------------
@@ -969,7 +969,7 @@ function render(){
       ? `<select class="assignsel" data-id="${esc(a.id||'')}" title="Assigner cette collab à une CP"><option value="">— non assigné</option>${(TEAM||[]).map(c=>`<option value="${esc(c)}"${(c||'').toLowerCase().trim()===cur?' selected':''}>${esc(c)}</option>`).join('')}</select>`
       : (showOwn?owner:'');
     const link=a.url?`<a href="${a.url}" target="_blank" rel="noopener">Ouvrir</a>`:'';
-    const NEXT={'Non posté':'→ En cours de production','En production':'→ En validation','En validation':'✓ Marquer publié'};
+    const NEXT={'Non posté':'→ En cours de production','En production':'→ Contenu validé','En validation':'✓ Marquer publié'};
     const nb=(a.id&&NEXT[a.statut])?`<button class="lk nextbtn" data-id="${esc(a.id)}" data-statut="${esc(a.statut)}" title="Faire passer à l'étape suivante">${NEXT[a.statut]}</button>`:'';
     return `<div class="row" data-name="${esc(a.name)}" data-brand="${esc(a.brand)}" data-cp="${esc(a.cp||'')}">
       <span class="rdot" style="background:${a.color}"></span>

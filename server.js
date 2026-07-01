@@ -161,7 +161,7 @@ const ADAPTERS = {
     const p = page.properties || {};
     const statut = p["Statut"]?.select?.name;
     const M = {
-      "En validation": { grp: "À valider", label: "Contenu à valider", color: "#C2553B" },
+      "En validation": { grp: "Validé", label: "Contenu validé", color: "#C2553B" },
       "En production": { grp: "En production", label: "En cours de production", color: "#7A5AA8" },
       "Non posté":     { grp: "Planifié", label: "Le contenu est planifié", color: "#C77F2A" },
       // "Posté" -> rien (terminé)
@@ -276,7 +276,7 @@ app.get("/api/overview", auth, async (req, res) => {
     else if (!isSup && !teamReq) rows = rows.filter((r) => r.cp === req.user.name);
     rows.forEach((r) => {
       const b = r.brand || "Autres";
-      if (r.grp === "À valider") B(b).recus++; else B(b).contenus++;
+      if (r.grp === "Validé") B(b).recus++; else B(b).contenus++;
     });
     const brands = Object.values(C)
       .filter((x) => x.aContacter || x.relances || x.contenus || x.recus)
@@ -285,7 +285,7 @@ app.get("/api/overview", auth, async (req, res) => {
     const contacted = loadContacted().filter((c) => mine(c.cp));
     const aContacter = open.filter((t) => t.type === "Prise de contact").length;
     const contacte = contacted.length;
-    const recus = rows.filter((r) => r.grp === "À valider").length;
+    const recus = rows.filter((r) => r.grp === "Validé").length;
     const relancesN = open.filter((t) => t.type === "Relance créateur").length;
     const pipeline = [
       { key: "a_contacter", label: "À contacter",   count: aContacter },
@@ -573,7 +573,7 @@ app.post("/api/collab/:id/assign", auth, async (req, res) => {
 
 // Fait avancer une collab à l'étape suivante du pipeline (met à jour le Statut Notion)
 const STAGE_ORDER = ["Non posté", "En production", "En validation", "Posté"];
-const STAGE_LABEL = { "Non posté": "Le contenu est planifié", "En production": "En cours de production", "En validation": "Contenu à valider", "Posté": "Publié / terminé" };
+const STAGE_LABEL = { "Non posté": "Le contenu est planifié", "En production": "En cours de production", "En validation": "Contenu validé", "Posté": "Publié / terminé" };
 app.post("/api/collab/:id/advance", auth, async (req, res) => {
   if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
   try {
