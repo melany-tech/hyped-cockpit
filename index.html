@@ -424,6 +424,10 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .ficheform textarea{min-height:52px;resize:vertical}
 .fichebtns{margin-top:8px;display:flex;gap:10px;align-items:center}
 .fichemsg{font-size:11px;color:var(--teal)}
+.fdlrow{display:flex;gap:8px;align-items:center;margin-bottom:7px;flex-wrap:wrap}
+.fdlrow input{flex:1;min-width:150px}
+.fdlrow input[type=file]{flex:1;min-width:150px;border:none;padding:4px 0;font-size:11px}
+.fdlrow .lk{white-space:nowrap}
 @media(max-width:900px){.sidebar{display:none}.main{padding:18px 16px 40px;max-width:100%}.bcgrid2{grid-template-columns:1fr}}
 </style>
 </head>
@@ -861,6 +865,7 @@ const FICHE_FIELDS=[
   ['kpis','📈 KPIs suivis','ex. 3 collabs/sem, EMV, vues cumulées',0],
   ['pole','🧩 Pôle concerné','ex. Influence / UGC',0],
   ['contactsOu','📇 Où trouver les contacts','ex. lien Notion ou Drive de l\'annuaire marque',1],
+  ['reseaux','🌐 Où trouver la marque','ex. Insta @lamarque · TikTok @lamarque · https://site.com',1],
 ];
 function fnoteDate(ts){ return new Date(ts).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}); }
 function ficheHTML(brand,f,canBase){
@@ -869,6 +874,10 @@ function ficheHTML(brand,f,canBase){
   const cells=FICHE_FIELDS.map(([k,label,ph,wide])=>`<div class="fitem${wide?' wide':''}"><div class="fk">${label}</div><div class="fv">${val(f[k])}</div></div>`).join('');
   const itv=(it.nom||it.email||it.role)?`${esc(it.nom||'')}${it.role?(' · '+esc(it.role)):''}${it.email?(' · <a class="todolink" href="mailto:'+esc(it.email)+'">'+esc(it.email)+'</a>'):''}`:'<span class="empty">à compléter</span>';
   const notes=(f.notes||[]).slice().reverse().map(n=>`<div class="fnote"><div class="fm">${linkify(n.text)}</div><div class="fs">${esc(n.by||'')} · ${fnoteDate(n.at)}</div>${canBase?`<button class="fdel" data-at="${n.at}" title="Supprimer la note">✕</button>`:''}</div>`).join('');
+  const fsize=(n)=>n>1048576?(n/1048576).toFixed(1)+' Mo':Math.max(1,Math.round(n/1024))+' Ko';
+  const links=(f.links||[]).map(l=>`<div class="fnote"><div class="fm">🔗 <a class="todolink" href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)} ↗</a></div><div class="fs">${esc(l.by||'')} · ${fnoteDate(l.at)}</div>${canBase?`<button class="fdel fdellink" data-at="${l.at}" title="Supprimer le lien">✕</button>`:''}</div>`).join('');
+  const docs=(f.docs||[]).map(d=>`<div class="fnote"><div class="fm">📄 <a class="todolink" href="/api/brand/${encodeURIComponent(brand)}/doc/${esc(d.id)}">${esc(d.label)}</a> <span class="fs">(${esc(d.filename)} · ${fsize(d.size||0)})</span></div><div class="fs">${esc(d.by||'')} · ${fnoteDate(d.at)}</div>${canBase?`<button class="fdel fdeldoc" data-id="${esc(d.id)}" title="Supprimer le document">✕</button>`:''}</div>`).join('');
+  const docsLinks=links+docs;
   return `<div class="fiche">
     <div class="fichehead"><h4>📁 Fiche marque · ${esc(brand)}</h4><span>${canBase?'<button class="lk" id="fbaseedit">✏️ Modifier la fiche</button>':''}</span></div>
     <div class="fichegrid">${cells}
@@ -882,6 +891,12 @@ function ficheHTML(brand,f,canBase){
     </div>
     <div id="fbaseform" style="display:none" class="ficheform">${FICHE_FIELDS.map(([k,label,ph,wide])=>`<label>${label}</label>`+(wide?`<textarea id="fb_${k}" placeholder="${esc(ph)}">${esc(f[k]||'')}</textarea>`:`<input id="fb_${k}" value="${esc(f[k]||'')}" placeholder="${esc(ph)}">`)).join('')}
       <div class="fichebtns"><button class="lk primary" id="fbasesave">Enregistrer la fiche</button><button class="lk" id="fbasecancel">Annuler</button><span class="fichemsg" id="fbasemsg"></span></div></div>
+    <div class="bcsub">📎 Documents & liens good to know</div>
+    <div class="fnotes">${docsLinks||'<div class="state2">Rien pour l\'instant. Brief influenceurs, veille, moodboard… tout ce qui aide à comprendre la marque, c\'est ici. 📎</div>'}</div>
+    <div class="ficheform">
+      <div class="fdlrow"><input id="flinklabel" placeholder="Nom du lien (ex. Veille In Haircare)"><input id="flinkurl" placeholder="https://…"><button class="lk primary" id="flinkadd">🔗 Ajouter le lien</button></div>
+      <div class="fdlrow"><input id="fdoclabel" placeholder="Nom du document (ex. Brief influenceurs Final Touch)"><input id="fdocfile" type="file"><button class="lk primary" id="fdocadd">📄 Ajouter le document</button></div>
+      <span class="fichemsg" id="fdlmsg"></span></div>
     <div class="bcsub">📝 Contexte ajouté par l'équipe</div>
     <div class="fnotes">${notes||'<div class="state2">Aucune note pour l\'instant. La première info utile que tu apprends sur cette marque, note-la ici pour les copines. 🤍</div>'}</div>
     <div class="ficheform"><textarea id="fnewnote" placeholder="ex. Clara préfère être appelée le matin · la marque ne veut pas de créateurs gaming…"></textarea>
@@ -899,14 +914,29 @@ async function fichePost(brand,payload,msgEl){
 }
 function wireFiche(det,brand){
   const q=(id)=>det.querySelector('#'+id);
-  const be=q('fbaseedit'); if(be) be.onclick=()=>{ const fm=q('fbaseform'); fm.style.display=fm.style.display==='none'?'block':'none'; };
+  // le formulaire d'édition REMPLACE la fiche affichée (pas de doublon à l'écran)
+  const grid=det.querySelector('.fichegrid');
+  const toggleBase=(edit)=>{ const fm=q('fbaseform'); if(!fm||!grid)return; fm.style.display=edit?'block':'none'; grid.style.display=edit?'none':''; const be2=q('fbaseedit'); if(be2) be2.textContent=edit?'👁 Revoir la fiche':'✏️ Modifier la fiche'; };
+  const be=q('fbaseedit'); if(be) be.onclick=()=>toggleBase(q('fbaseform').style.display==='none');
   const bs=q('fbasesave'); if(bs) bs.onclick=async()=>{ const base={}; FICHE_FIELDS.forEach(([k])=>{ base[k]=q('fb_'+k).value.trim(); }); if(await fichePost(brand,{base},q('fbasemsg'))) renderBrandDetail(brand); };
-  const bc=q('fbasecancel'); if(bc) bc.onclick=()=>{ q('fbaseform').style.display='none'; };
+  const bc=q('fbasecancel'); if(bc) bc.onclick=()=>toggleBase(false);
+  const la=q('flinkadd'); if(la) la.onclick=async()=>{ const url=q('flinkurl').value.trim(); if(!url){ q('fdlmsg').textContent='Il me faut au moins l\'URL 🙂'; return; } if(await fichePost(brand,{link:{label:q('flinklabel').value.trim(),url}},q('fdlmsg'))) renderBrandDetail(brand); };
+  const da=q('fdocadd'); if(da) da.onclick=()=>{
+    const fi=q('fdocfile'); const file=fi&&fi.files&&fi.files[0];
+    if(!file){ q('fdlmsg').textContent='Choisis d\'abord un fichier 🙂'; return; }
+    if(file.size>10*1024*1024){ q('fdlmsg').textContent='Fichier trop lourd (10 Mo max)'; return; }
+    q('fdlmsg').textContent='Envoi en cours…';
+    const rd=new FileReader();
+    rd.onload=async()=>{ if(await fichePost(brand,{doc:{label:q('fdoclabel').value.trim(),filename:file.name,data:rd.result}},q('fdlmsg'))) renderBrandDetail(brand); };
+    rd.readAsDataURL(file);
+  };
+  det.querySelectorAll('.fnote .fdellink').forEach(b=>b.onclick=async()=>{ if(confirm('Supprimer ce lien ?')&&await fichePost(brand,{deleteLinkAt:Number(b.dataset.at)},null)) renderBrandDetail(brand); });
+  det.querySelectorAll('.fnote .fdeldoc').forEach(b=>b.onclick=async()=>{ if(confirm('Supprimer ce document ?')&&await fichePost(brand,{deleteDocId:b.dataset.id},null)) renderBrandDetail(brand); });
   const ie=q('fitedit'); if(ie) ie.onclick=()=>{ q('fitform').style.display='block'; ie.style.display='none'; };
   const ic2=q('fitcancel'); if(ic2) ic2.onclick=()=>{ q('fitform').style.display='none'; const e2=q('fitedit'); if(e2)e2.style.display=''; };
   const is=q('fitsave'); if(is) is.onclick=async()=>{ const itv={nom:q('fitnom').value.trim(),role:q('fitrole').value.trim(),email:q('fitemail').value.trim()}; if(await fichePost(brand,{interlocuteur:itv},null)) renderBrandDetail(brand); };
   const na=q('fnoteadd'); if(na) na.onclick=async()=>{ const t=q('fnewnote').value.trim(); if(!t){ q('fnotemsg').textContent='Écris d\'abord ta note 🙂'; return; } if(await fichePost(brand,{note:t},q('fnotemsg'))) renderBrandDetail(brand); };
-  det.querySelectorAll('.fnote .fdel').forEach(b=>b.onclick=async()=>{ if(confirm('Supprimer cette note ?')&&await fichePost(brand,{deleteNoteAt:Number(b.dataset.at)},null)) renderBrandDetail(brand); });
+  det.querySelectorAll('.fnote .fdel:not(.fdellink):not(.fdeldoc)').forEach(b=>b.onclick=async()=>{ if(confirm('Supprimer cette note ?')&&await fichePost(brand,{deleteNoteAt:Number(b.dataset.at)},null)) renderBrandDetail(brand); });
 }
 async function renderBrandDetail(brand){
   const det=$('branddetail'); if(!det)return;

@@ -208,7 +208,7 @@ async function fetchRows() {
 
 // === App ================================================================
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "12mb" })); // 12 Mo : permet l'upload des documents de fiche marque (base64)
 app.use(cookieParser());
 function setAuthCookie(res, payload) {
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "30d" });
@@ -829,7 +829,9 @@ app.get("/api/history", auth, (req, res) => {
 //   modifiable par la responsable (supervisor) uniquement.
 // Interlocuteur principal + notes de contexte : modifiables par toutes les CP (signé, horodaté).
 const BRANDS_STORE = path.join(DATA_DIR, "brands.json");
-const BRAND_BASE_FIELDS = ["histoire", "clientDepuis", "clientJusqua", "objectifs", "reunions", "kpis", "pole", "contactsOu"];
+const BRAND_BASE_FIELDS = ["histoire", "clientDepuis", "clientJusqua", "objectifs", "reunions", "kpis", "pole", "contactsOu", "reseaux"];
+const BRAND_FILES_DIR = path.join(DATA_DIR, "brandfiles");
+try { fs.mkdirSync(BRAND_FILES_DIR, { recursive: true }); } catch (e) {}
 function loadBrandFiches() { try { return JSON.parse(fs.readFileSync(BRANDS_STORE, "utf8")); } catch (e) { return {}; } }
 function saveBrandFiches(o) { try { fs.writeFileSync(BRANDS_STORE, JSON.stringify(o)); } catch (e) {} }
 app.get("/api/brands", auth, (req, res) => {
@@ -863,11 +865,56 @@ app.post("/api/brand/:name", auth, (req, res) => {
     rec.notes = (rec.notes || []).filter((n) => n.at !== Number(body.deleteNoteAt));
     changes.push("suppression note");
   }
+  if (body.link) { // lien utile (veille, brief en ligne…) : toutes les CP
+    const l = body.link;
+    const url = String(l.url || "").trim();
+    if (!/^https?:\/\//.test(url)) return res.status(400).json({ error: "URL invalide (elle doit commencer par http)" });
+    rec.links = (rec.links || []).concat([{ at: Date.now(), by: req.user.name, label: String(l.label || "").slice(0, 200) || url, url: url.slice(0, 1000) }]).slice(-50);
+    changes.push("lien");
+  }
+  if (body.deleteLinkAt) { // suppression d'un lien : responsable uniquement
+    if (!isSup) return res.status(403).json({ error: "Seule la responsable peut supprimer un lien" });
+    rec.links = (rec.links || []).filter((l) => l.at !== Number(body.deleteLinkAt));
+    changes.push("suppression lien");
+  }
+  if (body.doc) { // document « good to know » (PJ) : toutes les CP
+    const d = body.doc;
+    const data = String(d.data || "").replace(/^data:[^;]*;base64,/, "");
+    const buf = Buffer.from(data, "base64");
+    if (!buf.length) return res.status(400).json({ error: "fichier vide" });
+    if (buf.length > 10 * 1024 * 1024) return res.status(400).json({ error: "fichier trop lourd (10 Mo max)" });
+    const safe = String(d.filename || "document").replace(/[^\w.\-()À-ſ ]+/g, "_").slice(0, 120);
+    const id = Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+    const dir = path.join(BRAND_FILES_DIR, name.replace(/[^\w\-À-ſ ]+/g, "_"));
+    try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {}
+    fs.writeFileSync(path.join(dir, id + "_" + safe), buf);
+    rec.docs = (rec.docs || []).concat([{ at: Date.now(), by: req.user.name, label: String(d.label || "").slice(0, 200) || safe, filename: safe, id, size: buf.length }]).slice(-50);
+    changes.push("document");
+  }
+  if (body.deleteDocId) { // suppression d'un document : responsable uniquement
+    if (!isSup) return res.status(403).json({ error: "Seule la responsable peut supprimer un document" });
+    const doc = (rec.docs || []).find((x) => x.id === String(body.deleteDocId));
+    if (doc) {
+      const dir = path.join(BRAND_FILES_DIR, name.replace(/[^\w\-À-ſ ]+/g, "_"));
+      try { fs.unlinkSync(path.join(dir, doc.id + "_" + doc.filename)); } catch (e) {}
+      rec.docs = rec.docs.filter((x) => x.id !== doc.id);
+      changes.push("suppression document");
+    }
+  }
   if (!changes.length) return res.status(400).json({ error: "rien à modifier" });
   rec.updatedAt = Date.now(); rec.updatedBy = req.user.name;
   all[name] = rec; saveBrandFiches(all);
   logActivity({ type: "fiche", creator: name, cp: req.user.name });
   res.json({ ok: true, brand: rec, changes });
+});
+app.get("/api/brand/:name/doc/:id", auth, (req, res) => {
+  const name = String(req.params.name || "").trim();
+  const rec = loadBrandFiches()[name];
+  const doc = rec && (rec.docs || []).find((x) => x.id === String(req.params.id));
+  if (!doc) return res.status(404).json({ error: "document introuvable" });
+  const fp = path.join(BRAND_FILES_DIR, name.replace(/[^\w\-À-ſ ]+/g, "_"), doc.id + "_" + doc.filename);
+  if (!fs.existsSync(fp)) return res.status(404).json({ error: "fichier disparu du disque" });
+  res.download(fp, doc.filename);
 });
 // Mail de demande de stats/bilan (J+5 après publication)
 function genStatsFR(brand, name, cp) {
