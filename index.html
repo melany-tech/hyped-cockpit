@@ -199,6 +199,17 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .histinfo .hists{font-size:11px;color:var(--gray)}
 .histrowbtn{cursor:pointer}
 .sighint{background:#FBF3E6;border:1px solid #EBD9B6;color:#7A5B18;border-radius:9px;padding:9px 12px;font-size:12px;margin-bottom:10px}
+.schedhead{font-size:12px;font-weight:700;color:#5B3FA8;margin:2px 0 8px}
+.schedcard{display:flex;align-items:center;gap:10px;background:#F3EFFB;border:1px solid #E0D6F5;border-radius:10px;padding:9px 12px;margin-bottom:8px}
+.schedcard .info{flex:1;min-width:0}
+.schedcard .info .t{font-size:12.5px;font-weight:600;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.schedcard .info .s{font-size:11px;color:var(--gray)}
+.schedcancel{cursor:pointer;color:#C2553B;font-weight:600;white-space:nowrap}
+.schedrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;padding:8px 10px;background:#F3EFFB;border:1px solid #E0D6F5;border-radius:9px;font-size:12px}
+.schedrow .schedlbl{font-weight:600;color:#5B3FA8}
+.schedat{font-family:inherit;font-size:12px;padding:5px 7px;border:1px solid #CFDADA;border-radius:7px}
+.schedmsg{font-size:11px;color:var(--gray)}
+.lk.msgsched{background:#EFEAFB;color:#5B3FA8;border:1px solid #D8CCF3;font-weight:600}
 .sighint a{color:#0F6E56;font-weight:600}
 .nextbtn{white-space:nowrap;cursor:pointer;background:#EAF3F1;color:#0F6E56;border:1px solid #BfE0D9;font-weight:600}
 .nextbtn:hover{background:#ddf0eb}
@@ -497,6 +508,7 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
   <!-- Mes mails créateurs -->
   <section class="panel block hidden" id="mailpanel">
     <p class="pt"><span class="pi">✉️</span> Mes mails créateurs</p>
+    <div id="schedbox"></div>
     <div id="mailbox"></div>
   </section>
 
@@ -822,7 +834,24 @@ async function loadDrafts(){
   }catch(e){show($('draftbanner'),false);}
 }
 function timeAgo(ts){ if(!ts)return''; const s=Math.max(0,(Date.now()-ts)/1000); if(s<60)return"à l'instant"; const m=Math.floor(s/60); if(m<60)return'il y a '+m+' min'; const h=Math.floor(m/60); if(h<24)return'il y a '+h+'h'; const d=Math.floor(h/24); return 'il y a '+d+' j'; }
-const ACT_META={ profil_ajoute:{ic:'📱',lbl:'Nouveau profil à contacter'}, contacte:{ic:'✅',lbl:'Profil contacté'}, relance:{ic:'✉️',lbl:'Relance envoyée'}, brief:{ic:'📋',lbl:'Brief envoyé'}, brouillon:{ic:'📝',lbl:'Brouillon préparé'}, email:{ic:'📨',lbl:'Message envoyé'}, etape:{ic:'⏭️',lbl:'Étape avancée'} };
+const ACT_META={ profil_ajoute:{ic:'📱',lbl:'Nouveau profil à contacter'}, contacte:{ic:'✅',lbl:'Profil contacté'}, relance:{ic:'✉️',lbl:'Relance envoyée'}, brief:{ic:'📋',lbl:'Brief envoyé'}, brouillon:{ic:'📝',lbl:'Brouillon préparé'}, email:{ic:'📨',lbl:'Message envoyé'}, etape:{ic:'⏭️',lbl:'Étape avancée'}, programme:{ic:'⏱',lbl:'Envoi programmé'} };
+// --- Envois programmés (planification des mails) ------------------------
+async function loadScheduled(){
+  const box=$('schedbox'); if(!box)return;
+  try{
+    const d=await api('/api/gmail/scheduled').then(r=>r.json());
+    const list=d.scheduled||[];
+    if(!list.length){ box.innerHTML=''; return; }
+    box.innerHTML='<div class="schedhead">⏱ '+list.length+' envoi'+(list.length>1?'s':'')+' programmé'+(list.length>1?'s':'')+'</div>'+list.map(s=>`<div class="schedcard"><div class="info"><div class="t">${esc(s.subject||'(sans objet)')}</div><div class="s">à ${esc(s.to)} · ${schedDate(s.at)}</div></div><button class="lk schedcancel" data-id="${esc(s.id)}">Annuler</button></div>`).join('');
+    box.querySelectorAll('.schedcancel').forEach(b=>b.onclick=()=>cancelScheduled(b));
+  }catch(e){ box.innerHTML=''; }
+}
+function schedDate(at){ const d=new Date(at); const today=new Date(); const sameDay=d.toDateString()===today.toDateString(); return (sameDay?"aujourd'hui":d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'}))+' à '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }
+async function cancelScheduled(btn){
+  if(!confirm('Annuler cet envoi programmé ?'))return; btn.textContent='…';
+  try{ await api('/api/gmail/scheduled/'+encodeURIComponent(btn.dataset.id)+'/cancel',{method:'POST',body:'{}'}); }catch(e){}
+  loadScheduled();
+}
 async function loadActivity(){
   try{
     const r=await api('/api/activity'+tparam());const d=await r.json();
@@ -868,7 +897,7 @@ async function loadMail(fresh){
       return;
     }
     renderMail(d, who);
-    if(!who) checkSignature();
+    if(!who){ checkSignature(); loadScheduled(); }
   }catch(e){show($('mailpanel'),false);}
 }
 let SIG_CHECKED=false;
@@ -1063,7 +1092,7 @@ function openMsgPanel(rowEl, opts){
   const f=opts.files||{}; const fchips=fileChips(f.a,f.l);
   const recv = (opts.received||fchips) ? `<div class="msgrecv"><div class="msgrecv-h">📨 Message reçu${opts.threadUrl?` · <a href="${esc(opts.threadUrl)}" target="_blank" rel="noopener">Ouvrir le fil dans Gmail ↗</a>`:''}</div><div class="msgrecv-b">${linkify(opts.received||'')}</div>${fchips}</div>` : '';
   const aibar = opts.aiSuggest ? `<div class="aibar"><button class="lk ai aigen">✨ Régénérer la réponse</button><span class="aistatus"></span></div>` : '';
-  panel.innerHTML=recv+aibar+'<input class="msgto" type="email" placeholder="Email du destinataire (requis pour envoyer)"><textarea class="msgtxt" rows="12"></textarea><div class="msgbtns"><button class="lk msgcopy">Copier</button> <button class="lk msgdraft">📧 Brouillon</button> <button class="lk msgsend">✉️ Envoyer</button></div>';
+  panel.innerHTML=recv+aibar+'<input class="msgto" type="email" placeholder="Email du destinataire (requis pour envoyer)"><textarea class="msgtxt" rows="12"></textarea><div class="msgbtns"><button class="lk msgcopy">Copier</button> <button class="lk msgdraft">📧 Brouillon</button> <button class="lk msgsched">⏱ Programmer</button> <button class="lk msgsend">✉️ Envoyer</button></div><div class="schedrow" style="display:none"><span class="schedlbl">Envoyer le :</span> <input type="datetime-local" class="schedat"> <button class="lk primary schedok">Programmer l\'envoi</button> <span class="schedmsg"></span></div>';
   rowEl.after(panel);
   const ta=panel.querySelector('.msgtxt'); ta.value=opts.body||'';
   if(opts.aiSuggest){
@@ -1091,6 +1120,9 @@ function openMsgPanel(rowEl, opts){
   dbtn.onclick=async()=>{ dbtn.textContent='…'; const r=await api('/api/gmail/draft',{method:'POST',body:JSON.stringify({to:(panel.querySelector('.msgto').value||'').trim(),subject:subjOf(),body:ta.value})}); const d=await r.json().catch(()=>({})); if(d&&d.ok){dbtn.textContent='Brouillon créé ✓';loadDrafts();if(opts.onSent)opts.onSent('brouillon');} else dbtn.textContent='↻ Reconnecte ton Gmail'; setTimeout(()=>{dbtn.textContent='📧 Brouillon';},2600); };
   const sbtn=panel.querySelector('.msgsend');
   sbtn.onclick=async()=>{ const to=(panel.querySelector('.msgto').value||'').trim(); if(!to){sbtn.textContent='Ajoute un destinataire';setTimeout(()=>sbtn.textContent='✉️ Envoyer',2200);return;} if(!confirm('Envoyer ce mail à '+to+' ?'))return; sbtn.textContent='Envoi…'; const r=await api('/api/gmail/send',{method:'POST',body:JSON.stringify({to,subject:subjOf(),body:ta.value})}); const d=await r.json().catch(()=>({})); sbtn.textContent=(d&&d.ok)?'Envoyé ✓':(d.error||'↻ Reconnecte ton Gmail'); if(d&&d.ok&&opts.onSent)opts.onSent('email'); setTimeout(()=>{sbtn.textContent='✉️ Envoyer';},2800); };
+  const schbtn=panel.querySelector('.msgsched'), schrow=panel.querySelector('.schedrow'), schat=panel.querySelector('.schedat'), schok=panel.querySelector('.schedok'), schmsg=panel.querySelector('.schedmsg');
+  schbtn.onclick=()=>{ const show=schrow.style.display==='none'; schrow.style.display=show?'flex':'none'; if(show&&!schat.value){ const d=new Date(Date.now()+3600000); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); schat.value=d.toISOString().slice(0,16); } };
+  schok.onclick=async()=>{ const to=(panel.querySelector('.msgto').value||'').trim(); if(!to){schmsg.textContent='Ajoute un destinataire';return;} if(!schat.value){schmsg.textContent='Choisis une date/heure';return;} const at=new Date(schat.value).getTime(); if(!at||at<Date.now()+30000){schmsg.textContent='Choisis un horaire futur';return;} if(!confirm('Programmer l\'envoi à '+to+' le '+new Date(at).toLocaleString('fr-FR')+' ?'))return; schok.textContent='…'; const r=await api('/api/gmail/schedule',{method:'POST',body:JSON.stringify({to,subject:subjOf(),body:ta.value,at})}); const d=await r.json().catch(()=>({})); if(d&&d.ok){ schmsg.textContent='✓ Programmé'; if(opts.onSent)opts.onSent('programme'); loadScheduled(); setTimeout(()=>{panel.remove();},900); } else { schok.textContent='Programmer l\'envoi'; schmsg.textContent=(d&&d.error)||'Échec'; } };
 }
 function genBriefFR(brand, name){
   const cp=(VIEWER&&VIEWER.name)||'';

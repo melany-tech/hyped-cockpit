@@ -419,6 +419,57 @@ app.post("/api/gmail/send", auth, async (req, res) => {
   try { const r = await gm.sendEmail(req.user.email, { to, subject, body }); if (r && r.ok) logActivity({ type: "email", creator: to, cp: req.user.name }); res.json(r); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
+// --- Envois programmés (le cockpit envoie à l'heure dite, même hors ligne) ---
+const SCHEDULED_STORE = path.join(DATA_DIR, "scheduled.json");
+function loadScheduled() { try { return JSON.parse(fs.readFileSync(SCHEDULED_STORE, "utf8")); } catch (e) { return []; } }
+function saveScheduled(a) { try { fs.writeFileSync(SCHEDULED_STORE, JSON.stringify(a)); } catch (e) {} }
+app.post("/api/gmail/schedule", auth, (req, res) => {
+  if (!gm.ENABLED) return res.status(400).json({ error: "Gmail non configuré" });
+  const to = String(req.body?.to || "").trim();
+  const subject = String(req.body?.subject || "");
+  const body = String(req.body?.body || "");
+  const at = Number(req.body?.at || 0);
+  if (!to) return res.status(400).json({ error: "destinataire manquant" });
+  if (!at || at < Date.now() + 30000) return res.status(400).json({ error: "choisis une date/heure future" });
+  const item = { id: "s_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), email: req.user.email, by: req.user.name, to, subject, body, at, createdAt: Date.now(), attempts: 0 };
+  const a = loadScheduled(); a.push(item); saveScheduled(a);
+  logActivity({ type: "programme", creator: to, cp: req.user.name, extra: new Date(at).toISOString() });
+  res.json({ ok: true, id: item.id, at });
+});
+app.get("/api/gmail/scheduled", auth, (req, res) => {
+  const mine = loadScheduled().filter((x) => x.email === req.user.email).sort((a, b) => a.at - b.at)
+    .map((x) => ({ id: x.id, to: x.to, subject: x.subject, at: x.at }));
+  res.json({ scheduled: mine });
+});
+app.post("/api/gmail/scheduled/:id/cancel", auth, (req, res) => {
+  const a = loadScheduled();
+  const before = a.length;
+  const kept = a.filter((x) => !(x.id === req.params.id && x.email === req.user.email));
+  saveScheduled(kept);
+  res.json({ ok: kept.length < before });
+});
+// Boucle : envoie les mails dus (toutes les 60 s + un passage au démarrage)
+async function runScheduledSends() {
+  if (!gm.ENABLED) return;
+  let a = loadScheduled();
+  if (!a.length) return;
+  const now = Date.now();
+  const due = a.filter((x) => x.at <= now);
+  if (!due.length) return;
+  for (const item of due) {
+    try {
+      const r = await gm.sendEmail(item.email, { to: item.to, subject: item.subject, body: item.body });
+      if (r && r.ok) { logActivity({ type: "email", creator: item.to, cp: item.by, extra: "envoi programmé" }); item._done = true; }
+      else { item.attempts = (item.attempts || 0) + 1; item.lastError = r && r.error; }
+    } catch (e) { item.attempts = (item.attempts || 0) + 1; item.lastError = String(e && e.message || e); }
+  }
+  // on retire les envoyés et ceux qui échouent depuis trop longtemps (>10 tentatives)
+  const remaining = loadScheduled().map((x) => { const d = due.find((y) => y.id === x.id); return d ? d : x; })
+    .filter((x) => !x._done && (x.attempts || 0) < 10);
+  saveScheduled(remaining);
+}
+setInterval(() => { runScheduledSends().catch(() => {}); }, 60 * 1000);
+setTimeout(() => { runScheduledSends().catch(() => {}); }, 8000); // rattrapage au démarrage
 // --- Cerveau IA : rédige une réponse adaptée au mail RÉELLEMENT reçu ------
 // Compatible OpenAI (ChatGPT) ET Anthropic (Claude). On utilise la clé présente :
 //   - OPENAI_API_KEY  -> ChatGPT  (modèle OPENAI_MODEL, défaut gpt-4o-mini)
