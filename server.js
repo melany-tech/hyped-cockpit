@@ -829,7 +829,7 @@ app.get("/api/history", auth, (req, res) => {
 //   modifiable par la responsable (supervisor) uniquement.
 // Interlocuteur principal + notes de contexte : modifiables par toutes les CP (signé, horodaté).
 const BRANDS_STORE = path.join(DATA_DIR, "brands.json");
-const BRAND_BASE_FIELDS = ["histoire", "clientDepuis", "clientJusqua", "objectifs", "reunions", "kpis", "pole", "contactsOu", "reseaux"];
+const BRAND_BASE_FIELDS = ["histoire", "clientDepuis", "clientJusqua", "objectifs", "reunions", "kpis", "pole", "contactsOu", "instagram", "tiktok", "siteweb"];
 const BRAND_FILES_DIR = path.join(DATA_DIR, "brandfiles");
 try { fs.mkdirSync(BRAND_FILES_DIR, { recursive: true }); } catch (e) {}
 function loadBrandFiches() { try { return JSON.parse(fs.readFileSync(BRANDS_STORE, "utf8")); } catch (e) { return {}; } }
