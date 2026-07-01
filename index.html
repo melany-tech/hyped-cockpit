@@ -186,6 +186,16 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .panel.block{margin-bottom:16px}
 .panelhint{font-size:11.5px;color:var(--gray);margin:-4px 0 12px;line-height:1.4}
 .briefbtn,.replybtn{white-space:nowrap;cursor:pointer}
+.histcard{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;background:#fff}
+.histhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #EFF3F3}
+.histname{font-size:14px;font-weight:700;color:var(--navy)}
+.histlinks{font-size:11.5px}
+.histlinks a{color:var(--teal);font-weight:600;text-decoration:none;white-space:nowrap}
+.histrow{display:flex;align-items:flex-start;gap:9px;padding:5px 0}
+.histic{width:22px;height:22px;flex:none;border-radius:7px;background:#F1F5F4;display:flex;align-items:center;justify-content:center;font-size:12px}
+.histinfo .histt{font-size:12.5px;font-weight:600;color:var(--navy)}
+.histinfo .hists{font-size:11px;color:var(--gray)}
+.histrowbtn{cursor:pointer}
 .sighint{background:#FBF3E6;border:1px solid #EBD9B6;color:#7A5B18;border-radius:9px;padding:9px 12px;font-size:12px;margin-bottom:10px}
 .sighint a{color:#0F6E56;font-weight:600}
 .nextbtn{white-space:nowrap;cursor:pointer;background:#EAF3F1;color:#0F6E56;border:1px solid #BfE0D9;font-weight:600}
@@ -425,6 +435,7 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
         <span id="demobadge" class="demo hidden">Mode démo</span>
         <span class="chip" id="totalchip">…</span>
         <button class="iconbtn" id="refreshbtn" title="Actualiser (recharge mails, calendriers, pipeline)">↻</button>
+        <button class="iconbtn" id="histbtn" title="Historique &amp; traçabilité">🕘</button>
         <a class="iconbtn" id="guidebtn" href="/guide" target="_blank" rel="noopener" title="Guide du cockpit" style="text-decoration:none">📖</a>
         <button class="iconbtn" id="searchbtn" title="Rechercher">🔍</button>
         <button class="iconbtn" id="bellbtn" title="Notifications">🔔<span class="badge hidden" id="bellcount">0</span></button>
@@ -492,6 +503,7 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
     <section id="contactsview" style="display:none"><p class="pt"><span class="pi">👥</span> Contacts créateurs</p><div id="contactsbox"><div class="state">Chargement…</div></div></section>
     <section id="rapportsview" style="display:none"><p class="pt"><span class="pi">📊</span> Rapports</p><div id="rapportsbox"><div class="state">Chargement…</div></div></section>
     <section id="calendrierview" style="display:none"><p class="pt"><span class="pi">📅</span> Calendrier</p><div id="calendrierbox"><div class="state">Chargement…</div></div></section>
+    <section id="historiqueview" style="display:none"><p class="pt"><span class="pi">🕘</span> Historique &amp; traçabilité</p><div class="panelhint">Chaque collab et son fil d'étapes : qui a fait quoi, quand — avec les liens vers les mails et la fiche Notion.</div><div class="ctsearch"><input id="histsearch" placeholder="🔍 Rechercher un créateur, une marque, une CP…"></div><div id="historiquebox"><div class="state">Chargement…</div></div></section>
     <div id="activitybar" class="actbar hidden"></div>
     <div class="foot">Clients actifs uniquement · filtré par interlocutrice.</div>
   </div><!-- /.main -->
@@ -521,6 +533,8 @@ function setupChrome(){
   document.addEventListener('click',(e)=>{ if(menu&&av&&!menu.contains(e.target)&&!av.contains(e.target))menu.classList.add('hidden'); if(bmenu&&bell&&!bmenu.contains(e.target)&&!bell.contains(e.target))bmenu.classList.add('hidden'); });
   const rf=$('refreshbtn');
   if(rf){ rf.onclick=()=>refreshAll(rf); }
+  const hb=$('histbtn');
+  if(hb){ hb.onclick=()=>showView('historique'); }
   const sb=$('searchbtn'), bar=$('searchbar'), si=$('searchinput');
   if(sb&&bar){ sb.onclick=()=>{ const willShow=bar.classList.contains('hidden'); show(bar,willShow); if(willShow&&si)si.focus(); else applySearch(''); }; }
   if(si){ si.oninput=()=>applySearch(si.value.trim().toLowerCase()); }
@@ -542,13 +556,14 @@ function statCardGo(act){
   else { navToView('cockpit'); setTimeout(()=>{const el=$('todopanel'); if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},220); } // à traiter / relances → priorités
 }
 let CURRENT_VIEW='cockpit';
-const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview'};
-function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
+const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview',historique:'historiqueview'};
+function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','historiqueview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
 function refreshCustomView(){
   if(CURRENT_VIEW==='campagnes')renderCampagnes();
   else if(CURRENT_VIEW==='contacts')renderContacts();
   else if(CURRENT_VIEW==='rapports')renderRapports();
   else if(CURRENT_VIEW==='calendrier')renderCalendrier();
+  else if(CURRENT_VIEW==='historique')renderHistorique();
 }
 function showView(v){
   CURRENT_VIEW=v;
@@ -621,6 +636,31 @@ function renderRapports(){
   const tot=brands.reduce((a,b)=>({c:a.c+b.aContacter,r:a.r+b.relances,at:a.at+b.contenus,re:a.re+b.recus}),{c:0,r:0,at:0,re:0});
   let t3=`<div class="rsec"><div class="rsec-h">∑ Totaux équipe</div><div class="rtot"><div><b>${tot.c}</b><span>à contacter</span></div><div><b>${tot.r}</b><span>relances</span></div><div><b>${tot.at}</b><span>contenus attendus</span></div><div><b>${tot.re}</b><span>reçus</span></div></div></div>`;
   $('rapportsbox').innerHTML=t1+t2+t3;
+}
+// ===== Historique / traçabilité =====
+let HIST_DATA=[];
+const HIST_ICON={etape:'⏭️',assignation:'👤'};
+function histDate(at){ const d=new Date(at); return d.toLocaleDateString('fr-FR',{day:'numeric',month:'short'})+' · '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }
+async function renderHistorique(){
+  const box=$('historiquebox'); if(!box)return;
+  if(!HIST_DATA.length) box.innerHTML='<div class="state">Chargement…</div>';
+  try{ const d=await api('/api/history').then(r=>r.json()); HIST_DATA=d.history||[]; }
+  catch(e){ box.innerHTML='<div class="state">Historique indisponible.</div>'; return; }
+  drawHist('');
+  const si=$('histsearch'); if(si) si.oninput=()=>drawHist(si.value.trim().toLowerCase());
+}
+function drawHist(q){
+  const box=$('historiquebox'); if(!box)return;
+  if(!HIST_DATA.length){ box.innerHTML='<div class="state" style="padding:16px">Rien pour l\'instant. L\'historique se remplit dès que tu fais avancer une étape ou que tu assignes une collab. ✨</div>'; return; }
+  box.innerHTML=HIST_DATA.map(c=>{
+    const hay=(c.name+' '+c.brand+' '+c.events.map(e=>(e.by||'')+' '+(e.detail||'')).join(' ')).toLowerCase();
+    const hidden=(q&&!hay.includes(q))?' style="display:none"':'';
+    const gmail='https://mail.google.com/mail/u/0/#search/'+encodeURIComponent(c.name||'');
+    const notion=c.url?`<a href="${esc(c.url)}" target="_blank" rel="noopener">Fiche Notion ↗</a>`:'';
+    const mails=c.name?`<a href="${gmail}" target="_blank" rel="noopener">Voir les mails ↗</a>`:'';
+    const tl=(c.events||[]).map(e=>`<div class="histrow"><span class="histic">${HIST_ICON[e.action]||'•'}</span><div class="histinfo"><div class="histt">${esc(e.detail||e.action||'')}</div><div class="hists">par ${esc(e.by||'—')} · ${histDate(e.at)}</div></div></div>`).join('');
+    return `<div class="histcard"${hidden}><div class="histhead"><div><div class="histname">${esc(c.name||'(sans nom)')}</div>${c.brand?`<span class="brand">${esc(c.brand)}</span>`:''}</div><div class="histlinks">${notion}${notion&&mails?' · ':''}${mails}</div></div>${tl}</div>`;
+  }).join('');
 }
 let CAL_EVENTS=[], CAL_VIEWING=null;
 function renderCalendrier(){
@@ -965,26 +1005,29 @@ function render(){
     const showOwn=isSup||teamOn();
     const owner=(showOwn&&a.cp)?`<span class="owner" title="Cheffe de projet">${esc(a.cp)}</span>`:(showOwn?`<span class="owner none" title="Personne assignée">— non assigné</span>`:'');
     const cur=(a.cp||'').toLowerCase().trim();
-    const assignCtl=isSup
-      ? `<select class="assignsel" data-id="${esc(a.id||'')}" title="Assigner cette collab à une CP"><option value="">— non assigné</option>${(TEAM||[]).map(c=>`<option value="${esc(c)}"${(c||'').toLowerCase().trim()===cur?' selected':''}>${esc(c)}</option>`).join('')}</select>`
+    // Assignable par tout le monde depuis Contenus en cours (écrit l'Interlocuteur + trace dans l'historique)
+    const assignCtl=a.id
+      ? `<select class="assignsel" data-id="${esc(a.id)}" data-name="${esc(a.name||'')}" data-brand="${esc(a.brand||'')}" title="Assigner / changer la personne responsable"><option value="">— non assigné</option>${(TEAM||[]).map(c=>`<option value="${esc(c)}"${(c||'').toLowerCase().trim()===cur?' selected':''}>${esc(c)}</option>`).join('')}</select>`
       : (showOwn?owner:'');
     const link=a.url?`<a href="${a.url}" target="_blank" rel="noopener">Ouvrir</a>`:'';
+    const hist=a.id?`<button class="lk histrowbtn" title="Voir l'historique de cette collab">🕘</button>`:'';
     const NEXT={'Non posté':'→ En cours de production','En production':'→ Contenu validé','En validation':'✓ Marquer publié'};
-    const nb=(a.id&&NEXT[a.statut])?`<button class="lk nextbtn" data-id="${esc(a.id)}" data-statut="${esc(a.statut)}" title="Faire passer à l'étape suivante">${NEXT[a.statut]}</button>`:'';
+    const nb=(a.id&&NEXT[a.statut])?`<button class="lk nextbtn" data-id="${esc(a.id)}" data-statut="${esc(a.statut)}" data-name="${esc(a.name||'')}" data-brand="${esc(a.brand||'')}" title="Faire passer à l'étape suivante">${NEXT[a.statut]}</button>`:'';
     return `<div class="row" data-name="${esc(a.name)}" data-brand="${esc(a.brand)}" data-cp="${esc(a.cp||'')}">
       <span class="rdot" style="background:${a.color}"></span>
       <div class="info"><div class="t">${esc(a.name)}</div><div class="s">${esc(extra.join(' · '))}</div></div>
-      ${assignCtl}<span class="brand">${esc(a.brand)}</span>${nb}${link}</div>`;
+      ${assignCtl}<span class="brand">${esc(a.brand)}</span>${nb}${hist}${link}</div>`;
   }).join('');
   document.querySelectorAll('#list .assignsel').forEach(s=>s.onchange=()=>assignCollab(s));
   document.querySelectorAll('#list .nextbtn').forEach(b=>b.onclick=()=>advanceCollab(b));
+  document.querySelectorAll('#list .histrowbtn').forEach(b=>b.onclick=()=>{ const nm=b.closest('.row').dataset.name||''; showView('historique'); setTimeout(()=>{const si=$('histsearch');if(si){si.value=nm;drawHist(nm.toLowerCase());}},250); });
 }
 async function advanceCollab(btn){
   const id=btn.dataset.id; if(!id)return;
   if(btn.dataset.busy==='1')return; btn.dataset.busy='1';
   const orig=btn.textContent; btn.textContent='…'; btn.disabled=true;
   try{
-    const r=await api('/api/collab/'+encodeURIComponent(id)+'/advance',{method:'POST',body:JSON.stringify({})});
+    const r=await api('/api/collab/'+encodeURIComponent(id)+'/advance',{method:'POST',body:JSON.stringify({name:btn.dataset.name||'',brand:btn.dataset.brand||''})});
     const d=await r.json().catch(()=>({}));
     if(d&&d.ok){ btn.textContent='✓ '+(d.toLabel||'Étape suivante'); loadActivity(); setTimeout(load,500); }
     else if(d&&d.done){ btn.textContent='Déjà à la dernière étape'; setTimeout(()=>{btn.textContent=orig;btn.disabled=false;btn.dataset.busy='';},2000); }
@@ -996,7 +1039,7 @@ async function assignCollab(sel){
   if(!id){alert('Cette collab n\'a pas d\'identifiant Notion.');return;}
   sel.disabled=true; const prev=sel.style.borderColor; sel.style.borderColor='#2C9087';
   try{
-    const r=await api('/api/collab/'+encodeURIComponent(id)+'/assign',{method:'POST',body:JSON.stringify({to})});
+    const r=await api('/api/collab/'+encodeURIComponent(id)+'/assign',{method:'POST',body:JSON.stringify({to,name:sel.dataset.name||'',brand:sel.dataset.brand||''})});
     const d=await r.json().catch(()=>({}));
     if(d&&d.ok){ setTimeout(load,300); } else { alert(d.error||'Échec de l\'assignation'); sel.disabled=false; sel.style.borderColor=prev; }
   }catch(e){ sel.disabled=false; sel.style.borderColor=prev; }

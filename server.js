@@ -553,11 +553,12 @@ app.post("/api/brief", auth, (req, res) => {
   logActivity({ type: "brief", creator, brand, cp: req.user.name });
   res.json({ ok: true });
 });
-// Assignation rapide d'une collab à une CP (pilote) → écrit l'Interlocuteur dans Notion
+// Assignation rapide d'une collab à une CP → écrit l'Interlocuteur dans Notion (+ historique)
 app.post("/api/collab/:id/assign", auth, async (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé au pilote" });
   if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
   const to = String(req.body?.to || "").trim();
+  const name = String(req.body?.name || "").trim();
+  const brand = String(req.body?.brand || "").trim();
   try {
     if (!to) {
       await notion.pages.update({ page_id: req.params.id, properties: { "Interlocuteur": { people: [] } } });
@@ -567,6 +568,7 @@ app.post("/api/collab/:id/assign", auth, async (req, res) => {
       await notion.pages.update({ page_id: req.params.id, properties: { "Interlocuteur": { people: [{ id: uid }] } } });
     }
     CACHE = { at: 0, rows: [] }; // force le rafraîchissement des collabs
+    recordHistory(req.params.id, { name, brand }, { by: req.user.name, action: "assignation", detail: to ? ("assigné à " + to) : "assignation retirée" });
     res.json({ ok: true, to });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -583,9 +585,11 @@ app.post("/api/collab/:id/advance", auth, async (req, res) => {
     if (i < 0) return res.status(400).json({ error: "statut inconnu : " + cur });
     if (i >= STAGE_ORDER.length - 1) return res.json({ ok: false, done: true, message: "déjà à la dernière étape" });
     const next = STAGE_ORDER[i + 1];
+    const nm = title(pg.properties?.["Nom"]) || String(req.body?.name || "") || null;
     await notion.pages.update({ page_id: req.params.id, properties: { "Statut": { select: { name: next } } } });
     CACHE = { at: 0, rows: [] }; // force le rafraîchissement des collabs
-    logActivity({ type: "etape", creator: title(pg.properties?.["Nom"]) || null, cp: req.user.name, extra: STAGE_LABEL[next] });
+    logActivity({ type: "etape", creator: nm, cp: req.user.name, extra: STAGE_LABEL[next] });
+    recordHistory(req.params.id, { name: nm, brand: String(req.body?.brand || ""), url: pg.url }, { by: req.user.name, action: "etape", detail: STAGE_LABEL[next] });
     res.json({ ok: true, from: cur, to: next, toLabel: STAGE_LABEL[next], last: (i + 1) >= STAGE_ORDER.length - 1 });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -721,6 +725,29 @@ const BRIEF_STORE = path.join(DATA_DIR, "briefs.json");
 function loadBriefs() { try { return JSON.parse(fs.readFileSync(BRIEF_STORE, "utf8")); } catch (e) { return []; } }
 function saveBriefs(a) { try { fs.writeFileSync(BRIEF_STORE, JSON.stringify(a)); } catch (e) {} }
 function recordBrief(rec) { const a = loadBriefs(); a.push(rec); saveBriefs(a.slice(-500)); }
+// --- Historique / traçabilité par collab (étapes + assignations) ---------
+const HISTORY_STORE = path.join(DATA_DIR, "history.json");
+function loadHistory() { try { return JSON.parse(fs.readFileSync(HISTORY_STORE, "utf8")); } catch (e) { return {}; } }
+function saveHistory(h) { try { fs.writeFileSync(HISTORY_STORE, JSON.stringify(h)); } catch (e) {} }
+function recordHistory(pageId, meta, event) {
+  if (!pageId) return;
+  try {
+    const h = loadHistory();
+    const rec = h[pageId] || { events: [] };
+    if (meta) { if (meta.name) rec.name = meta.name; if (meta.brand) rec.brand = meta.brand; if (meta.url) rec.url = meta.url; }
+    rec.events = (rec.events || []).concat([{ at: Date.now(), ...event }]).slice(-100);
+    h[pageId] = rec; saveHistory(h);
+  } catch (e) {}
+}
+app.get("/api/history", auth, (req, res) => {
+  const h = loadHistory();
+  const out = Object.entries(h).map(([pageId, rec]) => ({
+    pageId, name: rec.name || "", brand: rec.brand || "", url: rec.url || "",
+    events: (rec.events || []).slice().sort((a, b) => b.at - a.at),
+  }));
+  out.sort((a, b) => (b.events[0] ? b.events[0].at : 0) - (a.events[0] ? a.events[0].at : 0));
+  res.json({ history: out });
+});
 // Mail de demande de stats/bilan (J+5 après publication)
 function genStatsFR(brand, name, cp) {
   return `Hello ${name} ✨\n\nMerci encore pour ta superbe collab avec ${brand} ! 🤍\n\nPour clôturer la campagne côté marque, est-ce que tu pourrais m'envoyer les statistiques de tes contenus : vues, portée/impressions, likes, partages, enregistrements, et les captures des stories ?\n\nUn petit screenshot de chaque contenu suffit largement. Ça nous permet de faire le bilan avec ${brand}.\n\nMerci d'avance et à très vite,\n${cp}`;
