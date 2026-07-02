@@ -168,6 +168,9 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .todolink:hover{border-bottom-color:var(--teal)}
 .draftbanner{display:block;background:#FBEFD9;color:#9A6B12;border:1px solid #F0E0C0;border-radius:11px;padding:12px 16px;margin-bottom:18px;font-weight:600;font-size:13.5px;text-decoration:none}
 .draftbanner:hover{background:#F6E6C8}
+.draftbanner{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.bannerclose{border:none;background:none;color:#9A6B12;font-size:15px;font-weight:700;cursor:pointer;padding:2px 6px;border-radius:6px;line-height:1}
+.bannerclose:hover{background:#F0E0C0}
 .calbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px}
 .calbar .lab{font-size:12px;color:var(--gray);font-weight:600}
 .calbar a{font-size:12.5px;font-weight:600;color:var(--navy);background:var(--bg);border:1px solid #CFDADA;border-radius:8px;padding:7px 12px;text-decoration:none}
@@ -1014,9 +1017,14 @@ async function loadDrafts(){
     NOTIF.drafts=(d&&d.count)||0;
     NOTIF.draftItems=NOTIF.drafts>0?[{icon:'📧',text:NOTIF.drafts+' brouillon'+(NOTIF.drafts>1?'s':'')+' à valider',sub:'relire et envoyer depuis Gmail',url:'https://mail.google.com/mail/u/0/#drafts'}]:[];
     updateBell();
-    if(d&&d.count>0){
-      $('draftbanner').textContent='📧 '+d.count+' brouillon'+(d.count>1?'s':'')+' à valider, clique pour les relire et les envoyer depuis Gmail';
-      show($('draftbanner'),true);
+    // bandeau fermable : la croix le masque, il revient si le nombre de brouillons change
+    let dismissed=false; try{ dismissed=localStorage.getItem('hc_draftdismiss')===String(d&&d.count); }catch(e){}
+    if(d&&d.count>0&&!dismissed){
+      const b=$('draftbanner');
+      b.innerHTML='<span>📧 '+d.count+' brouillon'+(d.count>1?'s':'')+' à valider, clique pour les relire et les envoyer depuis Gmail</span><button class="bannerclose" title="Masquer ce bandeau">✕</button>';
+      const x=b.querySelector('.bannerclose');
+      if(x)x.onclick=(ev)=>{ ev.preventDefault(); ev.stopPropagation(); try{ localStorage.setItem('hc_draftdismiss',String(d.count)); }catch(e){} show(b,false); };
+      show(b,true);
     } else show($('draftbanner'),false);
   }catch(e){show($('draftbanner'),false);}
 }
