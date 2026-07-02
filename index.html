@@ -1090,7 +1090,9 @@ async function checkSignature(){
 }
 function emailFromHeader(from){ const m=String(from||'').match(/<([^>]+)>/); return m?m[1]:(String(from||'').includes('@')?String(from).trim():''); }
 function genReplyFR(category, creator){
-  const cp=mailAs()||(VIEWER&&VIEWER.name)||''; const c=creator||'toi';
+  const cp=mailAs()||(VIEWER&&VIEWER.name)||'';
+  // prénom seul, jamais le nom complet / pseudo (« Juliette », pas « Juliette DTR »)
+  const c=(String(creator||'').trim().replace(/^@/,'').split(/[\s|·@\/(_-]+/).filter(Boolean)[0])||'toi';
   const T={
     'preview':`Hello ${c} ✨\n\nMerci pour la preview, c'est top ! 🙌\n[ À compléter : valider tel quel / petits ajustements → … ]\n\nDès que c'est bon de ton côté, tu peux publier 🤍\n\n${cp}`,
     'logistique':`Hello ${c} ✨\n\nParfait, merci pour ton adresse ! On t'envoie le colis 📦 (réception sous 3-5 jours ouvrés).\nJe reviens vers toi pour caler les dates de mise en ligne.\n\nÀ très vite,\n${cp}`,
@@ -1316,6 +1318,7 @@ function openMsgPanel(rowEl, opts){
 }
 function genBriefFR(brand, name){
   const cp=(VIEWER&&VIEWER.name)||'';
+  name=(String(name||'').trim().replace(/^@/,'').split(/[\s|·@\/(_-]+/).filter(Boolean)[0])||name; // prénom seul
   return `Hello ${name} ✨\n\nSuper contente de lancer ta collab avec ${brand} ! 🎉\nTu trouveras en pièce jointe le brief complet (livrables, deadlines, do & don't, hashtags et mentions).\n\nEn résumé :\n• Livrables : [à compléter]\n• Date de mise en ligne : [à compléter]\n• Mentions : @${brand} + #partenariat\n\nOn valide ensemble la preview avant publication, et n'hésite pas si tu as la moindre question avant de tourner 🤍\n\nBelle journée,\n${cp}`;
 }
 function openBrief(btn){

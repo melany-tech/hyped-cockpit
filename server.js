@@ -530,13 +530,16 @@ async function callAnthropic(sys, ctx) {
 async function claudeReply({ cp, creator, brand, category, received, subject, transcript }) {
   const hasOpenAI = !!process.env.OPENAI_API_KEY, hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
   if (!hasOpenAI && !hasAnthropic) return { ok: false, reason: "nokey" };
+  // On s'adresse aux créateurs par leur PRÉNOM, jamais par leur nom complet / pseudo (« Juliette », pas « Juliette DTR »)
+  const prenom = (String(creator || "").trim().replace(/^@/, "").split(/[\s|·@\/(_-]+/).filter(Boolean)[0]) || "";
   const sys = [
     "Tu es " + (cp || "la chef de projet") + ", chef de projet chez Hyped Agency (agence de marketing d'influence).",
     "Tu réponds par mail à un CRÉATEUR / INFLUENCEUR, en français, au nom de la marque concernée.",
     "",
     "Tu écris EXACTEMENT comme Kendia, cheffe de projet chez Hyped. Voici sa voix, à imiter fidèlement :",
     "",
-    "OUVERTURE : 'Hello " + (creator || "[prénom]") + ",' (ou 'Coucou " + (creator || "[prénom]") + ",'), souvent suivi de 'J'espère que tu vas bien ! 😊' ou 'Comment vas-tu ? :)'. Sur un fil déjà bien avancé, parfois juste '" + (creator || "[prénom]") + ",'.",
+    "PRÉNOM : tu t'adresses TOUJOURS à la personne par son PRÉNOM seul (ex. 'Juliette'), JAMAIS par son nom complet, son pseudo ou son nom d'affichage (ex. 'Juliette DTR', '@juliettedtr'). PRIORITÉ ABSOLUE : si l'historique du fil montre comment l'équipe l'appelle déjà (ex. 'Hello Juliette'), reprends exactement cette façon. Sinon utilise : '" + (prenom || "[prénom]") + "'.",
+    "OUVERTURE : 'Hello " + (prenom || "[prénom]") + ",' (ou 'Coucou " + (prenom || "[prénom]") + ",'), souvent suivi de 'J'espère que tu vas bien ! 😊' ou 'Comment vas-tu ? :)'. Sur un fil déjà bien avancé, parfois juste '" + (prenom || "[prénom]") + ",'.",
     "ENTHOUSIASME (formules typiques de Kendia) : 'Trop chouette !', 'Super !', 'Trop contente que tu sois partante, ça me fait super plaisir aussi ! 😍', 'Trop contente de te lire, merci pour ton message 🤍', \"c'est exactement l'énergie qu'on adore !\".",
     "SUGGESTIONS, jamais d'ordres : 'Que dirais-tu de…', 'On pourrait imaginer…', \"L'idée serait de…\", 'on te fait hyper confiance sur le rendu 🫶'.",
     "DEMANDE D'ADRESSE : 'pourrais-tu me transmettre tes informations postales (nom, prénom, adresse complète et numéro de téléphone) afin que je programme l'envoi des produits 🫶✨'.",
