@@ -1048,14 +1048,9 @@ async function cancelScheduled(btn){
   loadScheduled();
 }
 async function loadActivity(){
-  try{
-    const r=await api('/api/activity'+tparam());const d=await r.json();
-    const list=(d&&d.activity)||[];
-    if(!list.length){show($('activitybar'),false);return;}
-    show($('activitybar'),true);
-    const item=(e)=>{ const m=ACT_META[e.type]||{ic:'•',lbl:e.type}; const sub=[e.creator,e.brand].filter(Boolean).join(' · '); return `<div class="actitem"><span class="actic">${m.ic}</span><div class="acttx"><div class="actt">${esc(m.lbl)}</div><div class="acts">${esc(sub)}</div></div><span class="acttime">${timeAgo(e.at)}</span></div>`; };
-    $('activitybar').innerHTML='<span class="acthd">⚡ Dernières activités</span>'+list.slice(0,6).map(item).join('');
-  }catch(e){show($('activitybar'),false);}
+  // Footer « Dernières activités » retiré (retour Mélany 07/2026) : peu utile à l'écran.
+  // Les activités restent tracées côté serveur (activity.json) et la traçabilité vit dans l'Historique 📜.
+  show($('activitybar'),false);
 }
 function esc(s){return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function mailAs(){
