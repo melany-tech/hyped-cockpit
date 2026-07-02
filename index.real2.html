@@ -76,6 +76,8 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px}
 .owner{font-size:11px;color:var(--teal);font-weight:600;background:#EAF3F1;padding:2px 9px;border-radius:10px;white-space:nowrap}
 .owner.none{color:#8A8780;background:#EFF1F1;font-weight:500}
 .row a{font-size:12.5px;font-weight:600;color:var(--navy);background:var(--bg);text-decoration:none;border:1px solid #CFDADA;border-radius:8px;padding:7px 12px;white-space:nowrap}
+/* Boutons d'action des lignes : tous à la même taille (Répondre / Traité / Rouvrir / Ouvrir…) */
+.row .lk,.row a{font-size:13px;font-weight:600;padding:9px 14px;border-radius:10px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;line-height:1}
 .row a:hover{background:var(--soft)}
 .chip{background:#EAF3F1;color:var(--teal);font-weight:600;font-size:12px;padding:6px 14px;border-radius:20px;white-space:nowrap;height:fit-content}
 .state{padding:40px 10px;text-align:center;color:var(--gray);font-size:14px}
@@ -329,7 +331,12 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 /* page Calendrier */
 .calwrap{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;align-items:start}
 .calmonth{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:16px}
-.cmtitle{font-size:14px;font-weight:700;color:var(--navy);text-transform:capitalize;margin-bottom:12px}
+.cmtitle{font-size:14px;font-weight:700;color:var(--navy);text-transform:capitalize;margin-bottom:12px;display:flex;align-items:center;gap:10px}
+.cmnav{border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:8px;min-width:28px;height:28px;font-size:16px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0 8px}
+.cmnav:hover{border-color:var(--teal);color:var(--teal)}
+.cmnav.cmtoday{font-size:11px;font-weight:600;text-transform:none}
+.cmcell.clk{cursor:pointer;transition:box-shadow .12s}
+.cmcell.clk:hover{box-shadow:0 0 0 2px var(--teal) inset}
 .cmgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
 .cmwd{font-size:10px;font-weight:700;color:#9aa6a8;text-align:center;padding-bottom:4px}
 .cmcell{position:relative;aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:9px;font-size:13px;color:var(--navy);font-weight:600;background:var(--soft)}
@@ -729,29 +736,35 @@ function drawHist(q){
   }).join('');
 }
 let CAL_EVENTS=[], CAL_VIEWING=null;
-let CAL_SELDAY=null; // jour sélectionné dans le calendrier (retour de Rozenn : cases cliquables)
+let CAL_SELDAY=null, CAL_OFF=0; // jour sélectionné + décalage de mois affiché (0 = mois courant)
 function renderCalendrier(){
-  const now=new Date(), y=now.getFullYear(), m=now.getMonth(), today=now.getDate();
+  const now=new Date();
+  const base=new Date(now.getFullYear(), now.getMonth()+CAL_OFF, 1);
+  const y=base.getFullYear(), m=base.getMonth();
+  const today=(CAL_OFF===0)?now.getDate():-1;
   const start=(new Date(y,m,1).getDay()+6)%7, days=new Date(y,m+1,0).getDate();
   const byDay={};
   (ROWS||[]).forEach(r=>{ if(!r.date)return; const d=new Date(r.date); if(d.getFullYear()===y&&d.getMonth()===m){ const dd=d.getDate(); (byDay[dd]=byDay[dd]||[]).push(r); } });
   const wd=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(w=>`<span class="cmwd">${w}</span>`).join('');
   let cells=''; for(let i=0;i<start;i++)cells+='<span class="cmcell em"></span>';
-  for(let d=1;d<=days;d++){ const n=(byDay[d]||[]).length; cells+=`<span class="cmcell${d===today?' tod':''}${n?' has':''}${d===CAL_SELDAY?' sel':''}"${n?` data-d="${d}" title="${n} collab(s) prévue(s), clique pour voir"`:''}><span class="cmn">${d}</span>${n?`<span class="cmdot">${n}</span>`:''}</span>`; }
-  const monthName=now.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+  for(let d=1;d<=days;d++){ const n=(byDay[d]||[]).length; cells+=`<span class="cmcell clk${d===today?' tod':''}${n?' has':''}${d===CAL_SELDAY?' sel':''}" data-d="${d}" title="${n?(n+' collab(s) prévue(s) ce jour'):'aucune collab prévue ce jour'}"><span class="cmn">${d}</span>${n?`<span class="cmdot">${n}</span>`:''}</span>`; }
+  const monthName=base.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
   const todayISO=now.toISOString().slice(0,10);
   const up=(ROWS||[]).filter(r=>r.date&&r.date.slice(0,10)>=todayISO).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,25);
   const rowHtml=(r)=>`<div class="row"><span class="rdot" style="background:${r.color||'#7A5AA8'}"></span><div class="info"><div class="t">${esc(r.name)}</div><div class="s">${esc(r.label||'')}${r.brand?(' · '+esc(r.brand)):''}</div></div>${r.cp&&(VIEWER&&(VIEWER.role==='supervisor'||teamOn()))?`<span class="owner">${esc(r.cp)}</span>`:''}${r.url?`<a class="lk" href="${esc(r.url)}" target="_blank" rel="noopener">Ouvrir</a>`:`<span class="brand">${fmtDate(r.date)}</span>`}</div>`;
   let selHtml='';
-  if(CAL_SELDAY&&byDay[CAL_SELDAY]){
+  if(CAL_SELDAY){
     const lbl=new Date(y,m,CAL_SELDAY).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
-    selHtml=`<div class="calsub">🗓 ${esc(lbl.charAt(0).toUpperCase()+lbl.slice(1))} · ${byDay[CAL_SELDAY].length} collab(s) <button class="lk" id="calselclose">fermer ✕</button></div>`+byDay[CAL_SELDAY].map(rowHtml).join('');
+    const list=byDay[CAL_SELDAY]||[];
+    selHtml=`<div class="calsub">🗓 ${esc(lbl.charAt(0).toUpperCase()+lbl.slice(1))} · ${list.length} collab(s) <button class="lk" id="calselclose">fermer ✕</button></div>`+(list.length?list.map(rowHtml).join(''):'<div class="state2">Aucune collab prévue ce jour-là. 🍃</div>');
   }
   let evHtml='';
   if(CAL_EVENTS&&CAL_EVENTS.length){ evHtml='<div class="calsub">📹 Visios aujourd’hui'+(CAL_VIEWING?(' · '+esc(CAL_VIEWING)):'')+'</div>'+CAL_EVENTS.map(e=>`<div class="row"><span class="rdot" style="background:${e.meet?'#2C9087':'#7A5AA8'}"></span><div class="info"><div class="t">${esc(e.title)}</div><div class="s">${e.allDay?'journée':fmtTime(e.start)}</div></div>${e.meet?'<span class="brand" style="color:#0F6E56;background:#E4F1ED">Meet</span>':''}</div>`).join(''); }
   const upHtml = up.length? up.map(rowHtml).join('') : '<div class="state2">Aucune échéance à venir dans les calendriers clients.</div>';
-  $('calendrierbox').innerHTML=`<div class="calwrap"><div class="calmonth"><div class="cmtitle">${monthName}</div><div class="cmgrid">${wd}${cells}</div><div class="cmlegend"><span class="cmdot" style="position:static;display:inline-flex">n</span> = collabs prévues ce jour · clique une case pour le détail</div></div><div class="callist">${selHtml}${evHtml}<div class="calsub">📅 Prochaines échéances</div>${upHtml}</div></div>`;
-  document.querySelectorAll('#calendrierbox .cmcell.has').forEach(c=>c.onclick=()=>{ const d=Number(c.dataset.d); CAL_SELDAY=(CAL_SELDAY===d)?null:d; renderCalendrier(); });
+  $('calendrierbox').innerHTML=`<div class="calwrap"><div class="calmonth"><div class="cmtitle"><button class="cmnav" id="calprev" title="Mois précédent">‹</button><span class="cmtname">${monthName}</span><button class="cmnav" id="calnext" title="Mois suivant">›</button>${CAL_OFF!==0?'<button class="cmnav cmtoday" id="caltoday">aujourd\'hui</button>':''}</div><div class="cmgrid">${wd}${cells}</div><div class="cmlegend"><span class="cmdot" style="position:static;display:inline-flex">n</span> = collabs prévues ce jour · clique un jour pour le détail</div></div><div class="callist">${selHtml}${evHtml}<div class="calsub">📅 Prochaines échéances</div>${upHtml}</div></div>`;
+  document.querySelectorAll('#calendrierbox .cmcell.clk').forEach(c=>c.onclick=()=>{ const d=Number(c.dataset.d); CAL_SELDAY=(CAL_SELDAY===d)?null:d; renderCalendrier(); });
+  const nav=(id,fn)=>{ const b=$(id); if(b)b.onclick=()=>{ fn(); CAL_SELDAY=null; renderCalendrier(); }; };
+  nav('calprev',()=>CAL_OFF--); nav('calnext',()=>CAL_OFF++); nav('caltoday',()=>CAL_OFF=0);
   const cc=$('calselclose'); if(cc)cc.onclick=()=>{ CAL_SELDAY=null; renderCalendrier(); };
 }
 function applySearch(q){
