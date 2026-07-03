@@ -947,7 +947,10 @@ function copilotCpName(email) { const u = USERS.find((x) => String(x.email).toLo
 function mailAddr(from) { const m = String(from || "").match(/<([^>]+)>/); return m ? m[1].trim() : (String(from || "").includes("@") ? String(from).trim() : ""); }
 async function copilotNotify(payload) {
   if (!COPILOT.webhook) return;
-  try { await fetch(COPILOT.webhook, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) }); }
+  try {
+    const r = await fetch(COPILOT.webhook, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+    try { console.log("[copilot] notif Slack →", payload.slackUser, ": HTTP", r.status); } catch (e2) {}
+  }
   catch (e) { try { console.error("[copilot] notif Make échouée :", e.message); } catch (e2) {} }
 }
 // Classe le mail : décision (accord CP requis) ou routine. En cas de doute ou d'IA muette : décision.
@@ -1016,8 +1019,9 @@ async function copilotTick() {
     const seen = new Set(store.proposals.map((p) => p.cpEmail + "|" + p.msgId));
     let collabs = []; try { collabs = await fetchRows(); } catch (e) {}
     for (const email of COPILOT.cps) {
-      if (!gm.isConnected(email)) continue;
-      let r; try { r = await gm.analyzeFor(email, collabs); } catch (e) { continue; }
+      if (!gm.isConnected(email)) { try { console.log("[copilot]", email, ": Gmail NON connecté, boîte sautée"); } catch (e) {} continue; }
+      let r; try { r = await gm.analyzeFor(email, collabs); } catch (e) { try { console.error("[copilot]", email, ": analyse échouée :", e.message); } catch (e2) {} continue; }
+      try { console.log("[copilot]", email, ":", ((r && r.creatorReplies) || []).length, "réponse(s) créateur,", ((r && r.teamMails) || []).length, "interne(s), total", (r && r.total) || 0, "mails"); } catch (e) {}
       const tt = treatedFor(email);
       for (const m of (r && r.creatorReplies) || []) {
         if (!m.threadId || tt[m.threadId]) continue;               // déjà traité
@@ -1082,6 +1086,14 @@ if (COPILOT.enabled) {
 function copilotPage(title, msg) {
   return "<!doctype html><html lang=\"fr\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>" + title + " · Cockpit</title><style>body{font-family:Montserrat,system-ui,sans-serif;background:#F5F3EE;color:#1C3A44;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}div{background:#fff;border:1px solid #E4E0D5;border-radius:16px;padding:34px 38px;max-width:460px;text-align:center;box-shadow:0 8px 30px rgba(28,58,68,.06)}h1{font-size:20px;margin:0 0 10px}p{font-size:14px;color:#56666D;margin:0}</style></head><body><div><h1>" + title + "</h1><p>" + msg + "</p></div></body></html>";
 }
+// Déclenche un passage du copilote à la demande (debug), protégé par le secret
+app.get("/copilot/tick", async (req, res) => {
+  if (!COPILOT.enabled) return res.status(400).json({ error: "copilote désactivé" });
+  if (String(req.query.s || "") !== COPILOT.secret) return res.status(403).json({ error: "secret invalide" });
+  await copilotTick();
+  const s = loadCopilot();
+  res.json({ ok: true, dernieres: (s.proposals || []).slice(-10).map((p) => ({ cp: p.cpEmail, de: p.creator, categorie: p.categorie, statut: p.status, quand: new Date(p.at).toLocaleString("fr-FR") })) });
+});
 app.get("/copilot/act", async (req, res) => {
   const { id, action, sig } = req.query || {};
   const ok = id && action && sig && COPILOT.secret && sig === copilotSign(String(id), String(action));
