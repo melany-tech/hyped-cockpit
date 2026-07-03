@@ -107,20 +107,23 @@ function analyzeMailbox(emails, collabs, brandProducts = {}) {
   const kw = buildBrandKeywords(collabs, brandProducts);
   const byBrand = {};
   const creatorReplies = [];
+  const teamMails = []; // mails internes reçus d'un membre @hyped-agency.fr (pour le copilote, si activé)
   let noise = 0, offTopic = 0;
   for (const e of emails || []) {
     const r = classifyEmail(e, kw);
     if (r.isNoise) { noise++; continue; }
-    if (!r.brand) { offTopic++; continue; }
+    const team = isFromTeam(e);
+    if (team) teamMails.push({ ...e, ...r, interne: true });
+    if (!r.brand) { if (!team) offTopic++; continue; }
     (byBrand[r.brand] ||= []).push({ ...e, ...r });
     // réponse créateur = un mail REÇU d'un créateur (donc PAS d'un @hyped-agency.fr)
-    if (r.isReply && !isFromTeam(e)) creatorReplies.push({ ...e, ...r });
+    if (r.isReply && !team) creatorReplies.push({ ...e, ...r });
   }
   return {
     total: (emails || []).length,
     noise, offTopic,
     relevant: Object.values(byBrand).reduce((n, a) => n + a.length, 0),
-    byBrand, creatorReplies,
+    byBrand, creatorReplies, teamMails,
   };
 }
 

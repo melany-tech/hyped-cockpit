@@ -937,6 +937,7 @@ const COPILOT = {
   cps: String(process.env.COPILOT_CPS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean),
   slackIds: (() => { try { return JSON.parse(process.env.COPILOT_SLACK_IDS || "{}"); } catch (e) { return {}; } })(),
   publicUrl: (process.env.PUBLIC_URL || "https://hyped-cockpit.onrender.com").replace(/\/$/, ""),
+  includeTeam: process.env.COPILOT_INCLUDE_TEAM === "1", // notifier aussi les mails internes @hyped-agency.fr
 };
 function loadCopilot() { try { return JSON.parse(fs.readFileSync(COPILOT_STORE, "utf8")); } catch (e) { return { proposals: [] }; } }
 function saveCopilot(o) { try { fs.writeFileSync(COPILOT_STORE, JSON.stringify(o)); } catch (e) {} }
@@ -971,9 +972,28 @@ async function copilotClassify({ creator, subject, received, transcript }) {
   } catch (e) {}
   return fallback;
 }
+// Réponse proposée pour un mail INTERNE (ton collègue, pas la voix créateurs)
+async function copilotInternalReply({ cp, fromName, subject, received, transcript }) {
+  const hasOpenAI = !!process.env.OPENAI_API_KEY, hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
+  if (!hasOpenAI && !hasAnthropic) return { ok: false, reason: "nokey" };
+  const sys = [
+    "Tu es " + (cp || "une cheffe de projet") + ", de l'agence Hyped Agency. Tu réponds par mail à " + (fromName || "un collègue de l'agence") + " (mail INTERNE, entre collègues).",
+    "Ton : chaleureux, direct, professionnel, tutoiement, français. Court (2 à 6 phrases). Un emoji léger max.",
+    "Réponds VRAIMENT au contenu du message : réponds aux questions posées, confirme ce qui doit l'être, dis clairement si quelque chose sera fait.",
+    "Ne signe que par le prénom : " + (cp || "") + ". Jamais de tiret quadratin.",
+  ].join("\n");
+  const ctx = "Sujet : " + (subject || "") + "\n\n" + (transcript ? ("Fil :\n" + String(transcript).slice(0, 5000) + "\n\n") : "") + "Dernier message reçu :\n\"\"\"\n" + String(received || "").slice(0, 3000) + "\n\"\"\"\n\nRédige la réponse.";
+  return hasOpenAI ? callOpenAI(sys, ctx) : callAnthropic(sys, ctx);
+}
 function copilotSlackText(p) {
   const who = p.creator || "un créateur";
   const brand = p.brand ? (" · " + p.brand) : "";
+  if (p.categorie === "interne") {
+    return "📨 Interne · *" + (p.creator || p.to || "quelqu'un de l'équipe") + "* → boîte " + p.cpName + " : " + (p.subject || "(sans objet)")
+      + (p.resume ? ("\n_" + p.resume + "_") : "")
+      + (p.reply ? ("\n\n_Réponse proposée :_\n>>> " + String(p.reply).slice(0, 900)) : "")
+      + "\n\n" + (p.reply ? ("<" + copilotLink(p.id, "send") + "|📤 Envoyer>  ·  ") : "") + "<" + copilotLink(p.id, "self") + "|✍️ Je gère dans le cockpit>";
+  }
   if (p.status === "ready") {
     return "✍️ Réponse prête pour *" + who + "*" + brand + " (suite à ta décision : " + (p.decision === "accept" ? "oui ✅" : "non ❌") + ")\n\n>>> " + String(p.reply || "").slice(0, 900)
       + "\n\n<" + copilotLink(p.id, "send") + "|📤 Envoyer tel quel>  ·  <" + copilotLink(p.id, "self") + "|✍️ Je gère dans le cockpit>";
@@ -1020,6 +1040,32 @@ async function copilotTick() {
         seen.add(email + "|" + p.msgId);
         const slackUser = COPILOT.slackIds[email] || "";
         if (slackUser) await copilotNotify({ slackUser, text: "<@" + slackUser + "> " + copilotSlackText(p) }); // mention = vraie notification
+      }
+      // Mails internes (si COPILOT_INCLUDE_TEAM=1) : on voit tout, on peut répondre en un clic
+      if (COPILOT.includeTeam) {
+        for (const m of (r && r.teamMails) || []) {
+          if (!m.threadId || tt[m.threadId]) continue;
+          if (seen.has(email + "|" + (m.id || m.threadId))) continue;
+          const fromAddr = mailAddr(m.from);
+          if (fromAddr.toLowerCase() === email) continue; // ses propres mails, non merci
+          let transcript = "";
+          try { const full = await gm.fetchThreadText(email, m.threadId); if (full && full.ok) transcript = full.transcript || full.text || ""; } catch (e) {}
+          const fromName = String(m.from || "").replace(/<[^>]*>/, "").trim() || fromAddr;
+          const rep = await copilotInternalReply({ cp: copilotCpName(email), fromName, subject: m.subject, received: m.snippet, transcript });
+          const p = {
+            id: crypto.randomBytes(8).toString("hex"),
+            cpEmail: email, cpName: copilotCpName(email),
+            msgId: m.id || m.threadId, threadId: m.threadId,
+            to: fromAddr, creator: fromName, brand: m.brand || "", subject: m.subject || "",
+            categorie: "interne", resume: String(m.snippet || "").slice(0, 200), question: "",
+            reply: rep && rep.ok ? rep.body : "",
+            status: "pending", at: Date.now(),
+          };
+          store.proposals.push(p);
+          seen.add(email + "|" + p.msgId);
+          const slackUser = COPILOT.slackIds[email] || "";
+          if (slackUser) await copilotNotify({ slackUser, text: "<@" + slackUser + "> " + copilotSlackText(p) });
+        }
       }
     }
     store.proposals = store.proposals.slice(-300);
