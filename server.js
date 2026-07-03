@@ -946,10 +946,25 @@ function copilotLink(id, action) { return COPILOT.publicUrl + "/copilot/act?id="
 function copilotCpName(email) { const u = USERS.find((x) => String(x.email).toLowerCase() === email); return u ? u.name : email.split("@")[0]; }
 function mailAddr(from) { const m = String(from || "").match(/<([^>]+)>/); return m ? m[1].trim() : (String(from || "").includes("@") ? String(from).trim() : ""); }
 async function copilotNotify(payload) {
+  // Trajet direct cockpit -> Slack (0 crédit Make) si SLACK_BOT_TOKEN est configuré ; sinon via le webhook Make.
+  const botToken = process.env.SLACK_BOT_TOKEN || "";
+  if (botToken) {
+    try {
+      const r = await fetch("https://slack.com/api/chat.postMessage", {
+        method: "POST",
+        headers: { "content-type": "application/json; charset=utf-8", "authorization": "Bearer " + botToken },
+        body: JSON.stringify({ channel: payload.slackUser, text: payload.text }),
+      });
+      const d = await r.json().catch(() => ({}));
+      try { console.log("[copilot] notif Slack directe →", payload.slackUser, ":", d.ok ? "ok" : ("échec " + (d.error || r.status))); } catch (e2) {}
+      if (d.ok) return;
+      // en cas d'échec du direct, on retombe sur Make ci-dessous
+    } catch (e) { try { console.error("[copilot] Slack direct échoué :", e.message); } catch (e2) {} }
+  }
   if (!COPILOT.webhook) return;
   try {
     const r = await fetch(COPILOT.webhook, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
-    try { console.log("[copilot] notif Slack →", payload.slackUser, ": HTTP", r.status); } catch (e2) {}
+    try { console.log("[copilot] notif Slack via Make →", payload.slackUser, ": HTTP", r.status); } catch (e2) {}
   }
   catch (e) { try { console.error("[copilot] notif Make échouée :", e.message); } catch (e2) {} }
 }
