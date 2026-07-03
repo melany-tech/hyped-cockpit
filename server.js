@@ -1116,7 +1116,7 @@ app.get("/copilot/act", async (req, res) => {
   const store = loadCopilot(); store.proposals = store.proposals || [];
   const p = store.proposals.find((x) => x.id === id);
   if (!p) return res.status(404).send(copilotPage("Introuvable", "Cette proposition n'existe plus (elle a peut-être expiré)."));
-  if (p.status === "sent") return res.send(copilotPage("Déjà envoyé ✅", "Cette réponse est déjà partie chez " + (p.creator || "le créateur") + "."));
+  if (p.status === "sent") return res.send(copilotPage("C'est fait ! ✅", "La réponse à " + (p.creator || "ce créateur") + " est bien partie. Rien n'a été envoyé en double, tout est ok. Tu peux fermer cette page."));
   if (p.status === "self" && action !== "send") return res.send(copilotPage("C'est toi qui gères ✍️", "Ce mail t'attend dans le cockpit, onglet Messages."));
   try {
     if (action === "send") {
@@ -1127,7 +1127,7 @@ app.get("/copilot/act", async (req, res) => {
       markTreated(p.cpEmail, p.threadId, { by: p.cpName + " (copilote)", action: "répondu" });
       logActivity({ type: "email", creator: p.to, cp: p.cpName });
       p.status = "sent"; p.decidedAt = Date.now(); saveCopilot(store);
-      return res.send(copilotPage("Envoyé ✅", "La réponse est partie chez " + (p.creator || p.to) + ". Le mail est marqué traité dans le cockpit."));
+      return res.send(copilotPage("C'est fait ! 🎉", "La réponse est partie chez " + (p.creator || p.to) + ", depuis la boîte de " + p.cpName + ", signature comprise. Le mail est marqué traité dans le cockpit. Tu peux fermer cette page."));
     }
     if (action === "accept" || action === "refuse") {
       const directive = action === "accept"
