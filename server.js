@@ -10,6 +10,7 @@ const express = require("express");
 const cookieParser = require("cookie-parser");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto"); // signatures des liens d'action du copilote
 const gm = require("./gmail-oauth"); // connexion Gmail par personne (inerte si Google non configuré)
 
 const PORT = process.env.PORT || 3000;
@@ -527,7 +528,7 @@ async function callAnthropic(sys, ctx) {
     return text ? { ok: true, body: text, via: "anthropic" } : { ok: false, reason: "empty" };
   } catch (e) { return { ok: false, reason: "exc", detail: String(e && e.message || e) }; }
 }
-async function claudeReply({ cp, creator, brand, category, received, subject, transcript }) {
+async function claudeReply({ cp, creator, brand, category, received, subject, transcript, directive }) {
   const hasOpenAI = !!process.env.OPENAI_API_KEY, hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
   if (!hasOpenAI && !hasAnthropic) return { ok: false, reason: "nokey" };
   // On s'adresse aux créateurs par leur PRÉNOM, jamais par leur nom complet / pseudo (« Juliette », pas « Juliette DTR »)
@@ -597,6 +598,7 @@ async function claudeReply({ cp, creator, brand, category, received, subject, tr
     (received || "").slice(0, 4000),
     "\"\"\"",
     "",
+    directive ? ("DIRECTIVE DE LA CHEFFE DE PROJET (décision prise, à appliquer absolument, avec tact et dans la voix Hyped) : " + directive) : "",
     "Rédige la réponse de " + (cp || "la CP") + ".",
   ].filter(Boolean).join("\n");
   // priorité au fournisseur explicite (REPLY_PROVIDER), sinon OpenAI si présent, sinon Anthropic
@@ -918,6 +920,163 @@ app.get("/api/brand/:name/doc/:id", auth, (req, res) => {
   const fp = path.join(BRAND_FILES_DIR, name.replace(/[^\w\-À-ſ ]+/g, "_"), doc.id + "_" + doc.filename);
   if (!fs.existsSync(fp)) return res.status(404).json({ error: "fichier disparu du disque" });
   res.download(fp, doc.filename);
+});
+// ===================== Copilote mails (humain dans la boucle) =====================
+// L'IA surveille les boîtes des CP activées, classe chaque réponse créateur
+// (routine vs décision), prépare une réponse dans la voix Hyped, et ping la
+// bonne personne sur Slack (via un webhook Make). RIEN ne part sans un clic :
+// les boutons Slack sont des liens signés (HMAC) vers /copilot/act.
+// Config (Render) : COPILOT_ENABLED=1, COPILOT_MAKE_WEBHOOK, COPILOT_SECRET,
+//   COPILOT_CPS="amena@hyped-agency.fr,kendia@hyped-agency.fr",
+//   COPILOT_SLACK_IDS='{"amena@hyped-agency.fr":"U09CHH6N6LX", ...}'  (boîte -> destinataire Slack)
+const COPILOT_STORE = path.join(DATA_DIR, "copilot.json");
+const COPILOT = {
+  enabled: process.env.COPILOT_ENABLED === "1" && !!process.env.COPILOT_MAKE_WEBHOOK && !!process.env.COPILOT_SECRET,
+  webhook: process.env.COPILOT_MAKE_WEBHOOK || "",
+  secret: process.env.COPILOT_SECRET || "",
+  cps: String(process.env.COPILOT_CPS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean),
+  slackIds: (() => { try { return JSON.parse(process.env.COPILOT_SLACK_IDS || "{}"); } catch (e) { return {}; } })(),
+  publicUrl: (process.env.PUBLIC_URL || "https://hyped-cockpit.onrender.com").replace(/\/$/, ""),
+};
+function loadCopilot() { try { return JSON.parse(fs.readFileSync(COPILOT_STORE, "utf8")); } catch (e) { return { proposals: [] }; } }
+function saveCopilot(o) { try { fs.writeFileSync(COPILOT_STORE, JSON.stringify(o)); } catch (e) {} }
+function copilotSign(id, action) { return crypto.createHmac("sha256", COPILOT.secret).update(id + "|" + action).digest("hex").slice(0, 32); }
+function copilotLink(id, action) { return COPILOT.publicUrl + "/copilot/act?id=" + encodeURIComponent(id) + "&action=" + action + "&sig=" + copilotSign(id, action); }
+function copilotCpName(email) { const u = USERS.find((x) => String(x.email).toLowerCase() === email); return u ? u.name : email.split("@")[0]; }
+function mailAddr(from) { const m = String(from || "").match(/<([^>]+)>/); return m ? m[1].trim() : (String(from || "").includes("@") ? String(from).trim() : ""); }
+async function copilotNotify(payload) {
+  if (!COPILOT.webhook) return;
+  try { await fetch(COPILOT.webhook, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) }); }
+  catch (e) { try { console.error("[copilot] notif Make échouée :", e.message); } catch (e2) {} }
+}
+// Classe le mail : décision (accord CP requis) ou routine. En cas de doute ou d'IA muette : décision.
+async function copilotClassify({ creator, subject, received, transcript }) {
+  const fallback = { categorie: "decision", resume: "Nouveau message de " + (creator || "un créateur"), question: "Nouveau message de " + (creator || "un créateur") + ", tu veux voir ?" };
+  const sys = [
+    "Tu tries les réponses des créateurs pour une agence d'influence. Réponds UNIQUEMENT un JSON valide :",
+    '{"categorie":"routine"|"decision","resume":"...","question":"..."}',
+    "\"decision\" = le créateur demande quelque chose qui nécessite l'accord de la cheffe de projet : décaler une date de publication, budget / tarif / rémunération, refus ou désaccord, retard de paiement, litige, demande inhabituelle.",
+    "\"routine\" = le reste : envoi d'adresse postale, remerciement, confirmation simple, question logistique basique.",
+    "resume = une phrase factuelle qui dit ce que le créateur demande ou annonce.",
+    "question = si decision, la question fermée à poser à la CP (ex. 'Vanina veut décaler son post du 9 au 15 juillet, on accepte ?'), sinon chaîne vide.",
+  ].join("\n");
+  const ctx = "Créateur : " + (creator || "?") + "\nSujet : " + (subject || "") + "\n\n" + (transcript ? ("Fil :\n" + String(transcript).slice(0, 5000)) : ("Message :\n" + String(received || "").slice(0, 3000)));
+  const hasOpenAI = !!process.env.OPENAI_API_KEY, hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
+  if (!hasOpenAI && !hasAnthropic) return fallback;
+  const out = hasOpenAI ? await callOpenAI(sys, ctx) : await callAnthropic(sys, ctx);
+  if (!out.ok) return fallback;
+  try {
+    const j = JSON.parse(String(out.body).replace(/^[^{]*/, "").replace(/[^}]*$/, ""));
+    if (j && (j.categorie === "routine" || j.categorie === "decision")) return { categorie: j.categorie, resume: String(j.resume || "").slice(0, 300) || fallback.resume, question: String(j.question || "").slice(0, 300) };
+  } catch (e) {}
+  return fallback;
+}
+function copilotSlackText(p) {
+  const who = p.creator || "un créateur";
+  const brand = p.brand ? (" · " + p.brand) : "";
+  if (p.status === "ready") {
+    return "✍️ Réponse prête pour *" + who + "*" + brand + " (suite à ta décision : " + (p.decision === "accept" ? "oui ✅" : "non ❌") + ")\n\n>>> " + String(p.reply || "").slice(0, 900)
+      + "\n\n<" + copilotLink(p.id, "send") + "|📤 Envoyer tel quel>  ·  <" + copilotLink(p.id, "self") + "|✍️ Je gère dans le cockpit>";
+  }
+  if (p.categorie === "decision") {
+    return "🔔 *" + (p.question || p.resume) + "*\n_(" + who + brand + " · boîte " + p.cpName + ")_\n\n"
+      + "<" + copilotLink(p.id, "accept") + "|✅ Oui>  ·  <" + copilotLink(p.id, "refuse") + "|❌ Non>  ·  <" + copilotLink(p.id, "self") + "|✍️ Je gère moi-même>"
+      + (p.reply ? "\n\n_Si oui, l'IA propose :_\n>>> " + String(p.reply).slice(0, 600) : "");
+  }
+  return "✉️ *" + who + "*" + brand + " : " + (p.resume || p.subject || "nouveau message") + "\n\n_Réponse prête (voix Hyped) :_\n>>> " + String(p.reply || "(IA indisponible, ouvre le cockpit)").slice(0, 900)
+    + "\n\n<" + copilotLink(p.id, "send") + "|📤 Envoyer>  ·  <" + copilotLink(p.id, "self") + "|✍️ Je gère dans le cockpit>";
+}
+let COPILOT_RUNNING = false;
+async function copilotTick() {
+  if (!COPILOT.enabled || !gm.ENABLED || COPILOT_RUNNING) return;
+  COPILOT_RUNNING = true;
+  try {
+    const store = loadCopilot();
+    store.proposals = store.proposals || [];
+    const seen = new Set(store.proposals.map((p) => p.cpEmail + "|" + p.msgId));
+    let collabs = []; try { collabs = await fetchRows(); } catch (e) {}
+    for (const email of COPILOT.cps) {
+      if (!gm.isConnected(email)) continue;
+      let r; try { r = await gm.analyzeFor(email, collabs); } catch (e) { continue; }
+      const tt = treatedFor(email);
+      for (const m of (r && r.creatorReplies) || []) {
+        if (!m.threadId || tt[m.threadId]) continue;               // déjà traité
+        if (seen.has(email + "|" + (m.id || m.threadId))) continue; // déjà proposé
+        let transcript = "";
+        try { const full = await gm.fetchThreadText(email, m.threadId); if (full && full.ok) transcript = full.transcript || full.text || ""; } catch (e) {}
+        const creator = m["créateur"] || "";
+        const cls = await copilotClassify({ creator, subject: m.subject, received: m.snippet, transcript });
+        const rep = await claudeReply({ cp: copilotCpName(email), creator, brand: m.brand, category: m.category, received: m.snippet, subject: m.subject, transcript });
+        const p = {
+          id: crypto.randomBytes(8).toString("hex"),
+          cpEmail: email, cpName: copilotCpName(email),
+          msgId: m.id || m.threadId, threadId: m.threadId,
+          to: mailAddr(m.from), creator, brand: m.brand || "", subject: m.subject || "",
+          categorie: cls.categorie, resume: cls.resume, question: cls.question,
+          reply: rep && rep.ok ? rep.body : "",
+          status: "pending", at: Date.now(),
+        };
+        store.proposals.push(p);
+        seen.add(email + "|" + p.msgId);
+        const slackUser = COPILOT.slackIds[email] || "";
+        if (slackUser) await copilotNotify({ slackUser, text: copilotSlackText(p) });
+      }
+    }
+    store.proposals = store.proposals.slice(-300);
+    saveCopilot(store);
+  } catch (e) { try { console.error("[copilot] tick :", e.message); } catch (e2) {} }
+  finally { COPILOT_RUNNING = false; }
+}
+if (COPILOT.enabled) {
+  setInterval(copilotTick, 5 * 60 * 1000);
+  setTimeout(copilotTick, 20 * 1000);
+  try { console.log("[copilot] actif pour :", COPILOT.cps.join(", ") || "(aucune boîte)"); } catch (e) {}
+}
+// Page de confirmation minimaliste (Montserrat, charte cockpit)
+function copilotPage(title, msg) {
+  return "<!doctype html><html lang=\"fr\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>" + title + " · Cockpit</title><style>body{font-family:Montserrat,system-ui,sans-serif;background:#F5F3EE;color:#1C3A44;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}div{background:#fff;border:1px solid #E4E0D5;border-radius:16px;padding:34px 38px;max-width:460px;text-align:center;box-shadow:0 8px 30px rgba(28,58,68,.06)}h1{font-size:20px;margin:0 0 10px}p{font-size:14px;color:#56666D;margin:0}</style></head><body><div><h1>" + title + "</h1><p>" + msg + "</p></div></body></html>";
+}
+app.get("/copilot/act", async (req, res) => {
+  const { id, action, sig } = req.query || {};
+  const ok = id && action && sig && COPILOT.secret && sig === copilotSign(String(id), String(action));
+  if (!ok) return res.status(403).send(copilotPage("Lien invalide 🤔", "Ce lien n'est pas valide ou a été modifié. Repasse par le message Slack."));
+  const store = loadCopilot(); store.proposals = store.proposals || [];
+  const p = store.proposals.find((x) => x.id === id);
+  if (!p) return res.status(404).send(copilotPage("Introuvable", "Cette proposition n'existe plus (elle a peut-être expiré)."));
+  if (p.status === "sent") return res.send(copilotPage("Déjà envoyé ✅", "Cette réponse est déjà partie chez " + (p.creator || "le créateur") + "."));
+  if (p.status === "self" && action !== "send") return res.send(copilotPage("C'est toi qui gères ✍️", "Ce mail t'attend dans le cockpit, onglet Messages."));
+  try {
+    if (action === "send") {
+      if (!p.reply) return res.send(copilotPage("Pas de réponse prête", "L'IA n'a pas pu rédiger. Ouvre le cockpit pour répondre."));
+      if (!p.to) return res.send(copilotPage("Destinataire introuvable", "Impossible d'extraire l'email du créateur. Ouvre le cockpit pour répondre."));
+      const r = await gm.sendEmail(p.cpEmail, { to: p.to, subject: p.subject ? (/^re\s*:/i.test(p.subject) ? p.subject : "Re: " + p.subject) : "Re:", body: p.reply });
+      if (!r || !r.ok) return res.status(500).send(copilotPage("Échec de l'envoi 😖", "Gmail n'a pas voulu. Réessaie ou passe par le cockpit."));
+      markTreated(p.cpEmail, p.threadId, { by: p.cpName + " (copilote)", action: "répondu" });
+      logActivity({ type: "email", creator: p.to, cp: p.cpName });
+      p.status = "sent"; p.decidedAt = Date.now(); saveCopilot(store);
+      return res.send(copilotPage("Envoyé ✅", "La réponse est partie chez " + (p.creator || p.to) + ". Le mail est marqué traité dans le cockpit."));
+    }
+    if (action === "accept" || action === "refuse") {
+      const directive = action === "accept"
+        ? "La CP ACCEPTE la demande du créateur (" + (p.resume || p.question) + "). Confirme-lui gentiment que c'est ok."
+        : "La CP REFUSE la demande du créateur (" + (p.resume || p.question) + "). Dis-le avec tact, sans fermer la relation, propose une alternative si pertinent.";
+      let transcript = "";
+      try { const full = await gm.fetchThreadText(p.cpEmail, p.threadId); if (full && full.ok) transcript = full.transcript || full.text || ""; } catch (e) {}
+      const rep = await claudeReply({ cp: p.cpName, creator: p.creator, brand: p.brand, category: "réponse", received: p.resume, subject: p.subject, transcript, directive });
+      if (!rep || !rep.ok) return res.status(500).send(copilotPage("IA indisponible 💤", "Impossible de rédiger là tout de suite. Réponds depuis le cockpit."));
+      p.reply = rep.body; p.status = "ready"; p.decision = action; p.decidedAt = Date.now(); saveCopilot(store);
+      const slackUser = COPILOT.slackIds[p.cpEmail] || "";
+      if (slackUser) await copilotNotify({ slackUser, text: copilotSlackText(p) });
+      return res.send(copilotPage("C'est noté " + (action === "accept" ? "✅" : "❌"), "L'IA a rédigé la réponse dans ce sens. Regarde Slack pour la relire et l'envoyer en un clic."));
+    }
+    if (action === "self") {
+      p.status = "self"; p.decidedAt = Date.now(); saveCopilot(store);
+      return res.send(copilotPage("C'est toi qui gères ✍️", "Rien n'a été envoyé. Le mail t'attend dans le cockpit, onglet Messages."));
+    }
+  } catch (e) {
+    return res.status(500).send(copilotPage("Oups", "Une erreur est survenue : " + String(e && e.message || e).slice(0, 120)));
+  }
+  return res.status(400).send(copilotPage("Action inconnue", "Ce lien ne correspond à aucune action."));
 });
 // Mail de demande de stats/bilan (J+5 après publication)
 function genStatsFR(brand, name, cp) {
