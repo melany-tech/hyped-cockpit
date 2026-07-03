@@ -1019,7 +1019,7 @@ async function copilotTick() {
         store.proposals.push(p);
         seen.add(email + "|" + p.msgId);
         const slackUser = COPILOT.slackIds[email] || "";
-        if (slackUser) await copilotNotify({ slackUser, text: copilotSlackText(p) });
+        if (slackUser) await copilotNotify({ slackUser, text: "<@" + slackUser + "> " + copilotSlackText(p) }); // mention = vraie notification
       }
     }
     store.proposals = store.proposals.slice(-300);
@@ -1066,7 +1066,7 @@ app.get("/copilot/act", async (req, res) => {
       if (!rep || !rep.ok) return res.status(500).send(copilotPage("IA indisponible 💤", "Impossible de rédiger là tout de suite. Réponds depuis le cockpit."));
       p.reply = rep.body; p.status = "ready"; p.decision = action; p.decidedAt = Date.now(); saveCopilot(store);
       const slackUser = COPILOT.slackIds[p.cpEmail] || "";
-      if (slackUser) await copilotNotify({ slackUser, text: copilotSlackText(p) });
+      if (slackUser) await copilotNotify({ slackUser, text: "<@" + slackUser + "> " + copilotSlackText(p) }); // mention = vraie notification
       return res.send(copilotPage("C'est noté " + (action === "accept" ? "✅" : "❌"), "L'IA a rédigé la réponse dans ce sens. Regarde Slack pour la relire et l'envoyer en un clic."));
     }
     if (action === "self") {
