@@ -998,13 +998,13 @@ function copilotSlackText(p) {
       + "\n\n" + (p.reply ? ("<" + copilotLink(p.id, "send") + "|📤 Envoyer>  ·  ") : "") + "<" + copilotLink(p.id, "self") + "|✍️ Je gère dans le cockpit>";
   }
   if (p.status === "ready") {
-    return "✍️ Réponse prête pour *" + who + "*" + brand + " (suite à ta décision : " + (p.decision === "accept" ? "oui ✅" : "non ❌") + ")\n\n>>> " + String(p.reply || "").slice(0, 900)
-      + "\n\n<" + copilotLink(p.id, "send") + "|📤 Envoyer tel quel>  ·  <" + copilotLink(p.id, "self") + "|✍️ Je gère dans le cockpit>";
+    return "*Étape 2/2 · Relis et envoie* ✍️ (réponse à *" + who + "*" + brand + ", rédigée selon ta décision : " + (p.decision === "accept" ? "oui ✅" : "non ❌") + ")\n\n>>> " + String(p.reply || "").slice(0, 900)
+      + "\n\n<" + copilotLink(p.id, "send") + "|📤 Envoyer>  ·  <" + copilotLink(p.id, "self") + "|✍️ Je gère dans le cockpit>";
   }
   if (p.categorie === "decision") {
-    return "🔔 *" + (p.question || p.resume) + "*\n_(" + who + brand + " · boîte " + p.cpName + ")_\n\n"
+    return "*Étape 1/2 · Décision* 🔔 *" + (p.question || p.resume) + "*\n_(" + who + brand + " · boîte " + p.cpName + ")_\n\n"
       + "<" + copilotLink(p.id, "accept") + "|✅ Oui>  ·  <" + copilotLink(p.id, "refuse") + "|❌ Non>  ·  <" + copilotLink(p.id, "self") + "|✍️ Je gère moi-même>"
-      + (p.reply ? "\n\n_Si oui, l'IA propose :_\n>>> " + String(p.reply).slice(0, 600) : "");
+      + "\n_Clique un choix : je rédige la réponse dans ce sens et je te l'envoie à relire._";
   }
   return "✉️ *" + who + "*" + brand + " : " + (p.resume || p.subject || "nouveau message") + "\n\n_Réponse prête (voix Hyped) :_\n>>> " + String(p.reply || "(IA indisponible, ouvre le cockpit)").slice(0, 900)
     + "\n\n<" + copilotLink(p.id, "send") + "|📤 Envoyer>  ·  <" + copilotLink(p.id, "self") + "|✍️ Je gère dans le cockpit>";
