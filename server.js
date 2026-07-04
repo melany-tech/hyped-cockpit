@@ -1333,11 +1333,15 @@ app.get("/api/todo", auth, async (req, res) => {
     const me = normName(req.user.name);
     const sup = req.user.role === "supervisor";
     const qui = String(req.query.qui || "").trim(); // superviseures : filtre par personne
+    // Les tâches de la boss ne sont visibles que par elle (couvre « Mélany » et « Melany »)
+    const BOSS = "melany";
+    const viewerIsBoss = me === BOSS;
     const taches = all
       .filter((t) => t.statut !== "Fait")
+      .filter((t) => viewerIsBoss || normName(t.responsable || "") !== BOSS)
       .filter((t) => (sup ? (!qui || normName(t.responsable || "") === normName(qui)) : normName(t.responsable || "") === me))
       .sort((a, b) => String(a.echeance || "9999").localeCompare(String(b.echeance || "9999")));
-    const responsables = sup ? [...new Set(all.map((t) => t.responsable).filter(Boolean))].sort() : [];
+    const responsables = sup ? [...new Set(all.map((t) => t.responsable).filter(Boolean))].filter((n) => viewerIsBoss || normName(n) !== BOSS).sort() : [];
     res.json({ enabled: true, taches, responsables });
   } catch (e) { res.json({ enabled: false, error: e.message, taches: [] }); }
 });
