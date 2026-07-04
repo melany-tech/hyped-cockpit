@@ -590,7 +590,16 @@ function planningForBrand(collabs, brand) {
     return lines.join("\n");
   } catch (e) { return ""; }
 }
-async function claudeReply({ cp, creator, brand, category, received, subject, transcript, directive, planning }) {
+// Consignes spécifiques d'une marque, écrites dans sa fiche (champ « Consignes pour l'IA »).
+// L'IA les reçoit à chaque réponse liée à cette marque.
+function brandNotesFor(brand) {
+  try {
+    if (!brand) return "";
+    const rec = loadBrandFiches()[brand];
+    return (rec && String(rec.iaNotes || "").trim().slice(0, 2000)) || "";
+  } catch (e) { return ""; }
+}
+async function claudeReply({ cp, creator, brand, category, received, subject, transcript, directive, planning, brandNotes }) {
   const hasOpenAI = !!process.env.OPENAI_API_KEY, hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
   if (!hasOpenAI && !hasAnthropic) return { ok: false, reason: "nokey" };
   // On s'adresse aux créateurs par leur PRÉNOM, jamais par leur nom complet / pseudo (« Juliette », pas « Juliette DTR »)
@@ -660,6 +669,7 @@ async function claudeReply({ cp, creator, brand, category, received, subject, tr
     (received || "").slice(0, 4000),
     "\"\"\"",
     "",
+    brandNotes ? ("CONSIGNES SPÉCIFIQUES DE LA MARQUE (écrites par l'agence dans la fiche marque, à respecter ABSOLUMENT, prioritaires sur les règles générales) :\n" + brandNotes) : "",
     planning ? ("PLANNING de la marque (publications déjà calées sur les prochaines semaines) :\n" + planning) : "",
     planning ? "RÈGLE DATES : si le mail concerne une date de publication (caler, décaler, confirmer), privilégie un MARDI, MERCREDI ou JEUDI, dans une semaine où moins de 3 jours sont déjà couverts (objectif : au moins 3 jours différents remplis par semaine). Si la date proposée par le créateur respecte déjà ces règles, valide-la simplement. Sinon, reste souple : accepte le principe mais suggère la meilleure date proche ('est-ce que le jeudi 23 t'irait ?'), sans jamais imposer ni mentionner l'existence d'un planning interne." : "",
     directive ? ("DIRECTIVE DE LA CHEFFE DE PROJET (décision prise, à appliquer absolument, avec tact et dans la voix Hyped) : " + directive) : "",
@@ -685,7 +695,7 @@ app.post("/api/reply/suggest", auth, async (req, res) => {
     }
   } catch (e) {}
   let planning = ""; try { planning = planningForBrand(await fetchRows(), brand); } catch (e) {}
-  const out = await claudeReply({ cp: req.user.name, creator, brand, category, received, subject, transcript, planning });
+  const out = await claudeReply({ cp: req.user.name, creator, brand, category, received, subject, transcript, planning, brandNotes: brandNotesFor(brand) });
   res.json(out);
 });
 // Marque un brief comme envoyé/préparé pour une collab → allume l'étape pipeline + activité
@@ -899,7 +909,7 @@ app.get("/api/history", auth, (req, res) => {
 //   modifiable par la responsable (supervisor) uniquement.
 // Interlocuteur principal + notes de contexte : modifiables par toutes les CP (signé, horodaté).
 const BRANDS_STORE = path.join(DATA_DIR, "brands.json");
-const BRAND_BASE_FIELDS = ["histoire", "clientDepuis", "clientJusqua", "objectifs", "reunions", "kpis", "pole", "interlocuteurHA", "contactsOu", "instagram", "tiktok", "siteweb"];
+const BRAND_BASE_FIELDS = ["histoire", "clientDepuis", "clientJusqua", "objectifs", "reunions", "kpis", "pole", "interlocuteurHA", "contactsOu", "instagram", "tiktok", "siteweb", "iaNotes"];
 const BRAND_FILES_DIR = path.join(DATA_DIR, "brandfiles");
 try { fs.mkdirSync(BRAND_FILES_DIR, { recursive: true }); } catch (e) {}
 function loadBrandFiches() { try { return JSON.parse(fs.readFileSync(BRANDS_STORE, "utf8")); } catch (e) { return {}; } }
@@ -1128,7 +1138,7 @@ async function copilotTick() {
         try { const full = await gm.fetchThreadText(email, m.threadId); if (full && full.ok) transcript = full.transcript || full.text || ""; } catch (e) {}
         const creator = m["créateur"] || "";
         const cls = await copilotClassify({ creator, subject: m.subject, received: m.snippet, transcript });
-        const rep = await claudeReply({ cp: copilotCpName(email), creator, brand: m.brand, category: m.category, received: m.snippet, subject: m.subject, transcript, planning: planningForBrand(collabs, m.brand) });
+        const rep = await claudeReply({ cp: copilotCpName(email), creator, brand: m.brand, category: m.category, received: m.snippet, subject: m.subject, transcript, planning: planningForBrand(collabs, m.brand), brandNotes: brandNotesFor(m.brand) });
         const p = {
           id: crypto.randomBytes(8).toString("hex"),
           cpEmail: email, cpName: copilotCpName(email),
@@ -1257,7 +1267,7 @@ async function copilotExecute(id, action) {
       let transcript = "";
       try { const full = await gm.fetchThreadText(p.cpEmail, p.threadId); if (full && full.ok) transcript = full.transcript || full.text || ""; } catch (e) {}
       let planning = ""; try { planning = planningForBrand(await fetchRows(), p.brand); } catch (e) {}
-      const rep = await claudeReply({ cp: p.cpName, creator: p.creator, brand: p.brand, category: "réponse", received: p.resume, subject: p.subject, transcript, directive, planning });
+      const rep = await claudeReply({ cp: p.cpName, creator: p.creator, brand: p.brand, category: "réponse", received: p.resume, subject: p.subject, transcript, directive, planning, brandNotes: brandNotesFor(p.brand) });
       if (!rep || !rep.ok) return { code: 500, title: "IA indisponible 💤", msg: "Impossible de rédiger là tout de suite. Réponds depuis le cockpit." };
       p.reply = rep.body; p.status = "ready"; p.decision = action; p.decidedAt = Date.now(); saveCopilot(store);
       const slackUser = COPILOT.slackIds[p.cpEmail] || "";
