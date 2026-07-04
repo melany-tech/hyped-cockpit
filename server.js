@@ -1104,7 +1104,9 @@ async function copilotTick() {
         }
       }
     }
-    store.proposals = store.proposals.slice(-300);
+    // 1000 (et pas 300) : sinon, à l'échelle de toutes les CP, la mémoire des mails déjà proposés
+    // déborde en quelques jours et les mêmes mails reviennent (double appel IA + double notif Slack)
+    store.proposals = store.proposals.slice(-1000);
     saveCopilot(store);
   } catch (e) { try { console.error("[copilot] tick :", e.message); } catch (e2) {} }
   finally { COPILOT_RUNNING = false; }
@@ -1128,7 +1130,13 @@ app.get("/copilot/tick", async (req, res) => {
 });
 app.get("/copilot/act", async (req, res) => {
   const { id, action, sig } = req.query || {};
-  const ok = id && action && sig && COPILOT.secret && sig === copilotSign(String(id), String(action));
+  // Comparaison timing-safe : même durée que la signature soit bonne ou pas (anti-attaque par chronométrage)
+  let ok = false;
+  try {
+    const expected = Buffer.from(copilotSign(String(id || ""), String(action || "")));
+    const given = Buffer.from(String(sig || ""));
+    ok = !!(id && action && sig && COPILOT.secret) && given.length === expected.length && crypto.timingSafeEqual(given, expected);
+  } catch (e) { ok = false; }
   if (!ok) return res.status(403).send(copilotPage("Lien invalide 🤔", "Ce lien n'est pas valide ou a été modifié. Repasse par le message Slack."));
   const store = loadCopilot(); store.proposals = store.proposals || [];
   const p = store.proposals.find((x) => x.id === id);
