@@ -833,7 +833,8 @@ async function load(){
   show($('teamtoggle'), !isSup);   // toggle « vue équipe » réservé aux CP
   if(isSup){
     const present=ROWS.map(x=>x.cp).filter(Boolean);
-    const cps=[...new Set([...(d.team||[]),...present])].sort();
+    // La superviseure connectée figure aussi dans son propre filtre (pour voir « que moi »)
+    const cps=[...new Set([VIEWER.name,...(d.team||[]),...present])].filter(Boolean).sort();
     $('cpfilter').innerHTML='<option value="ALL">Toute l\'équipe</option>'+cps.map(c=>`<option value="${c}">${c}</option>`).join('');
     $('cpfilter').onchange=()=>{render();loadTodo();loadOverview();loadMail();loadVisios();};show($('filterbar'),true);
   }else show($('filterbar'),false);
