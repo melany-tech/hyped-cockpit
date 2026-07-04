@@ -296,6 +296,9 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .sb-filter .filterbar label{display:none}
 .sb-filter select{width:100%;font-family:inherit;font-size:12.5px;color:var(--navy);background:var(--bg);border:1px solid #CFDADA;border-radius:8px;padding:7px 9px}
 .maildate{color:#C77F2A;font-weight:600;white-space:nowrap}
+.cprowbtns{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.cprowbtns .cplab2{font-size:12px;color:#2C9087;font-weight:700}
+.cprowbtns .lk{font-size:12.5px;padding:7px 12px}
 .othermails{margin-top:16px}
 .othermails summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--navy);padding:10px 12px;background:var(--soft);border:1px solid var(--line);border-radius:10px}
 .othermails[open] summary{margin-bottom:8px}
@@ -1244,7 +1247,32 @@ async function loadCopilotBox(who){
       alert((dd.title||'')+(dd.msg?('\n'+dd.msg):'')||(rr.ok?'OK':'Erreur'));
       loadCopilotBox(who); if(b.dataset.cpact==='send')loadMail();
     });
+    decorateMailRows(ps,who);
   }catch(e){show(box,false);}
+}
+// Boutons Oui/Non/Envoyer directement SUR la ligne du mail concerné (comme sur Slack)
+function decorateMailRows(ps,who){
+  document.querySelectorAll('#mailbox .cprowbtns').forEach(e=>e.remove());
+  (ps||[]).forEach(p=>{
+    if(!p.threadId)return;
+    let info=null;
+    try{ const row=document.querySelector('#mailbox .row[data-thread="'+CSS.escape(p.threadId)+'"]'); info=row&&row.querySelector('.info'); }catch(e){}
+    if(!info)return;
+    const div=document.createElement('div'); div.className='cprowbtns';
+    if(p.categorie==='decision'&&p.status==='pending'){
+      div.innerHTML='<span class="cplab2">🤖 '+esc(p.question||p.resume||'Décision demandée')+'</span><button class="lk" data-id="'+esc(p.id)+'" data-cpact="accept">✅ Oui</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="refuse">❌ Non</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="self">✍️ Je gère</button>';
+    }else if(p.reply){
+      div.innerHTML='<span class="cplab2">🤖 Réponse prête'+(p.status==='ready'?(' · décision : '+(p.decision==='accept'?'oui ✅':'non ❌')):'')+'</span><button class="lk" data-id="'+esc(p.id)+'" data-cpact="send">📤 Envoyer</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="self">✍️ Je gère</button>';
+    }else return;
+    info.appendChild(div);
+    div.querySelectorAll('button[data-cpact]').forEach(b=>b.onclick=async(ev)=>{
+      ev.stopPropagation(); b.disabled=true; b.textContent='…';
+      const rr=await api('/api/copilot/act',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:b.dataset.id,action:b.dataset.cpact})});
+      const dd=await rr.json().catch(()=>({}));
+      alert((dd.title||'')+(dd.msg?('\n'+dd.msg):'')||(rr.ok?'OK':'Erreur'));
+      loadMail();
+    });
+  });
 }
 let SIG_CHECKED=false;
 async function checkSignature(){

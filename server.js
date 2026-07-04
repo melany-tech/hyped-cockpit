@@ -1305,7 +1305,7 @@ app.get("/api/copilot/box", auth, (req, res) => {
     // superviseure sans filtre : elle voit les décisions de TOUTES les boîtes ; sinon la boîte affichée
     .filter((p) => ((sup && !asked) ? true : p.cpEmail === t.email))
     .slice(-30).reverse()
-    .map((p) => ({ id: p.id, cpName: p.cpName, creator: p.creator, brand: p.brand, subject: p.subject, categorie: p.categorie, resume: p.resume, question: p.question, reply: p.reply, status: p.status, decision: p.decision, at: p.at }));
+    .map((p) => ({ id: p.id, cpName: p.cpName, threadId: p.threadId, creator: p.creator, brand: p.brand, subject: p.subject, categorie: p.categorie, resume: p.resume, question: p.question, reply: p.reply, status: p.status, decision: p.decision, at: p.at }));
   res.json({ enabled: true, proposals: list });
 });
 app.post("/api/copilot/act", auth, async (req, res) => {
