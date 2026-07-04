@@ -1095,7 +1095,9 @@ async function checkSignature(){
   if(SIG_CHECKED)return; SIG_CHECKED=true;
   try{
     const r=await api('/api/gmail/signature');const d=await r.json();
-    if(d&&d.enabled&&d.connected&&!d.has){
+    // Reconnexion demandée UNIQUEMENT si l'autorisation manque vraiment (scopeOk=false).
+    // Autorisation ok mais aucune signature configurée dans Gmail : on n'embête personne.
+    if(d&&d.enabled&&d.connected&&!d.has&&d.scopeOk===false){
       const box=$('mailbox'); if(!box)return;
       const hint=document.createElement('div'); hint.className='sighint';
       hint.innerHTML='✍️ Pour ajouter <b>ta signature Gmail</b> en bas des mails envoyés d\'ici, reconnecte ton Gmail une fois (nouvelle autorisation). <a href="#" id="sigreco">Reconnecter mon Gmail ↗</a>';

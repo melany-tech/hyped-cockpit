@@ -263,8 +263,8 @@ async function getSignature(email) {
       || list.find((s) => s.isPrimary) || list.find((s) => s.isDefault) || list[0];
     const html = (pick && pick.signature) ? String(pick.signature) : "";
     SIG_CACHE[email] = { at: Date.now(), html };
-    return html;
-  } catch (e) { return ""; } // scope pas encore accordé, ou pas de signature
+    return html; // "" = autorisation OK mais aucune signature configurée dans Gmail
+  } catch (e) { return null; } // null = scope pas encore accordé (à distinguer de "pas de signature")
 }
 
 // Construit le MIME. Avec signature HTML -> multipart/alternative (texte + HTML).

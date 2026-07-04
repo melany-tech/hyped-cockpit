@@ -369,8 +369,8 @@ app.get("/api/gmail/signature", auth, async (req, res) => {
   if (!gm.ENABLED) return res.json({ enabled: false });
   const t = inboxTarget(req);
   if (!gm.isConnected(t.email)) return res.json({ enabled: true, connected: false });
-  try { const html = await gm.getSignature(t.email); res.json({ enabled: true, connected: true, has: !!(html && html.trim()) }); }
-  catch (e) { res.json({ enabled: true, connected: true, has: false }); }
+  try { const html = await gm.getSignature(t.email); res.json({ enabled: true, connected: true, has: !!(html && html.trim()), scopeOk: html !== null }); }
+  catch (e) { res.json({ enabled: true, connected: true, has: false, scopeOk: false }); }
 });
 app.get("/api/gmail/connect", auth, (req, res) => {
   if (!gm.ENABLED) return res.status(400).json({ error: "Connexion Gmail non configurée." });
