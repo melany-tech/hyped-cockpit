@@ -295,6 +295,7 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .sb-filter .filterbar{display:block;margin:0}
 .sb-filter .filterbar label{display:none}
 .sb-filter select{width:100%;font-family:inherit;font-size:12.5px;color:var(--navy);background:var(--bg);border:1px solid #CFDADA;border-radius:8px;padding:7px 9px}
+.maildate{color:#C77F2A;font-weight:600;white-space:nowrap}
 .othermails{margin-top:16px}
 .othermails summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--navy);padding:10px 12px;background:var(--soft);border:1px solid var(--line);border-radius:10px}
 .othermails[open] summary{margin-bottom:8px}
@@ -1223,7 +1224,8 @@ async function loadCopilotBox(who){
     box.innerHTML='<div class="cphead">🤖 Copilote · '+ps.length+' décision(s) en attente <span class="cpsub">mêmes choix que sur Slack, en un clic</span></div>'
       +ps.map(p=>{
         const who2=esc(p.creator||'expéditeur inconnu'), br=p.brand?(' · '+esc(p.brand)):'';
-        const head='<div class="cpwho"><b>'+who2+'</b>'+br+(p.categorie==='interne'?' · <span class="cptag">interne</span>':'')+'</div>'
+        const boxTag=p.cpName?(' · <span class="cptag">boîte '+esc(p.cpName)+'</span>'):'';
+        const head='<div class="cpwho"><b>'+who2+'</b>'+br+boxTag+(p.categorie==='interne'?' · <span class="cptag">interne</span>':'')+'</div>'
           +(p.subject?('<div class="cpsubj">'+esc(p.subject)+'</div>'):'');
         if(p.categorie==='decision'&&p.status==='pending'){
           return '<div class="cpcard">'+head+'<div class="cpq">'+esc(p.question||p.resume||'')+'</div>'
@@ -1311,6 +1313,15 @@ function fileChips(atts, lnks){
   }).join('');
   return `<div class="filechips">${al}${af}</div>`;
 }
+// Date lisible d'un mail : « 14:32 » si aujourd'hui, sinon « mer. 2 juil. 09:15 »
+function mailDate(d){
+  const t=new Date(d); if(isNaN(t))return '';
+  const now=new Date();
+  if(t.toDateString()===now.toDateString()) return 'auj. '+t.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  return t.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'})+' '+t.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+}
+// Les extraits Gmail arrivent avec des entités HTML (&#39; etc.) : on les décode avant affichage
+function deent(s){const t=document.createElement('textarea');t.innerHTML=String(s||'');return t.value;}
 function renderMail(d, who){
   const reps=d.creatorReplies||[];
   if(!who){ try{setPipeReponse(reps.length);}catch(e){} }
@@ -1324,8 +1335,8 @@ function renderMail(d, who){
   const autres=[]; const dd=new Set();
   flat.forEach(m=>{const k=m.id||m.threadId; if(!k||seenIds.has(k)||dd.has(k))return; dd.add(k); autres.push(m);});
   const aRow=m=>{const link=m.url?`<a class="lk" href="${esc(m.url)}" target="_blank" rel="noopener">Ouvrir</a>`:'';
-    const snip=String(m.snippet||'');
-    return `<div class="row"><span class="rdot" style="background:#9AA7AA"></span><div class="info"><div class="t">${esc(m.subject)||'(sans objet)'}</div><div class="s">${esc(m.from||'')}${m.interne?' · <span class="cptag">interne</span>':''}</div>${snip?`<div class="msgsnip">${esc(snip.slice(0,130))}${snip.length>130?'…':''}</div>`:''}</div>${m.brand?`<span class="brand">${esc(m.brand)}</span>`:''}${link}</div>`;};
+    const snip=deent(m.snippet||''); const dt=mailDate(m.date);
+    return `<div class="row"><span class="rdot" style="background:#9AA7AA"></span><div class="info"><div class="t">${esc(m.subject)||'(sans objet)'}</div><div class="s">${esc(m.from||'')}${m.interne?' · <span class="cptag">interne</span>':''}${dt?` · <span class="maildate">${esc(dt)}</span>`:''}</div>${snip?`<div class="msgsnip">${esc(snip.slice(0,130))}${snip.length>130?'…':''}</div>`:''}</div>${m.brand?`<span class="brand">${esc(m.brand)}</span>`:''}${link}</div>`;};
   const autresHtml=autres.length?`<details class="othermails"><summary>📥 Autres mails reçus (${autres.length}) · internes, en copie, hors collabs</summary>${autres.slice(0,50).map(aRow).join('')}</details>`:'';
   const sum=`<div class="mailsum">${d.relevant||0} mail(s) liés aux collabs · <b>${reps.length} réponse(s) créateur</b> · ${autres.length} autre(s) · ${d.noise||0} ignoré(s) (pubs, newsletters)</div>`;
   if(!reps.length){$('mailbox').innerHTML=sum+'<div class="state">Aucune réponse créateur récente. 👌</div>'+autresHtml;return;}
@@ -1334,13 +1345,13 @@ function renderMail(d, who){
     const ownerTag=m.créateur?`<span class="owner">${esc(m.créateur)}</span>`:'';
     const c=CC[m.category]||'#56666D';
     const link=m.url?`<a href="${m.url}" target="_blank" rel="noopener">Ouvrir</a>`:'';
-    const email=emailFromHeader(m.from); const snip=(m.snippet||'');
+    const email=emailFromHeader(m.from); const snip=deent(m.snippet||''); const dt=mailDate(m.date);
     const filesJson=esc(JSON.stringify({a:m.attachments||[],l:m.transferLinks||[]}));
     const tr=m.treated; const trLbl=tr?({'répondu':'Répondu','brouillon':'Brouillon en cours','programmé':'Envoi programmé','manuel':'Traité'}[tr.action]||'Traité'):'';
     const trBadge=tr?`<span class="treatedbadge" title="${esc(trLbl)} par ${esc(tr.by||'-')}">✓ ${esc(trLbl)}${tr.by?(' · '+esc(tr.by)):''}</span>`:'';
     const treatBtns=tr?`<button class="lk reopenbtn" data-thread="${esc(m.threadId||'')}" title="Rouvrir : remet ce mail à traiter">Rouvrir</button>`:`<button class="lk treatbtn" data-thread="${esc(m.threadId||'')}" title="Marquer comme traité (déjà répondu)">✓ Traité</button>`;
     return `<div class="row${tr?' treated':''}" data-email="${esc(email)}" data-subject="${esc(m.subject||'')}" data-cat="${esc(m.category||'')}" data-creator="${esc(m.créateur||'')}" data-brand="${esc(m.brand||'')}" data-thread="${esc(m.threadId||'')}" data-snippet="${esc(snip.slice(0,400))}" data-url="${esc(m.url||'')}" data-files="${filesJson}"><span class="rdot" style="background:${c}"></span>
-      <div class="info"><div class="t">${esc(m.subject)||'(sans objet)'}${trBadge}</div><div class="s">${esc(m.from)} · ${esc(m.category)}</div>${snip?`<div class="msgsnip">${esc(snip.slice(0,130))}${snip.length>130?'…':''}</div>`:''}${fileChips(m.attachments,m.transferLinks)}</div>
+      <div class="info"><div class="t">${esc(m.subject)||'(sans objet)'}${trBadge}</div><div class="s">${esc(m.from)} · ${esc(m.category)}${dt?` · <span class="maildate">${esc(dt)}</span>`:''}</div>${snip?`<div class="msgsnip">${esc(snip.slice(0,130))}${snip.length>130?'…':''}</div>`:''}${fileChips(m.attachments,m.transferLinks)}</div>
       <span class="brand">${esc(m.brand)}</span>${ownerTag}<button class="lk primary replybtn">✍️ Répondre</button>${treatBtns}${link}</div>`;
   }).join('')+autresHtml;
   document.querySelectorAll('#mailbox .replybtn').forEach(b=>b.onclick=()=>openReply(b));

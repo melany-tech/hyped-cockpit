@@ -1297,11 +1297,15 @@ app.post("/copilot/act/do", async (req, res) => {
 app.get("/api/copilot/box", auth, (req, res) => {
   if (!COPILOT.enabled) return res.json({ enabled: false, proposals: [] });
   const t = inboxTarget(req);
+  const sup = req.user.role === "supervisor";
+  const asked = String(req.query.as || "").trim(); // boîte précise demandée via le filtre
   const store = loadCopilot();
   const list = (store.proposals || [])
-    .filter((p) => p.cpEmail === t.email && (p.status === "pending" || p.status === "ready"))
+    .filter((p) => (p.status === "pending" || p.status === "ready"))
+    // superviseure sans filtre : elle voit les décisions de TOUTES les boîtes ; sinon la boîte affichée
+    .filter((p) => ((sup && !asked) ? true : p.cpEmail === t.email))
     .slice(-30).reverse()
-    .map((p) => ({ id: p.id, creator: p.creator, brand: p.brand, subject: p.subject, categorie: p.categorie, resume: p.resume, question: p.question, reply: p.reply, status: p.status, decision: p.decision, at: p.at }));
+    .map((p) => ({ id: p.id, cpName: p.cpName, creator: p.creator, brand: p.brand, subject: p.subject, categorie: p.categorie, resume: p.resume, question: p.question, reply: p.reply, status: p.status, decision: p.decision, at: p.at }));
   res.json({ enabled: true, proposals: list });
 });
 app.post("/api/copilot/act", auth, async (req, res) => {
