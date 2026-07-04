@@ -1197,28 +1197,21 @@ app.get("/copilot/act", (req, res) => {
     + "<noscript><form method=\"POST\" action=\"/copilot/act/do?" + q + "\" style=\"text-align:center;margin-top:14px\"><button style=\"font-family:inherit;font-size:14px;padding:10px 18px;border-radius:10px;border:1px solid #E4E0D5;background:#2C9087;color:#fff;cursor:pointer\">Continuer</button></form></noscript>";
   return res.send(copilotPage("Un instant ⏳", "J'exécute ton choix, la confirmation arrive dans une seconde.").replace("</body>", runner + "</body>"));
 });
-app.post("/copilot/act/do", async (req, res) => {
-  const { id, action, sig } = req.query || {};
-  // Comparaison timing-safe : même durée que la signature soit bonne ou pas (anti-attaque par chronométrage)
-  let ok = false;
-  try {
-    const expected = Buffer.from(copilotSign(String(id || ""), String(action || "")));
-    const given = Buffer.from(String(sig || ""));
-    ok = !!(id && action && sig && COPILOT.secret) && given.length === expected.length && crypto.timingSafeEqual(given, expected);
-  } catch (e) { ok = false; }
-  if (!ok) return res.status(403).send(copilotPage("Lien invalide 🤔", "Ce lien n'est pas valide ou a été modifié. Repasse par le message Slack."));
+// Exécution d'une action copilote. Partagée entre les liens Slack (/copilot/act/do)
+// et les boutons du cockpit (/api/copilot/act). Renvoie { code, title, msg }.
+async function copilotExecute(id, action) {
   const store = loadCopilot(); store.proposals = store.proposals || [];
   const p = store.proposals.find((x) => x.id === id);
-  if (!p) return res.status(404).send(copilotPage("Introuvable", "Cette proposition n'existe plus (elle a peut-être expiré)."));
-  if (p.status === "sent") return res.send(copilotPage("C'est fait ! ✅", "La réponse à " + (p.creator || "ce créateur") + " est bien partie. Rien n'a été envoyé en double, tout est ok. Tu peux fermer cette page."));
-  if (p.status === "handled") return res.send(copilotPage("Déjà traité ✅", "Ce mail a déjà été géré (réponse envoyée directement depuis Gmail, ou traité dans le cockpit). Rien n'a été envoyé en double, rien à faire."));
-  if (p.status === "self" && action !== "send") return res.send(copilotPage("C'est toi qui gères ✍️", "Ce mail t'attend dans le cockpit, onglet Messages."));
+  if (!p) return { code: 404, title: "Introuvable", msg: "Cette proposition n'existe plus (elle a peut-être expiré)." };
+  if (p.status === "sent") return { code: 200, title: "C'est fait ! ✅", msg: "La réponse à " + (p.creator || "ce créateur") + " est bien partie. Rien n'a été envoyé en double, tout est ok." };
+  if (p.status === "handled") return { code: 200, title: "Déjà traité ✅", msg: "Ce mail a déjà été géré (réponse envoyée directement depuis Gmail, ou traité dans le cockpit). Rien n'a été envoyé en double, rien à faire." };
+  if (p.status === "self" && action !== "send") return { code: 200, title: "C'est toi qui gères ✍️", msg: "Ce mail t'attend dans le cockpit, onglet Messages." };
   try {
     if (action === "send") {
-      if (!p.reply) return res.send(copilotPage("Pas de réponse prête", "L'IA n'a pas pu rédiger. Ouvre le cockpit pour répondre."));
-      if (!p.to) return res.send(copilotPage("Destinataire introuvable", "Impossible d'extraire l'email du créateur. Ouvre le cockpit pour répondre."));
+      if (!p.reply) return { code: 200, title: "Pas de réponse prête", msg: "L'IA n'a pas pu rédiger. Ouvre le cockpit pour répondre." };
+      if (!p.to) return { code: 200, title: "Destinataire introuvable", msg: "Impossible d'extraire l'email du créateur. Ouvre le cockpit pour répondre." };
       const r = await gm.sendEmail(p.cpEmail, { to: p.to, subject: p.subject ? (/^re\s*:/i.test(p.subject) ? p.subject : "Re: " + p.subject) : "Re:", body: p.reply });
-      if (!r || !r.ok) return res.status(500).send(copilotPage("Échec de l'envoi 😖", "Gmail n'a pas voulu. Réessaie ou passe par le cockpit."));
+      if (!r || !r.ok) return { code: 500, title: "Échec de l'envoi 😖", msg: "Gmail n'a pas voulu. Réessaie ou passe par le cockpit." };
       markTreated(p.cpEmail, p.threadId, { by: p.cpName + " (copilote)", action: "répondu" });
       logActivity({ type: "email", creator: p.to, cp: p.cpName });
       p.status = "sent"; p.decidedAt = Date.now(); saveCopilot(store);
@@ -1227,7 +1220,7 @@ app.post("/copilot/act/do", async (req, res) => {
         const slackUser = COPILOT.slackIds[p.cpEmail] || "";
         if (slackUser) await copilotNotify({ slackUser, text: "✅ C'est fait ! La réponse à *" + (p.creator || p.to) + "* (" + (p.brand || "sans marque") + ") est partie depuis la boîte de " + p.cpName + ", signature comprise. Mail marqué traité dans le cockpit, rien d'autre à faire." });
       } catch (e) {}
-      return res.send(copilotPage("C'est fait ! 🎉", "La réponse est partie chez " + (p.creator || p.to) + ", depuis la boîte de " + p.cpName + ", signature comprise. Le mail est marqué traité dans le cockpit. Tu peux fermer cette page."));
+      return { code: 200, title: "C'est fait ! 🎉", msg: "La réponse est partie chez " + (p.creator || p.to) + ", depuis la boîte de " + p.cpName + ", signature comprise. Le mail est marqué traité dans le cockpit." };
     }
     if (action === "accept" || action === "refuse") {
       const directive = action === "accept"
@@ -1236,11 +1229,11 @@ app.post("/copilot/act/do", async (req, res) => {
       let transcript = "";
       try { const full = await gm.fetchThreadText(p.cpEmail, p.threadId); if (full && full.ok) transcript = full.transcript || full.text || ""; } catch (e) {}
       const rep = await claudeReply({ cp: p.cpName, creator: p.creator, brand: p.brand, category: "réponse", received: p.resume, subject: p.subject, transcript, directive });
-      if (!rep || !rep.ok) return res.status(500).send(copilotPage("IA indisponible 💤", "Impossible de rédiger là tout de suite. Réponds depuis le cockpit."));
+      if (!rep || !rep.ok) return { code: 500, title: "IA indisponible 💤", msg: "Impossible de rédiger là tout de suite. Réponds depuis le cockpit." };
       p.reply = rep.body; p.status = "ready"; p.decision = action; p.decidedAt = Date.now(); saveCopilot(store);
       const slackUser = COPILOT.slackIds[p.cpEmail] || "";
       if (slackUser) await copilotNotify({ slackUser, text: "<@" + slackUser + "> " + copilotSlackText(p) }); // mention = vraie notification
-      return res.send(copilotPage("C'est noté " + (action === "accept" ? "✅" : "❌"), "L'IA a rédigé la réponse dans ce sens. Regarde Slack pour la relire et l'envoyer en un clic."));
+      return { code: 200, title: "C'est noté " + (action === "accept" ? "✅" : "❌"), msg: "L'IA a rédigé la réponse dans ce sens. Relis-la et envoie-la en un clic (ici ou sur Slack)." };
     }
     if (action === "self") {
       p.status = "self"; p.decidedAt = Date.now(); saveCopilot(store);
@@ -1248,12 +1241,41 @@ app.post("/copilot/act/do", async (req, res) => {
         const slackUser = COPILOT.slackIds[p.cpEmail] || "";
         if (slackUser) await copilotNotify({ slackUser, text: "✍️ Noté, tu gères toi-même le mail de *" + (p.creator || p.to || "ce contact") + "*. Rien n'a été envoyé, il t'attend dans le cockpit (onglet Messages)." });
       } catch (e) {}
-      return res.send(copilotPage("C'est toi qui gères ✍️", "Rien n'a été envoyé. Le mail t'attend dans le cockpit, onglet Messages."));
+      return { code: 200, title: "C'est toi qui gères ✍️", msg: "Rien n'a été envoyé. Le mail t'attend dans le cockpit, onglet Messages." };
     }
   } catch (e) {
-    return res.status(500).send(copilotPage("Oups", "Une erreur est survenue : " + String(e && e.message || e).slice(0, 120)));
+    return { code: 500, title: "Oups", msg: "Une erreur est survenue : " + String(e && e.message || e).slice(0, 120) };
   }
-  return res.status(400).send(copilotPage("Action inconnue", "Ce lien ne correspond à aucune action."));
+  return { code: 400, title: "Action inconnue", msg: "Ce lien ne correspond à aucune action." };
+}
+app.post("/copilot/act/do", async (req, res) => {
+  const { id, action } = req.query || {};
+  if (!copilotActOk(req)) return res.status(403).send(copilotPage("Lien invalide 🤔", "Ce lien n'est pas valide ou a été modifié. Repasse par le message Slack."));
+  const out = await copilotExecute(String(id), String(action));
+  res.status(out.code).send(copilotPage(out.title, out.msg + " Tu peux fermer cette page."));
+});
+// --- Copilote dans le cockpit : mêmes décisions que sur Slack, en un clic -----
+app.get("/api/copilot/box", auth, (req, res) => {
+  if (!COPILOT.enabled) return res.json({ enabled: false, proposals: [] });
+  const t = inboxTarget(req);
+  const store = loadCopilot();
+  const list = (store.proposals || [])
+    .filter((p) => p.cpEmail === t.email && (p.status === "pending" || p.status === "ready"))
+    .slice(-30).reverse()
+    .map((p) => ({ id: p.id, creator: p.creator, brand: p.brand, subject: p.subject, categorie: p.categorie, resume: p.resume, question: p.question, reply: p.reply, status: p.status, decision: p.decision, at: p.at }));
+  res.json({ enabled: true, proposals: list });
+});
+app.post("/api/copilot/act", auth, async (req, res) => {
+  if (!COPILOT.enabled) return res.status(400).json({ error: "copilote désactivé" });
+  const { id, action } = req.body || {};
+  if (!id || !["send", "accept", "refuse", "self"].includes(String(action))) return res.status(400).json({ error: "action inconnue" });
+  const store = loadCopilot();
+  const p = (store.proposals || []).find((x) => x.id === String(id));
+  if (!p) return res.status(404).json({ error: "proposition introuvable" });
+  // Chacune agit sur SA boîte ; les superviseures peuvent agir sur toutes
+  if (p.cpEmail !== req.user.email && req.user.role !== "supervisor") return res.status(403).json({ error: "pas ta boîte" });
+  const out = await copilotExecute(String(id), String(action));
+  res.status(out.code === 200 ? 200 : out.code).json({ ok: out.code === 200, title: out.title, msg: out.msg });
 });
 // Mail de demande de stats/bilan (J+5 après publication)
 function genStatsFR(brand, name, cp) {

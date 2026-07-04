@@ -213,6 +213,18 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .histinfo .hists{font-size:11px;color:var(--gray)}
 .histrowbtn{cursor:pointer}
 .sighint{background:#FBF3E6;border:1px solid #EBD9B6;color:#7A5B18;border-radius:9px;padding:9px 12px;font-size:12px;margin-bottom:10px}
+#copilotbox{margin-bottom:14px}
+.cphead{font-weight:700;font-size:14px;margin:2px 0 10px}
+.cphead .cpsub{font-weight:500;color:#56666D;font-size:12px;margin-left:8px}
+.cpcard{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:10px}
+.cpwho{font-size:13.5px}
+.cpsubj{font-size:12.5px;color:#56666D;margin-top:2px}
+.cptag{background:#EAF4F3;color:#2C9087;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:600}
+.cpq{font-size:13.5px;margin:8px 0;font-weight:600}
+.cplab{font-size:12px;color:#56666D;margin-bottom:6px}
+.cprep{white-space:pre-wrap;font-size:13px;background:var(--soft);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.cpbtns{display:flex;gap:8px;flex-wrap:wrap}
+.cpbtns .lk{font-size:13px;padding:9px 14px}
 .schedhead{font-size:12px;font-weight:700;color:#5B3FA8;margin:2px 0 8px}
 .schedcard{display:flex;align-items:center;gap:10px;background:#F3EFFB;border:1px solid #E0D6F5;border-radius:10px;padding:9px 12px;margin-bottom:8px}
 .schedcard .info{flex:1;min-width:0}
@@ -569,6 +581,7 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
   <section class="panel block hidden" id="mailpanel">
     <p class="pt"><span class="pi">✉️</span> Mes mails créateurs</p>
     <div id="schedbox"></div>
+    <div id="copilotbox" class="hidden"></div>
     <div id="mailbox"></div>
   </section>
 
@@ -1096,8 +1109,41 @@ async function loadMail(fresh){
       return;
     }
     renderMail(d, who);
+    loadCopilotBox(who);
     if(!who){ checkSignature(); loadScheduled(); }
   }catch(e){show($('mailpanel'),false);}
+}
+// --- Copilote dans le cockpit : mêmes décisions que sur Slack, en un clic ---
+async function loadCopilotBox(who){
+  const box=$('copilotbox'); if(!box)return;
+  try{
+    const r=await api('/api/copilot/box'+(who?('?as='+encodeURIComponent(who)):''));
+    if(!r.ok){show(box,false);return;}
+    const d=await r.json(); const ps=(d&&d.proposals)||[];
+    if(!ps.length){box.innerHTML='';show(box,false);return;}
+    box.innerHTML='<div class="cphead">🤖 Copilote · '+ps.length+' décision(s) en attente <span class="cpsub">mêmes choix que sur Slack, en un clic</span></div>'
+      +ps.map(p=>{
+        const who2=esc(p.creator||'expéditeur inconnu'), br=p.brand?(' · '+esc(p.brand)):'';
+        const head='<div class="cpwho"><b>'+who2+'</b>'+br+(p.categorie==='interne'?' · <span class="cptag">interne</span>':'')+'</div>'
+          +(p.subject?('<div class="cpsubj">'+esc(p.subject)+'</div>'):'');
+        if(p.categorie==='decision'&&p.status==='pending'){
+          return '<div class="cpcard">'+head+'<div class="cpq">'+esc(p.question||p.resume||'')+'</div>'
+            +'<div class="cpbtns"><button class="lk" data-id="'+p.id+'" data-cpact="accept">✅ Oui</button><button class="lk" data-id="'+p.id+'" data-cpact="refuse">❌ Non</button><button class="lk" data-id="'+p.id+'" data-cpact="self">✍️ Je gère moi-même</button></div></div>';
+        }
+        const rep=p.reply?('<div class="cprep">'+esc(String(p.reply).slice(0,600))+(String(p.reply).length>600?'…':'')+'</div>'):'';
+        const lab=p.status==='ready'?('Réponse rédigée selon ta décision ('+(p.decision==='accept'?'oui ✅':'non ❌')+') : relis et envoie'):'Réponse prête (voix Hyped) : relis et envoie';
+        return '<div class="cpcard">'+head+'<div class="cpq">'+esc(p.resume||'')+'</div><div class="cplab">'+lab+'</div>'+rep
+          +'<div class="cpbtns">'+(p.reply?('<button class="lk" data-id="'+p.id+'" data-cpact="send">📤 Envoyer</button>'):'')+'<button class="lk" data-id="'+p.id+'" data-cpact="self">✍️ Je gère moi-même</button></div></div>';
+      }).join('');
+    show(box,true);
+    box.querySelectorAll('button[data-cpact]').forEach(b=>b.onclick=async()=>{
+      b.disabled=true; b.textContent='…';
+      const rr=await api('/api/copilot/act',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:b.dataset.id,action:b.dataset.cpact})});
+      const dd=await rr.json().catch(()=>({}));
+      alert((dd.title||'')+(dd.msg?('\n'+dd.msg):'')||(rr.ok?'OK':'Erreur'));
+      loadCopilotBox(who); if(b.dataset.cpact==='send')loadMail();
+    });
+  }catch(e){show(box,false);}
 }
 let SIG_CHECKED=false;
 async function checkSignature(){
