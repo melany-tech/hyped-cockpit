@@ -1321,6 +1321,40 @@ function genStatsFR(brand, name, cp) {
   return `Hello ${name} ✨\n\nMerci encore pour ta superbe collab avec ${brand} ! 🤍\n\nPour clôturer la campagne côté marque, est-ce que tu pourrais m'envoyer les statistiques de tes contenus : vues, portée/impressions, likes, partages, enregistrements, et les captures des stories ?\n\nUn petit screenshot de chaque contenu suffit largement. Ça nous permet de faire le bilan avec ${brand}.\n\nMerci d'avance et à très vite,\n${cp}`;
 }
 
+// --- To-do par marque : les tâches Notion de la personne, groupées par Projet ---
+app.get("/api/todo", auth, async (req, res) => {
+  if (DEMO || !notion) return res.json({ enabled: false, taches: [] });
+  try {
+    const all = []; let cursor;
+    do {
+      const r = await notion.databases.query({ database_id: TASKS_DB, start_cursor: cursor, page_size: 100 });
+      r.results.forEach((pg) => all.push(mapTask(pg))); cursor = r.has_more ? r.next_cursor : null;
+    } while (cursor);
+    const me = normName(req.user.name);
+    const sup = req.user.role === "supervisor";
+    const qui = String(req.query.qui || "").trim(); // superviseures : filtre par personne
+    const taches = all
+      .filter((t) => t.statut !== "Fait")
+      .filter((t) => (sup ? (!qui || normName(t.responsable || "") === normName(qui)) : normName(t.responsable || "") === me))
+      .sort((a, b) => String(a.echeance || "9999").localeCompare(String(b.echeance || "9999")));
+    const responsables = sup ? [...new Set(all.map((t) => t.responsable).filter(Boolean))].sort() : [];
+    res.json({ enabled: true, taches, responsables });
+  } catch (e) { res.json({ enabled: false, error: e.message, taches: [] }); }
+});
+app.post("/api/todo/check", auth, async (req, res) => {
+  if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
+  const id = String(req.body?.id || "");
+  if (!id) return res.status(400).json({ error: "id manquant" });
+  try {
+    // Garde-fou : une CP ne coche que SES tâches ; les superviseures peuvent tout cocher
+    const pg = await notion.pages.retrieve({ page_id: id });
+    const t = mapTask(pg);
+    if (req.user.role !== "supervisor" && normName(t.responsable || "") !== normName(req.user.name)) return res.status(403).json({ error: "pas ta tâche" });
+    await notion.pages.update({ page_id: id, properties: { "Statut": { select: { name: req.body?.done ? "Fait" : "À faire" } } } });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: String(e && e.message || e).slice(0, 160) }); }
+});
+
 // --- Veille / Sourcing : profils à contacter (board Tâches, Type=Prise de contact) ---
 const INHAIRCARE_DB = "380f8ac3-c3ae-80ce-ba4c-e8e82490edc6";
 app.get("/api/sourcing", auth, async (req, res) => {

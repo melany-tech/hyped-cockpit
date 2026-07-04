@@ -213,6 +213,18 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .histinfo .hists{font-size:11px;color:var(--gray)}
 .histrowbtn{cursor:pointer}
 .sighint{background:#FBF3E6;border:1px solid #EBD9B6;color:#7A5B18;border-radius:9px;padding:9px 12px;font-size:12px;margin-bottom:10px}
+.todofilter{margin-bottom:12px;font-size:13px}
+.todofilter select{font-family:inherit;font-size:13px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.todobrand{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:12px}
+.todobt{font-weight:700;font-size:14px;margin-bottom:8px}
+.todocount{background:var(--soft);border-radius:8px;padding:1px 8px;font-size:11.5px;font-weight:600;color:#56666D;margin-left:6px}
+.todoitem{display:flex;align-items:center;gap:10px;padding:8px 6px;border-top:1px solid var(--line);cursor:pointer;font-size:13.5px}
+.todoitem:first-of-type{border-top:none}
+.todoitem.done .todotxt{text-decoration:line-through;opacity:.5}
+.todotxt{flex:1}
+.todotag{background:#EAF4F3;color:#2C9087;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:600}
+.tododue{font-size:11.5px;color:#C77F2A;font-weight:600}
+.todowho{font-size:11.5px;color:#56666D}
 #copilotbox{margin-bottom:14px}
 .cphead{font-weight:700;font-size:14px;margin:2px 0 10px}
 .cphead .cpsub{font-weight:500;color:#56666D;font-size:12px;margin-left:8px}
@@ -494,6 +506,7 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
       <a class="nav" data-go="campagnes"><span class="ni">📣</span> Campagnes</a>
       <a class="nav" data-go="contenus"><span class="ni">🎬</span> Contenus</a>
       <a class="nav" data-go="marques"><span class="ni">🏷️</span> Marques</a>
+      <a class="nav" data-go="todo"><span class="ni">✅</span> To-do</a>
       <a class="nav" data-go="contacts"><span class="ni">👥</span> Contacts</a>
       <a class="nav" data-go="calendrier"><span class="ni">📅</span> Calendrier</a>
       <a class="nav" data-go="messages"><span class="ni">💬</span> Messages</a>
@@ -590,6 +603,7 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
     <section id="contactsview" style="display:none"><p class="pt"><span class="pi">👥</span> Contacts créateurs</p><div id="contactsbox"><div class="state">Chargement…</div></div></section>
     <section id="rapportsview" style="display:none"><p class="pt"><span class="pi">📊</span> Rapports</p><div id="rapportsbox"><div class="state">Chargement…</div></div></section>
     <section id="calendrierview" style="display:none"><p class="pt"><span class="pi">📅</span> Calendrier</p><div id="calendrierbox"><div class="state">Chargement…</div></div></section>
+    <section id="todoview" style="display:none"><p class="pt"><span class="pi">✅</span> To-do</p><div class="panelhint">Tes tâches à faire, marque par marque. Une case cochée = statut « Fait » dans Notion, tout est synchronisé.</div><div id="todowrap"><div class="state">Chargement…</div></div></section>
     <section id="marquesview" style="display:none"><p class="pt"><span class="pi">🏷️</span> Marques</p><div class="panelhint">La fiche d'identité de chaque marque : contexte, période, contacts, docs & liens, et la progression du pôle. Clique une marque à gauche.</div><div class="mqlayout"><div id="mqlist" class="mqlist"></div><div id="mqdetail" class="mqdetail"><div class="state">Chargement…</div></div></div></section>
     <section id="historiqueview" style="display:none"><button class="lk backbtn" onclick="showView('cockpit')">← Retour au cockpit</button><p class="pt"><span class="pi">📜</span> Historique &amp; traçabilité</p><div class="panelhint">Chaque collab et son fil d'étapes : qui a fait quoi, quand, avec les liens vers les mails et la fiche Notion.</div><div class="ctsearch"><input id="histsearch" placeholder="🔍 Rechercher un créateur, une marque, une CP…"></div><div id="historiquebox"><div class="state">Chargement…</div></div></section>
     <div id="activitybar" class="actbar hidden"></div>
@@ -644,8 +658,8 @@ function statCardGo(act){
   else { navToView('cockpit'); setTimeout(()=>{const el=$('todopanel'); if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},220); } // à traiter / relances → priorités
 }
 let CURRENT_VIEW='cockpit';
-const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview',historique:'historiqueview',marques:'marquesview'};
-function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','historiqueview','marquesview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
+const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview',historique:'historiqueview',marques:'marquesview',todo:'todoview'};
+function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','historiqueview','marquesview','todoview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
 function refreshCustomView(){
   if(CURRENT_VIEW==='campagnes')renderCampagnes();
   else if(CURRENT_VIEW==='contacts')renderContacts();
@@ -653,6 +667,7 @@ function refreshCustomView(){
   else if(CURRENT_VIEW==='calendrier')renderCalendrier();
   else if(CURRENT_VIEW==='historique')renderHistorique();
   else if(CURRENT_VIEW==='marques')renderMarques();
+  else if(CURRENT_VIEW==='todo')renderTodo();
 }
 function showView(v){
   CURRENT_VIEW=v;
@@ -1025,6 +1040,41 @@ async function renderBrandDetail(brand,target){
 }
 // ===== Vue Marques (menu latéral) : liste à gauche, fiche à droite =====
 let MQ_SELECTED=null;
+// ===== To-do par marque (tâches Notion, cases à cocher synchronisées) =====
+let TODO_QUI='';
+async function renderTodo(){
+  const w=$('todowrap'); if(!w)return;
+  w.innerHTML='<div class="state">Chargement…</div>';
+  try{
+    const q=(VIEWER&&VIEWER.role==='supervisor'&&TODO_QUI)?('?qui='+encodeURIComponent(TODO_QUI)):'';
+    const r=await api('/api/todo'+q); const d=await r.json();
+    if(!d.enabled){w.innerHTML='<div class="state">To-do indisponible pour le moment.</div>';return;}
+    let h='';
+    if(VIEWER&&VIEWER.role==='supervisor'&&(d.responsables||[]).length){
+      h+='<div class="todofilter">Voir : <select id="todoqui"><option value="">toute l\'équipe</option>'+d.responsables.map(n=>'<option '+(TODO_QUI===n?'selected':'')+' value="'+esc(n)+'">'+esc(n)+'</option>').join('')+'</select></div>';
+    }
+    const ts=d.taches||[];
+    if(!ts.length){ w.innerHTML=h+'<div class="state">Rien à faire, tout est à jour 🎉</div>'; wireTodo(w); return; }
+    const by={};
+    ts.forEach(t=>{const k=t.projet||'Sans marque';(by[k]=by[k]||[]).push(t);});
+    h+=Object.keys(by).sort().map(b=>'<div class="todobrand"><div class="todobt">🏷️ '+esc(b)+' <span class="todocount">'+by[b].length+'</span></div>'
+      +by[b].map(t=>'<label class="todoitem"><input type="checkbox" data-tid="'+esc(t.id)+'"><span class="todotxt">'+esc(t.task)+'</span>'
+        +(t.type?('<span class="todotag">'+esc(t.type)+'</span>'):'')
+        +(t.echeance?('<span class="tododue">'+esc(t.echeance)+'</span>'):'')
+        +(VIEWER&&VIEWER.role==='supervisor'&&t.responsable?('<span class="todowho">'+esc(t.responsable)+'</span>'):'')
+        +'</label>').join('')+'</div>').join('');
+    w.innerHTML=h; wireTodo(w);
+  }catch(e){w.innerHTML='<div class="state">Erreur de chargement.</div>';}
+}
+function wireTodo(w){
+  const sel=w.querySelector('#todoqui'); if(sel){sel.onchange=()=>{TODO_QUI=sel.value;renderTodo();};}
+  w.querySelectorAll('input[data-tid]').forEach(cb=>{cb.onchange=async()=>{
+    cb.disabled=true; const row=cb.closest('.todoitem'); if(row)row.classList.add('done');
+    const r=await api('/api/todo/check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:cb.dataset.tid,done:cb.checked})});
+    if(!r.ok){ if(row)row.classList.remove('done'); cb.checked=false; cb.disabled=false; const d=await r.json().catch(()=>({})); alert(d.error||'Impossible de mettre à jour.'); return; }
+    setTimeout(renderTodo,700);
+  };});
+}
 function renderMarques(){
   const list=$('mqlist'), det=$('mqdetail'); if(!list||!det)return;
   const brands=brandUnion();
