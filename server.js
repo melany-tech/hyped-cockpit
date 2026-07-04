@@ -626,6 +626,7 @@ async function claudeReply({ cp, creator, brand, category, received, subject, tr
     "Ne JAMAIS écrire de signature complète type 'Kendia Koffi / Cheffe de projet / Hyped Agency' : juste le prénom (la signature mail s'ajoute automatiquement).",
     "",
     "STYLE : n'utilise JAMAIS de tiret quadratin, c'est-à-dire le caractère « — », dans tes réponses : préfère une virgule, deux-points ou une nouvelle phrase.",
+    "LANGUE (PRIORITÉ ABSOLUE) : tu réponds TOUJOURS dans la LANGUE du dernier message reçu. Mail en anglais = réponse ENTIÈREMENT en anglais (même chaleur, mêmes règles, salutation adaptée type 'Hi [prénom],'). Mail en français = réponse en français. Ne mélange jamais les deux.",
     "RÈGLE D'OR : tu réponds VRAIMENT au contenu du dernier message : tu reprends ses points, réponds à ses questions, rebondis sur ce qu'il dit. JAMAIS de réponse générique.",
     "RÈGLE BUDGET, déterminer le type : la collab est rémunérée UNIQUEMENT si un budget / tarif / facture / paiement a déjà été ACTÉ par l'agence dans le fil. Sinon c'est un envoi de produits (gifting). N'affirme JAMAIS que c'est payé si ça n'a pas été acté.",
     "RÈGLE BUDGET, comment l'annoncer (FORMULATION OBLIGATOIRE, à respecter à la lettre) :",
@@ -1072,7 +1073,8 @@ async function copilotInternalReply({ cp, fromName, subject, received, transcrip
   if (!hasOpenAI && !hasAnthropic) return { ok: false, reason: "nokey" };
   const sys = [
     "Tu es " + (cp || "une cheffe de projet") + ", de l'agence Hyped Agency. Tu réponds par mail à " + (fromName || "un collègue de l'agence") + " (mail INTERNE, entre collègues).",
-    "Ton : chaleureux, direct, professionnel, tutoiement, français. Court (2 à 6 phrases). Un emoji léger max.",
+    "Ton : chaleureux, direct, professionnel, tutoiement. Court (2 à 6 phrases). Un emoji léger max.",
+    "LANGUE : réponds TOUJOURS dans la langue du dernier message reçu (anglais si le mail est en anglais, français sinon).",
     "Réponds VRAIMENT au contenu du message : réponds aux questions posées, confirme ce qui doit l'être, dis clairement si quelque chose sera fait.",
     "Ne signe que par le prénom : " + (cp || "") + ". Jamais de tiret quadratin.",
   ].join("\n");
@@ -1120,6 +1122,8 @@ async function copilotTick() {
       const waiting = store.proposals.filter((x) => x.cpEmail === email && (x.status === "pending" || x.status === "ready") && (Date.now() - x.at) < 7 * 24 * 3600 * 1000);
       for (const w of waiting.slice(0, 20)) {
         try {
+          // Purge des fausses décisions « interne » créées sur des fils de collab (bug corrigé) : on classe sans bruit
+          if (w.categorie === "interne" && w.brand) { w.status = "handled"; w.decidedAt = Date.now(); continue; }
           if (tt[w.threadId]) { w.status = "handled"; w.decidedAt = Date.now(); continue; } // traité dans le cockpit : on classe sans bruit
           const own = await gm.lastReplyFromMe(email, w.threadId);
           if (own && own > w.at) {
@@ -1160,6 +1164,10 @@ async function copilotTick() {
           if (seen.has(email + "|" + (m.id || m.threadId))) continue;
           const fromAddr = mailAddr(m.from);
           if (fromAddr.toLowerCase() === email) continue; // ses propres mails, non merci
+          // Fil de COLLAB (marque détectée) écrit par une collègue : c'est ELLE qui gère le créateur,
+          // il n'y a rien à lui répondre. Sans ce garde-fou, l'IA proposait de répondre à sa collègue
+          // sur ses propres mails sortants (mails en copie) : absurde.
+          if (m.brand) continue;
           let transcript = "";
           try { const full = await gm.fetchThreadText(email, m.threadId); if (full && full.ok) transcript = full.transcript || full.text || ""; } catch (e) {}
           const fromName = String(m.from || "").replace(/<[^>]*>/, "").trim() || fromAddr;
