@@ -990,7 +990,8 @@ async function copilotNotify(payload) {
       const r = await fetch("https://slack.com/api/chat.postMessage", {
         method: "POST",
         headers: { "content-type": "application/json; charset=utf-8", "authorization": "Bearer " + botToken },
-        body: JSON.stringify({ channel: payload.slackUser, text: payload.text }),
+        // unfurl:false = pas d'aperçu de lien : Slack ne "visite" pas nos liens d'action
+        body: JSON.stringify({ channel: payload.slackUser, text: payload.text, unfurl_links: false, unfurl_media: false }),
       });
       const d = await r.json().catch(() => ({}));
       try { console.log("[copilot] notif Slack directe →", payload.slackUser, ":", d.ok ? "ok" : ("échec " + (d.error || r.status))); } catch (e2) {}
@@ -1169,7 +1170,34 @@ app.get("/copilot/tick", async (req, res) => {
   const s = loadCopilot();
   res.json({ ok: true, dernieres: (s.proposals || []).slice(-10).map((p) => ({ cp: p.cpEmail, de: p.creator, categorie: p.categorie, statut: p.status, quand: new Date(p.at).toLocaleString("fr-FR") })) });
 });
-app.get("/copilot/act", async (req, res) => {
+// Vérification de signature partagée (timing-safe)
+function copilotActOk(req) {
+  const { id, action, sig } = req.query || {};
+  try {
+    const expected = Buffer.from(copilotSign(String(id || ""), String(action || "")));
+    const given = Buffer.from(String(sig || ""));
+    return !!(id && action && sig && COPILOT.secret) && given.length === expected.length && crypto.timingSafeEqual(given, expected);
+  } catch (e) { return false; }
+}
+// GET = AUCUN effet. Slack (et d'autres services) "visitent" les liens pour les prévisualiser,
+// et cette simple visite déclenchait l'action : un mail est parti tout seul. Désormais le lien
+// ouvre une page neutre qui exécute l'action via le navigateur (POST en JS) : un robot ne
+// clique pas et n'exécute pas de JS, donc plus jamais d'action fantôme.
+app.get("/copilot/act", (req, res) => {
+  const { id, action, sig } = req.query || {};
+  if (!copilotActOk(req)) return res.status(403).send(copilotPage("Lien invalide 🤔", "Ce lien n'est pas valide ou a été modifié. Repasse par le message Slack."));
+  const store = loadCopilot();
+  const p = (store.proposals || []).find((x) => x.id === id);
+  if (!p) return res.status(404).send(copilotPage("Introuvable", "Cette proposition n'existe plus (elle a peut-être expiré)."));
+  if (p.status === "sent") return res.send(copilotPage("C'est fait ! ✅", "La réponse à " + (p.creator || "ce créateur") + " est bien partie. Rien n'a été envoyé en double, tout est ok. Tu peux fermer cette page."));
+  if (p.status === "handled") return res.send(copilotPage("Déjà traité ✅", "Ce mail a déjà été géré (réponse envoyée directement depuis Gmail, ou traité dans le cockpit). Rien n'a été envoyé en double, rien à faire."));
+  if (p.status === "self" && action !== "send") return res.send(copilotPage("C'est toi qui gères ✍️", "Ce mail t'attend dans le cockpit, onglet Messages."));
+  const q = "id=" + encodeURIComponent(String(id)) + "&action=" + encodeURIComponent(String(action)) + "&sig=" + encodeURIComponent(String(sig));
+  const runner = "<script>fetch('/copilot/act/do?" + q + "',{method:'POST'}).then(r=>r.text()).then(h=>{document.open();document.write(h);document.close();}).catch(()=>{var d=document.querySelector('p');if(d)d.textContent='Petit souci réseau, recharge cette page pour réessayer.';});</script>"
+    + "<noscript><form method=\"POST\" action=\"/copilot/act/do?" + q + "\" style=\"text-align:center;margin-top:14px\"><button style=\"font-family:inherit;font-size:14px;padding:10px 18px;border-radius:10px;border:1px solid #E4E0D5;background:#2C9087;color:#fff;cursor:pointer\">Continuer</button></form></noscript>";
+  return res.send(copilotPage("Un instant ⏳", "J'exécute ton choix, la confirmation arrive dans une seconde.").replace("</body>", runner + "</body>"));
+});
+app.post("/copilot/act/do", async (req, res) => {
   const { id, action, sig } = req.query || {};
   // Comparaison timing-safe : même durée que la signature soit bonne ou pas (anti-attaque par chronométrage)
   let ok = false;
