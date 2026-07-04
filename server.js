@@ -565,7 +565,32 @@ async function callAnthropic(sys, ctx) {
     return text ? { ok: true, body: text, via: "anthropic" } : { ok: false, reason: "empty" };
   } catch (e) { return { ok: false, reason: "exc", detail: String(e && e.message || e) }; }
 }
-async function claudeReply({ cp, creator, brand, category, received, subject, transcript, directive }) {
+// Résumé du calendrier d'une marque pour l'IA : jours de publication déjà pris
+// sur les 6 prochaines semaines. Sert à proposer des dates optimales (règles :
+// au moins 3 jours couverts par semaine, idéalement mardi/mercredi/jeudi).
+function planningForBrand(collabs, brand) {
+  try {
+    if (!brand) return "";
+    const taken = new Set();
+    for (const r of collabs || []) { if (r.brand === brand && r.date) taken.add(String(r.date).slice(0, 10)); }
+    const today = new Date(); today.setHours(12, 0, 0, 0);
+    const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    const JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
+    const MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+    const lines = [];
+    for (let w = 0; w < 6; w++) {
+      const start = new Date(monday); start.setDate(monday.getDate() + w * 7);
+      const days = [];
+      for (let j = 0; j < 7; j++) {
+        const d = new Date(start); d.setDate(start.getDate() + j);
+        if (taken.has(d.toISOString().slice(0, 10))) days.push(JOURS[j] + " " + d.getDate() + " " + MOIS[d.getMonth()]);
+      }
+      lines.push("semaine du " + start.getDate() + " " + MOIS[start.getMonth()] + " : " + (days.length ? (days.join(", ") + " -> " + days.length + " jour(s) couvert(s)") : "aucune publication prévue"));
+    }
+    return lines.join("\n");
+  } catch (e) { return ""; }
+}
+async function claudeReply({ cp, creator, brand, category, received, subject, transcript, directive, planning }) {
   const hasOpenAI = !!process.env.OPENAI_API_KEY, hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
   if (!hasOpenAI && !hasAnthropic) return { ok: false, reason: "nokey" };
   // On s'adresse aux créateurs par leur PRÉNOM, jamais par leur nom complet / pseudo (« Juliette », pas « Juliette DTR »)
@@ -635,6 +660,8 @@ async function claudeReply({ cp, creator, brand, category, received, subject, tr
     (received || "").slice(0, 4000),
     "\"\"\"",
     "",
+    planning ? ("PLANNING de la marque (publications déjà calées sur les prochaines semaines) :\n" + planning) : "",
+    planning ? "RÈGLE DATES : si le mail concerne une date de publication (caler, décaler, confirmer), privilégie un MARDI, MERCREDI ou JEUDI, dans une semaine où moins de 3 jours sont déjà couverts (objectif : au moins 3 jours différents remplis par semaine). Si la date proposée par le créateur respecte déjà ces règles, valide-la simplement. Sinon, reste souple : accepte le principe mais suggère la meilleure date proche ('est-ce que le jeudi 23 t'irait ?'), sans jamais imposer ni mentionner l'existence d'un planning interne." : "",
     directive ? ("DIRECTIVE DE LA CHEFFE DE PROJET (décision prise, à appliquer absolument, avec tact et dans la voix Hyped) : " + directive) : "",
     "Rédige la réponse de " + (cp || "la CP") + ".",
   ].filter(Boolean).join("\n");
@@ -657,7 +684,8 @@ app.post("/api/reply/suggest", auth, async (req, res) => {
       if (full && full.ok && full.transcript) transcript = full.transcript;
     }
   } catch (e) {}
-  const out = await claudeReply({ cp: req.user.name, creator, brand, category, received, subject, transcript });
+  let planning = ""; try { planning = planningForBrand(await fetchRows(), brand); } catch (e) {}
+  const out = await claudeReply({ cp: req.user.name, creator, brand, category, received, subject, transcript, planning });
   res.json(out);
 });
 // Marque un brief comme envoyé/préparé pour une collab → allume l'étape pipeline + activité
@@ -1100,7 +1128,7 @@ async function copilotTick() {
         try { const full = await gm.fetchThreadText(email, m.threadId); if (full && full.ok) transcript = full.transcript || full.text || ""; } catch (e) {}
         const creator = m["créateur"] || "";
         const cls = await copilotClassify({ creator, subject: m.subject, received: m.snippet, transcript });
-        const rep = await claudeReply({ cp: copilotCpName(email), creator, brand: m.brand, category: m.category, received: m.snippet, subject: m.subject, transcript });
+        const rep = await claudeReply({ cp: copilotCpName(email), creator, brand: m.brand, category: m.category, received: m.snippet, subject: m.subject, transcript, planning: planningForBrand(collabs, m.brand) });
         const p = {
           id: crypto.randomBytes(8).toString("hex"),
           cpEmail: email, cpName: copilotCpName(email),
@@ -1228,7 +1256,8 @@ async function copilotExecute(id, action) {
         : "La CP REFUSE la demande du créateur (" + (p.resume || p.question) + "). Dis-le avec tact, sans fermer la relation, propose une alternative si pertinent.";
       let transcript = "";
       try { const full = await gm.fetchThreadText(p.cpEmail, p.threadId); if (full && full.ok) transcript = full.transcript || full.text || ""; } catch (e) {}
-      const rep = await claudeReply({ cp: p.cpName, creator: p.creator, brand: p.brand, category: "réponse", received: p.resume, subject: p.subject, transcript, directive });
+      let planning = ""; try { planning = planningForBrand(await fetchRows(), p.brand); } catch (e) {}
+      const rep = await claudeReply({ cp: p.cpName, creator: p.creator, brand: p.brand, category: "réponse", received: p.resume, subject: p.subject, transcript, directive, planning });
       if (!rep || !rep.ok) return { code: 500, title: "IA indisponible 💤", msg: "Impossible de rédiger là tout de suite. Réponds depuis le cockpit." };
       p.reply = rep.body; p.status = "ready"; p.decision = action; p.decidedAt = Date.now(); saveCopilot(store);
       const slackUser = COPILOT.slackIds[p.cpEmail] || "";
