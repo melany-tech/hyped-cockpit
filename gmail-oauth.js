@@ -199,7 +199,7 @@ async function getAttachment(email, msgId, attId) {
 async function analyzeFor(email, collabs, brandProducts = {}) {
   const gmail = gmailFor(email);
   if (!gmail) return { connected: false };
-  const emails = await fetchEmails(gmail);
+  const emails = await fetchEmails(gmail, undefined, 80); // 80 fils : couvre aussi les boîtes chargées
   const res = analyzeMailbox(emails, collabs, brandProducts);
   // EN PARALLÈLE : on enrichit (PJ + liens) toutes les réponses créateurs en même temps
   await Promise.all((res.creatorReplies || []).map(async (r) => {

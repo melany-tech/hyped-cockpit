@@ -295,6 +295,13 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .sb-filter .filterbar{display:block;margin:0}
 .sb-filter .filterbar label{display:none}
 .sb-filter select{width:100%;font-family:inherit;font-size:12.5px;color:var(--navy);background:var(--bg);border:1px solid #CFDADA;border-radius:8px;padding:7px 9px}
+.othermails{margin-top:16px}
+.othermails summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--navy);padding:10px 12px;background:var(--soft);border:1px solid var(--line);border-radius:10px}
+.othermails[open] summary{margin-bottom:8px}
+.cpchips{display:flex;flex-wrap:wrap;gap:6px}
+.cpchips .chip{font-size:11.5px;padding:5px 10px;border:1px solid #CFDADA;border-radius:14px;background:var(--bg);cursor:pointer;color:var(--navy);font-weight:600;user-select:none}
+.cpchips .chip:hover{border-color:var(--navy)}
+.cpchips .chip.on{background:var(--navy);color:#fff;border-color:var(--navy)}
 .sb-filter .calbar{margin:9px 0 0;flex-direction:column;align-items:stretch;gap:6px}
 .sb-filter .calbar .lab{display:none}
 .sb-filter .calbar a{display:block;text-align:center}
@@ -518,7 +525,7 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
       </div>
       <div class="sb-filter">
         <div class="sb-filter-lbl">Filtres actifs</div>
-        <div class="filterbar hidden" id="filterbar"><select id="cpfilter"></select></div>
+        <div class="filterbar hidden" id="filterbar"><input type="hidden" id="cpfilter" value=""><div id="cpchips" class="cpchips"></div></div>
         <div id="calbar" class="calbar hidden"></div>
       </div>
     </div>
@@ -833,10 +840,15 @@ async function load(){
   show($('teamtoggle'), !isSup);   // toggle « vue équipe » réservé aux CP
   if(isSup){
     const present=ROWS.map(x=>x.cp).filter(Boolean);
-    // La superviseure connectée figure aussi dans son propre filtre (pour voir « que moi »)
-    const cps=[...new Set([VIEWER.name,...(d.team||[]),...present])].filter(Boolean).sort();
-    $('cpfilter').innerHTML='<option value="ALL">Toute l\'équipe</option>'+cps.map(c=>`<option value="${c}">${c}</option>`).join('');
-    $('cpfilter').onchange=()=>{render();loadTodo();loadOverview();loadMail();loadVisios();};show($('filterbar'),true);
+    // Pastilles : 🙋 Moi (défaut) · 👥 Toute l'équipe · membres cochables un par un
+    CP_OTHERS=[...new Set([...(d.team||[]),...present])].filter(n=>n&&nlow(n)!==nlow(VIEWER.name)).sort();
+    if(!CPFILTER_INIT){
+      let saved=''; try{saved=localStorage.getItem('hc_cpsel')||'';}catch(e){}
+      $('cpfilter').value=saved||VIEWER.name; // par défaut : sa vue à elle
+      CPFILTER_INIT=true;
+    }
+    renderCpChips();
+    show($('filterbar'),true);
   }else show($('filterbar'),false);
   loadAlerts();          // remplissage des calendriers : visible par toutes les CP
   render();
@@ -879,10 +891,38 @@ function updateStats(){
   updateBell();
 }
 // --- Pipeline + vue par marque ------------------------------------------
+// --- Filtre par pastilles (Moi / équipe / membres cochables) ---------------
+let CPFILTER_INIT=false, CP_OTHERS=[];
+function nlow(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();}
+function cpSelParts(){ const v=($('cpfilter')&&$('cpfilter').value)||''; return (!v||v==='ALL')?[]:v.split('||').filter(Boolean); }
+function cpSingle(){ const p=cpSelParts(); return p.length===1?p[0]:null; }
+function renderCpChips(){
+  const box=$('cpchips'); if(!box)return;
+  const me=VIEWER.name, parts=cpSelParts();
+  const isMoi=parts.length===1&&nlow(parts[0])===nlow(me);
+  const isAll=parts.length===0;
+  const chip=(label,on,val)=>'<span class="chip'+(on?' on':'')+'" data-val="'+esc(val)+'">'+esc(label)+'</span>';
+  box.innerHTML=chip('🙋 Moi',isMoi,'__MOI__')+chip('👥 Toute l\'équipe',isAll,'__ALL__')
+    +CP_OTHERS.map(n=>chip(n,!isMoi&&!isAll&&parts.some(p=>nlow(p)===nlow(n)),n)).join('');
+  box.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{
+    const v=c.dataset.val; let parts=cpSelParts();
+    if(v==='__MOI__') parts=[me];
+    else if(v==='__ALL__') parts=[];
+    else{
+      if(parts.length===1&&nlow(parts[0])===nlow(me)) parts=[]; // on sort du mode Moi
+      if(parts.some(p=>nlow(p)===nlow(v))) parts=parts.filter(p=>nlow(p)!==nlow(v)); else parts.push(v);
+      if(!parts.length) parts=[me]; // plus rien de coché : retour à Moi
+    }
+    $('cpfilter').value=parts.length?parts.join('||'):'ALL';
+    try{localStorage.setItem('hc_cpsel',$('cpfilter').value);}catch(e){}
+    renderCpChips();
+    render();loadTodo();loadOverview();loadMail();loadVisios();
+  });
+}
 function overviewParam(){
   const isSup=VIEWER&&VIEWER.role==='supervisor';
-  const v=(isSup&&$('cpfilter'))?$('cpfilter').value:'';
-  if(isSup&&v&&v!=='ALL') return '?view='+encodeURIComponent(v); // pilote → cale l'overview sur la CP
+  const v=isSup?cpSingle():null;
+  if(isSup&&v) return '?view='+encodeURIComponent(v); // pilote → cale l'overview sur la personne choisie
   return tparam();
 }
 async function loadOverview(){
@@ -1136,8 +1176,8 @@ async function loadActivity(){
 function esc(s){return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function mailAs(){
   const isSup=VIEWER&&VIEWER.role==='supervisor';
-  const v=(isSup&&$('cpfilter'))?$('cpfilter').value:'';
-  return (isSup&&v&&v!=='ALL')?v:null; // pilote qui regarde une CP précise
+  const v=isSup?cpSingle():null;
+  return (isSup&&v&&nlow(v)!==nlow(VIEWER.name))?v:null; // pilote qui regarde la boîte d'une CP précise
 }
 function setMailTitle(who){ const hdr=$('mailpanel')&&$('mailpanel').querySelector('.pt'); if(hdr) hdr.innerHTML='<span class="pi">✉️</span> '+(who?('Mails créateurs · '+esc(who)):'Mes mails créateurs'); }
 async function refreshAll(btn){
@@ -1274,8 +1314,21 @@ function fileChips(atts, lnks){
 function renderMail(d, who){
   const reps=d.creatorReplies||[];
   if(!who){ try{setPipeReponse(reps.length);}catch(e){} }
-  const sum=`<div class="mailsum">${d.relevant||0} mail(s) liés aux collabs · <b>${reps.length} réponse(s) créateur</b> · ${(d.noise||0)+(d.offTopic||0)} ignoré(s) (pubs, recrutement, newsletters)</div>`;
-  if(!reps.length){$('mailbox').innerHTML=sum+'<div class="state">Aucune réponse créateur récente. 👌</div>';return;}
+  // « Autres mails reçus » : tout ce qui n'est pas une réponse créateur mais qui existe quand même
+  // (mails internes, mails de marque, mails où on est en copie, divers). Rien n'est invisible.
+  const seenIds=new Set(reps.map(m=>m.id||m.threadId));
+  const flat=[];
+  Object.values(d.byBrand||{}).forEach(a=>(a||[]).forEach(m=>flat.push(m)));
+  (d.teamMails||[]).forEach(m=>flat.push(m));
+  (d.autres||[]).forEach(m=>flat.push(m));
+  const autres=[]; const dd=new Set();
+  flat.forEach(m=>{const k=m.id||m.threadId; if(!k||seenIds.has(k)||dd.has(k))return; dd.add(k); autres.push(m);});
+  const aRow=m=>{const link=m.url?`<a class="lk" href="${esc(m.url)}" target="_blank" rel="noopener">Ouvrir</a>`:'';
+    const snip=String(m.snippet||'');
+    return `<div class="row"><span class="rdot" style="background:#9AA7AA"></span><div class="info"><div class="t">${esc(m.subject)||'(sans objet)'}</div><div class="s">${esc(m.from||'')}${m.interne?' · <span class="cptag">interne</span>':''}</div>${snip?`<div class="msgsnip">${esc(snip.slice(0,130))}${snip.length>130?'…':''}</div>`:''}</div>${m.brand?`<span class="brand">${esc(m.brand)}</span>`:''}${link}</div>`;};
+  const autresHtml=autres.length?`<details class="othermails"><summary>📥 Autres mails reçus (${autres.length}) · internes, en copie, hors collabs</summary>${autres.slice(0,50).map(aRow).join('')}</details>`:'';
+  const sum=`<div class="mailsum">${d.relevant||0} mail(s) liés aux collabs · <b>${reps.length} réponse(s) créateur</b> · ${autres.length} autre(s) · ${d.noise||0} ignoré(s) (pubs, newsletters)</div>`;
+  if(!reps.length){$('mailbox').innerHTML=sum+'<div class="state">Aucune réponse créateur récente. 👌</div>'+autresHtml;return;}
   const CC={facturation:'#C77F2A',preview:'#7A5AA8',logistique:'#2C9087','réponse':'#1C3A44'};
   $('mailbox').innerHTML=sum+reps.map(m=>{
     const ownerTag=m.créateur?`<span class="owner">${esc(m.créateur)}</span>`:'';
@@ -1289,7 +1342,7 @@ function renderMail(d, who){
     return `<div class="row${tr?' treated':''}" data-email="${esc(email)}" data-subject="${esc(m.subject||'')}" data-cat="${esc(m.category||'')}" data-creator="${esc(m.créateur||'')}" data-brand="${esc(m.brand||'')}" data-thread="${esc(m.threadId||'')}" data-snippet="${esc(snip.slice(0,400))}" data-url="${esc(m.url||'')}" data-files="${filesJson}"><span class="rdot" style="background:${c}"></span>
       <div class="info"><div class="t">${esc(m.subject)||'(sans objet)'}${trBadge}</div><div class="s">${esc(m.from)} · ${esc(m.category)}</div>${snip?`<div class="msgsnip">${esc(snip.slice(0,130))}${snip.length>130?'…':''}</div>`:''}${fileChips(m.attachments,m.transferLinks)}</div>
       <span class="brand">${esc(m.brand)}</span>${ownerTag}<button class="lk primary replybtn">✍️ Répondre</button>${treatBtns}${link}</div>`;
-  }).join('');
+  }).join('')+autresHtml;
   document.querySelectorAll('#mailbox .replybtn').forEach(b=>b.onclick=()=>openReply(b));
   document.querySelectorAll('#mailbox .treatbtn').forEach(b=>b.onclick=()=>setTreated(b.dataset.thread,true));
   document.querySelectorAll('#mailbox .reopenbtn').forEach(b=>b.onclick=()=>setTreated(b.dataset.thread,false));
@@ -1329,9 +1382,9 @@ async function loadAlerts(fresh){
 }
 function render(){
   const isSup=VIEWER.role==='supervisor';
-  const f=isSup?$('cpfilter').value:null;
+  const parts=isSup?cpSelParts():[];
   let list=ROWS.slice();
-  if(isSup&&f&&f!=='ALL')list=list.filter(r=>r.cp===f);
+  if(isSup&&parts.length)list=list.filter(r=>parts.some(p=>nlow(p)===nlow(r.cp)));
   // groupes présents, ordonnés
   const present=[...new Set(list.map(r=>r.grp))];
   const ORDER=PREF.filter(g=>present.includes(g)).concat(present.filter(g=>!PREF.includes(g)));
@@ -1497,12 +1550,12 @@ async function loadVisios(){
 async function loadTodo(){
   try{
     const isSup=VIEWER&&VIEWER.role==='supervisor';
-    const view=(isSup&&$('cpfilter')&&$('cpfilter').value)?$('cpfilter').value:null;
+    const view=isSup?cpSingle():null;
     const qs=[]; if(view)qs.push('view='+encodeURIComponent(view)); if(teamOn())qs.push('team=1');
     const r=await api('/api/todos'+(qs.length?('?'+qs.join('&')):''));const d=await r.json();
     if(!d.enabled){show($('todopanel'),false);TODO_COUNT=0;updateStats();return;}
     let hdr='Mes priorités';
-    if(isSup) hdr=(!view||view==='ALL')?'Priorités équipe':'Priorités · '+view;
+    if(isSup) hdr=view?('Priorités · '+view):'Priorités équipe';
     else if(teamOn()) hdr='Priorités équipe (vue congés)';
     $('todohdr2').textContent=hdr;
     show($('todopanel'),true);
@@ -1551,8 +1604,8 @@ function renderTodo(tasks, showOwner, addFor){
 async function addTask(){
   const v=$('todoinput').value.trim(); if(!v)return;
   const isSup=VIEWER&&VIEWER.role==='supervisor';
-  const view=(isSup&&$('cpfilter')&&$('cpfilter').value)?$('cpfilter').value:null;
-  const body={task:v}; if(isSup&&view&&view!=='ALL') body.responsable=view;
+  const view=isSup?cpSingle():null;
+  const body={task:v}; if(isSup&&view) body.responsable=view;
   $('todoinput').value=''; $('todoinput').placeholder='Ajout…';
   await api('/api/todos',{method:'POST',body:JSON.stringify(body)});
   loadTodo();
