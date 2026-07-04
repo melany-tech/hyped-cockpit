@@ -19,9 +19,22 @@ const PROD = process.env.NODE_ENV === "production";
 const DEMO = !process.env.NOTION_TOKEN;
 
 function loadUsers() {
-  for (const f of ["users.json", "users.example.json"]) {
-    const p = path.join(__dirname, f);
-    if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, "utf8"));
+  // Priorité au disque persistant : les mots de passe changés depuis le cockpit y sont enregistrés
+  // et survivent aux déploiements. Le users.example.json du repo n'est qu'un DERNIER recours.
+  const candidates = [
+    "/var/data/users.json",
+    process.env.DATA_DIR ? path.join(process.env.DATA_DIR, "users.json") : null,
+    "/etc/secrets/users.json",
+    path.join(__dirname, "users.json"),
+    path.join(__dirname, "users.example.json"),
+  ].filter(Boolean);
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) {
+        if (p.endsWith("users.example.json")) console.warn("[auth] ATTENTION : comptes chargés depuis users.example.json (fichier public du repo). Change les mots de passe depuis le menu avatar pour basculer sur le disque persistant.");
+        return JSON.parse(fs.readFileSync(p, "utf8"));
+      }
+    } catch (e) {}
   }
   return [];
 }
@@ -219,13 +232,37 @@ function auth(req, res, next) {
   try { req.user = jwt.verify(req.cookies.hc_token, JWT_SECRET); next(); }
   catch (e) { res.status(401).json({ error: "non connecté" }); }
 }
+// Anti brute force : 8 échecs par IP+email -> pause de 10 minutes
+const LOGIN_FAILS = {}; // clé -> { n, until }
+function loginKey(req, email) { return String(req.headers["x-forwarded-for"] || req.ip || "?").split(",")[0].trim() + "|" + String(email || "").toLowerCase(); }
 app.post("/api/login", (req, res) => {
   const { email, password } = req.body || {};
+  const k = loginKey(req, email);
+  const f = LOGIN_FAILS[k];
+  if (f && f.until && f.until > Date.now()) return res.status(429).json({ error: "Trop de tentatives. Réessaie dans quelques minutes." });
   const u = USERS.find((x) => x.email.toLowerCase() === String(email || "").toLowerCase());
-  if (!u || !bcrypt.compareSync(String(password || ""), u.passwordHash))
+  if (!u || !bcrypt.compareSync(String(password || ""), u.passwordHash)) {
+    const e = (LOGIN_FAILS[k] = LOGIN_FAILS[k] || { n: 0, until: 0 });
+    e.n += 1;
+    if (e.n >= 8) { e.until = Date.now() + 10 * 60 * 1000; e.n = 0; }
     return res.status(401).json({ error: "Email ou mot de passe incorrect." });
+  }
+  delete LOGIN_FAILS[k];
   setAuthCookie(res, { email: u.email, name: u.name, role: u.role });
   res.json({ name: u.name, role: u.role });
+});
+// Changement de mot de passe (chacune le sien), enregistré sur le disque persistant :
+// permet de sortir des mots de passe du users.example.json public du repo.
+app.post("/api/account/password", auth, (req, res) => {
+  const { current, next } = req.body || {};
+  const u = USERS.find((x) => x.email.toLowerCase() === String(req.user.email || "").toLowerCase());
+  if (!u) return res.status(404).json({ error: "compte introuvable" });
+  if (!bcrypt.compareSync(String(current || ""), u.passwordHash)) return res.status(401).json({ error: "Mot de passe actuel incorrect." });
+  if (String(next || "").length < 8) return res.status(400).json({ error: "Le nouveau mot de passe doit faire au moins 8 caractères." });
+  u.passwordHash = bcrypt.hashSync(String(next), 10);
+  try { fs.writeFileSync(path.join(DATA_DIR, "users.json"), JSON.stringify(USERS, null, 2)); }
+  catch (e) { return res.status(500).json({ error: "impossible d'enregistrer sur le disque" }); }
+  res.json({ ok: true });
 });
 app.post("/api/logout", (req, res) => { res.clearCookie("hc_token"); res.json({ ok: true }); });
 app.get("/api/me", auth, (req, res) => res.json({ name: req.user.name, role: req.user.role, demo: DEMO }));
@@ -1118,6 +1155,10 @@ if (COPILOT.enabled) {
 }
 // Page de confirmation minimaliste (Montserrat, charte cockpit)
 function copilotPage(title, msg) {
+  // Échappement systématique : title/msg contiennent des données externes (nom d'expéditeur,
+  // message d'erreur), qui ne doivent jamais devenir du HTML exécutable (anti-XSS).
+  const escp = (s) => String(s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  title = escp(title); msg = escp(msg);
   return "<!doctype html><html lang=\"fr\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>" + title + " · Cockpit</title><style>body{font-family:Montserrat,system-ui,sans-serif;background:#F5F3EE;color:#1C3A44;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}div{background:#fff;border:1px solid #E4E0D5;border-radius:16px;padding:34px 38px;max-width:460px;text-align:center;box-shadow:0 8px 30px rgba(28,58,68,.06)}h1{font-size:20px;margin:0 0 10px}p{font-size:14px;color:#56666D;margin:0}</style></head><body><div><h1>" + title + "</h1><p>" + msg + "</p></div></body></html>";
 }
 // Déclenche un passage du copilote à la demande (debug), protégé par le secret

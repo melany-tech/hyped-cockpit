@@ -513,7 +513,7 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
         <button class="iconbtn" id="searchbtn" title="Rechercher">🔍</button>
         <button class="iconbtn" id="bellbtn" title="Notifications">🔔<span class="badge hidden" id="bellcount">0</span></button>
         <div class="avatar" id="avatarbtn"><span class="av-ini" id="avini">·</span><span class="av-name" id="avname"></span><span class="av-caret">▾</span></div>
-        <div class="av-menu hidden" id="avmenu"><button class="lk" id="refresh">↻ Recharger</button><button class="lk" id="logout">Déconnexion</button></div>
+        <div class="av-menu hidden" id="avmenu"><button class="lk" id="refresh">↻ Recharger</button><button class="lk" id="pwbtn">🔑 Mot de passe</button><button class="lk" id="logout">Déconnexion</button></div>
         <div class="bell-menu hidden" id="bellmenu"></div>
       </div>
     </header>
@@ -783,6 +783,15 @@ $('loginform').addEventListener('submit',async(e)=>{
   else{const d=await r.json().catch(()=>({}));$('lerr').textContent=d.error||'Connexion impossible.';}
 });
 $('logout').addEventListener('click',async()=>{await api('/api/logout',{method:'POST'});location.reload();});
+const pwb=$('pwbtn');
+if(pwb){pwb.addEventListener('click',async()=>{
+  const cur=prompt('Ton mot de passe actuel :'); if(cur===null)return;
+  const nxt=prompt('Ton NOUVEAU mot de passe (8 caractères minimum) :'); if(nxt===null)return;
+  if(String(nxt||'').length<8){alert('Trop court : 8 caractères minimum.');return;}
+  const r=await api('/api/account/password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({current:cur,next:nxt})});
+  const d=await r.json().catch(()=>({}));
+  alert(r.ok?'Mot de passe changé ! Il sera demandé à ta prochaine connexion.':(d.error||'Impossible de changer le mot de passe.'));
+});}
 $('refresh').addEventListener('click',load);
 
 async function load(){
