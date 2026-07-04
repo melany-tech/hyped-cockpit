@@ -1038,6 +1038,23 @@ async function copilotTick() {
       let r; try { r = await gm.analyzeFor(email, collabs); } catch (e) { try { console.error("[copilot]", email, ": analyse échouée :", e.message); } catch (e2) {} continue; }
       try { console.log("[copilot]", email, ":", ((r && r.creatorReplies) || []).length, "réponse(s) créateur,", ((r && r.teamMails) || []).length, "interne(s), total", (r && r.total) || 0, "mails"); } catch (e) {}
       const tt = treatedFor(email);
+      // Balayage des propositions en attente : si le mail a été géré AILLEURS (réponse directe
+      // depuis Gmail, ou traité dans le cockpit), on classe et on prévient sur Slack. Pas traité
+      // dans le cockpit ne veut pas dire pas fait.
+      const waiting = store.proposals.filter((x) => x.cpEmail === email && (x.status === "pending" || x.status === "ready") && (Date.now() - x.at) < 7 * 24 * 3600 * 1000);
+      for (const w of waiting.slice(0, 20)) {
+        try {
+          if (tt[w.threadId]) { w.status = "handled"; w.decidedAt = Date.now(); continue; } // traité dans le cockpit : on classe sans bruit
+          const own = await gm.lastReplyFromMe(email, w.threadId);
+          if (own && own > w.at) {
+            w.status = "handled"; w.decidedAt = Date.now();
+            try { markTreated(email, w.threadId, { by: w.cpName + " (Gmail direct)", action: "répondu" }); } catch (e) {}
+            const su = COPILOT.slackIds[email] || "";
+            if (su) await copilotNotify({ slackUser: su, text: "✅ C'est fait ! Tu as répondu à *" + (w.creator || w.to || "ce contact") + "* directement depuis Gmail : je classe, mail marqué traité dans le cockpit. Rien d'autre à faire." });
+            try { console.log("[copilot]", email, ": réponse directe Gmail détectée, proposition classée (", w.creator || w.to, ")"); } catch (e) {}
+          }
+        } catch (e) {}
+      }
       for (const m of (r && r.creatorReplies) || []) {
         if (!m.threadId || tt[m.threadId]) continue;               // déjà traité
         if (seen.has(email + "|" + (m.id || m.threadId))) continue; // déjà proposé
@@ -1117,6 +1134,7 @@ app.get("/copilot/act", async (req, res) => {
   const p = store.proposals.find((x) => x.id === id);
   if (!p) return res.status(404).send(copilotPage("Introuvable", "Cette proposition n'existe plus (elle a peut-être expiré)."));
   if (p.status === "sent") return res.send(copilotPage("C'est fait ! ✅", "La réponse à " + (p.creator || "ce créateur") + " est bien partie. Rien n'a été envoyé en double, tout est ok. Tu peux fermer cette page."));
+  if (p.status === "handled") return res.send(copilotPage("C'est fait ! ✅", "Ce mail a déjà été géré (réponse envoyée directement depuis Gmail, ou traité dans le cockpit). Rien n'a été envoyé en double, tout est ok."));
   if (p.status === "self" && action !== "send") return res.send(copilotPage("C'est toi qui gères ✍️", "Ce mail t'attend dans le cockpit, onglet Messages."));
   try {
     if (action === "send") {
@@ -1127,6 +1145,11 @@ app.get("/copilot/act", async (req, res) => {
       markTreated(p.cpEmail, p.threadId, { by: p.cpName + " (copilote)", action: "répondu" });
       logActivity({ type: "email", creator: p.to, cp: p.cpName });
       p.status = "sent"; p.decidedAt = Date.now(); saveCopilot(store);
+      // Confirmation aussi sur Slack : le fil se termine par un vrai "c'est fait", pas par "Étape 2/2"
+      try {
+        const slackUser = COPILOT.slackIds[p.cpEmail] || "";
+        if (slackUser) await copilotNotify({ slackUser, text: "✅ C'est fait ! La réponse à *" + (p.creator || p.to) + "* (" + (p.brand || "sans marque") + ") est partie depuis la boîte de " + p.cpName + ", signature comprise. Mail marqué traité dans le cockpit, rien d'autre à faire." });
+      } catch (e) {}
       return res.send(copilotPage("C'est fait ! 🎉", "La réponse est partie chez " + (p.creator || p.to) + ", depuis la boîte de " + p.cpName + ", signature comprise. Le mail est marqué traité dans le cockpit. Tu peux fermer cette page."));
     }
     if (action === "accept" || action === "refuse") {
@@ -1144,6 +1167,10 @@ app.get("/copilot/act", async (req, res) => {
     }
     if (action === "self") {
       p.status = "self"; p.decidedAt = Date.now(); saveCopilot(store);
+      try {
+        const slackUser = COPILOT.slackIds[p.cpEmail] || "";
+        if (slackUser) await copilotNotify({ slackUser, text: "✍️ Noté, tu gères toi-même le mail de *" + (p.creator || p.to || "ce contact") + "*. Rien n'a été envoyé, il t'attend dans le cockpit (onglet Messages)." });
+      } catch (e) {}
       return res.send(copilotPage("C'est toi qui gères ✍️", "Rien n'a été envoyé. Le mail t'attend dans le cockpit, onglet Messages."));
     }
   } catch (e) {

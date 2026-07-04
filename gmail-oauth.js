@@ -136,6 +136,23 @@ async function fetchThreadText(email, threadId) {
   } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
 }
 
+// Date (ms) du dernier message envoyé PAR la boîte connectée dans un fil (0 si aucun).
+// Sert au copilote : si la CP a répondu directement depuis Gmail, le mail est considéré traité.
+async function lastReplyFromMe(email, threadId) {
+  const gmail = gmailFor(email);
+  if (!gmail || !threadId) return 0;
+  try {
+    const t = await gmail.users.threads.get({ userId: "me", id: threadId, format: "metadata", metadataHeaders: ["From"] });
+    const mine = String(email || "").toLowerCase();
+    let last = 0;
+    for (const m of (t.data.messages || [])) {
+      const h = Object.fromEntries((m.payload?.headers || []).map((x) => [x.name, x.value]));
+      if (String(h.From || "").toLowerCase().includes(mine)) last = Math.max(last, Number(m.internalDate || 0));
+    }
+    return last;
+  } catch (e) { return 0; }
+}
+
 // --- Pièces jointes + liens de transfert (WeTransfer, Drive, Dropbox…) -----
 function humanSize(n) {
   n = Number(n) || 0;
@@ -317,4 +334,4 @@ async function draftsToValidate(email) {
   return { count: keep.length };
 }
 
-module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, analyzeFor, calendarToday, createDraft, sendEmail, draftsToValidate, fetchThreadText, getSignature, getAttachment, SCOPES };
+module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, analyzeFor, calendarToday, createDraft, sendEmail, draftsToValidate, fetchThreadText, lastReplyFromMe, getSignature, getAttachment, SCOPES };
