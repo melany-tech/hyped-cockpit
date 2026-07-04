@@ -1042,6 +1042,7 @@ async function renderBrandDetail(brand,target){
 let MQ_SELECTED=null;
 // ===== To-do par marque (tâches Notion, cases à cocher synchronisées) =====
 let TODO_QUI='';
+try{ TODO_QUI=localStorage.getItem('hc_todoqui')||''; }catch(e){}
 async function renderTodo(){
   const w=$('todowrap'); if(!w)return;
   w.innerHTML='<div class="state">Chargement…</div>';
@@ -1051,7 +1052,13 @@ async function renderTodo(){
     if(!d.enabled){w.innerHTML='<div class="state">To-do indisponible pour le moment.</div>';return;}
     let h='';
     if(VIEWER&&VIEWER.role==='supervisor'&&(d.responsables||[]).length){
-      h+='<div class="todofilter">Voir : <select id="todoqui"><option value="">toute l\'équipe</option>'+d.responsables.map(n=>'<option '+(TODO_QUI===n?'selected':'')+' value="'+esc(n)+'">'+esc(n)+'</option>').join('')+'</select></div>';
+      // « Mes tâches » en premier : les superviseures ont aussi leur propre to-do
+      const moi=(VIEWER.name||'').trim();
+      const low=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+      const autres=d.responsables.filter(n=>low(n)!==low(moi));
+      h+='<div class="todofilter">Voir : <select id="todoqui"><option value="">👥 toute l\'équipe</option>'
+        +'<option '+(low(TODO_QUI)===low(moi)&&TODO_QUI?'selected':'')+' value="'+esc(moi)+'">🙋 Mes tâches ('+esc(moi)+')</option>'
+        +autres.map(n=>'<option '+(TODO_QUI===n?'selected':'')+' value="'+esc(n)+'">'+esc(n)+'</option>').join('')+'</select></div>';
     }
     const ts=d.taches||[];
     if(!ts.length){ w.innerHTML=h+'<div class="state">Rien à faire, tout est à jour 🎉</div>'; wireTodo(w); return; }
@@ -1067,7 +1074,7 @@ async function renderTodo(){
   }catch(e){w.innerHTML='<div class="state">Erreur de chargement.</div>';}
 }
 function wireTodo(w){
-  const sel=w.querySelector('#todoqui'); if(sel){sel.onchange=()=>{TODO_QUI=sel.value;renderTodo();};}
+  const sel=w.querySelector('#todoqui'); if(sel){sel.onchange=()=>{TODO_QUI=sel.value;try{localStorage.setItem('hc_todoqui',TODO_QUI);}catch(e){};renderTodo();};}
   w.querySelectorAll('input[data-tid]').forEach(cb=>{cb.onchange=async()=>{
     cb.disabled=true; const row=cb.closest('.todoitem'); if(row)row.classList.add('done');
     const r=await api('/api/todo/check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:cb.dataset.tid,done:cb.checked})});
