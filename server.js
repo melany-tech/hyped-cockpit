@@ -1123,8 +1123,8 @@ async function copilotTick() {
       for (const w of waiting.slice(0, 20)) {
         try {
           // Purge des fausses décisions « interne » créées sur des fils de collab (bug corrigé) : on classe sans bruit.
-          // Et une proposition interne de plus de 48 h est périmée de toute façon : on classe aussi.
-          if (w.categorie === "interne" && (w.brand || (Date.now() - w.at) > 48 * 3600 * 1000)) { w.status = "handled"; w.decidedAt = Date.now(); continue; }
+          // Et une question interne qui attend plus de 12 h est périmée de toute façon : on classe aussi.
+          if (w.categorie === "interne" && (w.brand || (Date.now() - w.at) > 12 * 3600 * 1000)) { w.status = "handled"; w.decidedAt = Date.now(); continue; }
           if (tt[w.threadId]) { w.status = "handled"; w.decidedAt = Date.now(); continue; } // traité dans le cockpit : on classe sans bruit
           const own = await gm.lastReplyFromMe(email, w.threadId);
           if (own && own > w.at) {
