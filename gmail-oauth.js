@@ -153,6 +153,21 @@ async function lastReplyFromMe(email, threadId) {
   } catch (e) { return 0; }
 }
 
+// Le fil contient-il un participant EXTERNE (créateur, marque…) ? Sert au copilote :
+// un mail de collègue sur une conversation externe n'est pas un « mail interne » à répondre.
+async function threadHasExternal(email, threadId) {
+  const gmail = gmailFor(email);
+  if (!gmail || !threadId) return false;
+  try {
+    const t = await gmail.users.threads.get({ userId: "me", id: threadId, format: "metadata", metadataHeaders: ["From"] });
+    for (const m of (t.data.messages || [])) {
+      const h = Object.fromEntries((m.payload?.headers || []).map((x) => [x.name, x.value]));
+      if (h.From && !/@hyped-agency\.fr/i.test(String(h.From))) return true;
+    }
+    return false;
+  } catch (e) { return false; }
+}
+
 // --- Pièces jointes + liens de transfert (WeTransfer, Drive, Dropbox…) -----
 function humanSize(n) {
   n = Number(n) || 0;
@@ -334,4 +349,4 @@ async function draftsToValidate(email) {
   return { count: keep.length };
 }
 
-module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, analyzeFor, calendarToday, createDraft, sendEmail, draftsToValidate, fetchThreadText, lastReplyFromMe, getSignature, getAttachment, SCOPES };
+module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, analyzeFor, calendarToday, createDraft, sendEmail, draftsToValidate, fetchThreadText, lastReplyFromMe, threadHasExternal, getSignature, getAttachment, SCOPES };

@@ -1122,8 +1122,9 @@ async function copilotTick() {
       const waiting = store.proposals.filter((x) => x.cpEmail === email && (x.status === "pending" || x.status === "ready") && (Date.now() - x.at) < 7 * 24 * 3600 * 1000);
       for (const w of waiting.slice(0, 20)) {
         try {
-          // Purge des fausses décisions « interne » créées sur des fils de collab (bug corrigé) : on classe sans bruit
-          if (w.categorie === "interne" && w.brand) { w.status = "handled"; w.decidedAt = Date.now(); continue; }
+          // Purge des fausses décisions « interne » créées sur des fils de collab (bug corrigé) : on classe sans bruit.
+          // Et une proposition interne de plus de 48 h est périmée de toute façon : on classe aussi.
+          if (w.categorie === "interne" && (w.brand || (Date.now() - w.at) > 48 * 3600 * 1000)) { w.status = "handled"; w.decidedAt = Date.now(); continue; }
           if (tt[w.threadId]) { w.status = "handled"; w.decidedAt = Date.now(); continue; } // traité dans le cockpit : on classe sans bruit
           const own = await gm.lastReplyFromMe(email, w.threadId);
           if (own && own > w.at) {
@@ -1182,6 +1183,9 @@ async function copilotTick() {
           // il n'y a rien à lui répondre. Sans ce garde-fou, l'IA proposait de répondre à sa collègue
           // sur ses propres mails sortants (mails en copie) : absurde.
           if (m.brand) continue;
+          // Même règle si le fil implique un participant EXTERNE (créateur/marque hors calendriers) :
+          // ce n'est pas une conversation interne, la collègue gère.
+          try { if (await gm.threadHasExternal(email, m.threadId)) continue; } catch (e) {}
           let transcript = "";
           try { const full = await gm.fetchThreadText(email, m.threadId); if (full && full.ok) transcript = full.transcript || full.text || ""; } catch (e) {}
           const fromName = String(m.from || "").replace(/<[^>]*>/, "").trim() || fromAddr;
