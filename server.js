@@ -1015,8 +1015,20 @@ const COPILOT = {
   publicUrl: (process.env.PUBLIC_URL || "https://hyped-cockpit.onrender.com").replace(/\/$/, ""),
   includeTeam: process.env.COPILOT_INCLUDE_TEAM === "1", // notifier aussi les mails internes @hyped-agency.fr
 };
-function loadCopilot() { try { return JSON.parse(fs.readFileSync(COPILOT_STORE, "utf8")); } catch (e) { return { proposals: [] }; } }
-function saveCopilot(o) { try { fs.writeFileSync(COPILOT_STORE, JSON.stringify(o)); } catch (e) {} }
+function saveCopilot(o) { try { fs.writeFileSync(COPILOT_STORE, JSON.stringify(o)); } catch (e) { try { console.error("[copilot] ECRITURE copilot.json ECHOUEE :", e.message); } catch (e2) {} } }
+// Nettoyage à la lecture : les propositions « interne » liées à une marque ou vieilles de 12 h
+// sont classées d'office (ceinture et bretelles, en plus du balayage périodique).
+function loadCopilot() {
+  let store; try { store = JSON.parse(fs.readFileSync(COPILOT_STORE, "utf8")); } catch (e) { return { proposals: [] }; }
+  let purged = 0;
+  for (const p of store.proposals || []) {
+    if ((p.status === "pending" || p.status === "ready") && p.categorie === "interne" && (p.brand || (Date.now() - (p.at || 0)) > 12 * 3600 * 1000)) {
+      p.status = "handled"; p.decidedAt = Date.now(); purged++;
+    }
+  }
+  if (purged) { try { console.log("[copilot] purge lecture :", purged, "proposition(s) interne(s) périmée(s) classée(s)"); } catch (e) {} saveCopilot(store); }
+  return store;
+}
 function copilotSign(id, action) { return crypto.createHmac("sha256", COPILOT.secret).update(id + "|" + action).digest("hex").slice(0, 32); }
 function copilotLink(id, action) { return COPILOT.publicUrl + "/copilot/act?id=" + encodeURIComponent(id) + "&action=" + action + "&sig=" + copilotSign(id, action); }
 function copilotCpName(email) { const u = USERS.find((x) => String(x.email).toLowerCase() === email); return u ? u.name : email.split("@")[0]; }
