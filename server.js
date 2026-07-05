@@ -1136,7 +1136,15 @@ async function copilotTick() {
         } catch (e) {}
       }
       for (const m of (r && r.creatorReplies) || []) {
-        if (!m.threadId || tt[m.threadId]) continue;               // déjà traité
+        if (!m.threadId) continue;
+        // Fil déjà traité : on ne l'ignore QUE si rien de nouveau depuis. Si le créateur a écrit
+        // APRÈS le traitement, le fil redevient à traiter (sinon ses relances passaient aux oubliettes).
+        const tr = tt[m.threadId];
+        if (tr) {
+          const md = m.date ? new Date(m.date).getTime() : 0;
+          if (!md || md <= (tr.at || 0)) continue; // rien de nouveau depuis le traitement
+          unmarkTreated(email, m.threadId); delete tt[m.threadId];
+        }
         if (seen.has(email + "|" + (m.id || m.threadId))) continue; // déjà proposé
         let transcript = "";
         try { const full = await gm.fetchThreadText(email, m.threadId); if (full && full.ok) transcript = full.transcript || full.text || ""; } catch (e) {}
@@ -1160,7 +1168,13 @@ async function copilotTick() {
       // Mails internes (si COPILOT_INCLUDE_TEAM=1) : on voit tout, on peut répondre en un clic
       if (COPILOT.includeTeam) {
         for (const m of (r && r.teamMails) || []) {
-          if (!m.threadId || tt[m.threadId]) continue;
+          if (!m.threadId) continue;
+          const tr2 = tt[m.threadId];
+          if (tr2) {
+            const md2 = m.date ? new Date(m.date).getTime() : 0;
+            if (!md2 || md2 <= (tr2.at || 0)) continue;
+            unmarkTreated(email, m.threadId); delete tt[m.threadId];
+          }
           if (seen.has(email + "|" + (m.id || m.threadId))) continue;
           const fromAddr = mailAddr(m.from);
           if (fromAddr.toLowerCase() === email) continue; // ses propres mails, non merci
