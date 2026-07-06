@@ -128,13 +128,19 @@ async function fetchThreadText(email, threadId) {
       if (!isAgence(h.From)) { pick = { m: msgs[i], h }; break; }
     }
     if (!pick) { const m = msgs[msgs.length - 1]; pick = { m, h: Object.fromEntries((m?.payload?.headers || []).map((x) => [x.name, x.value])) }; }
-    // transcript complet du fil (du + ancien au + récent), pour juger sur l'historique
-    const transcript = msgs.map((m) => {
+    // transcript complet du fil (du + ancien au + récent), pour juger sur l'historique.
+    // Le message le plus récent est marqué explicitement, et si le fil est trop long on garde
+    // la FIN (avant, on coupait la fin : sur un long fil, l'IA jugeait sur de vieux messages
+    // et pouvait dire l'inverse du dernier mail du créateur).
+    const parts = msgs.map((m, i) => {
       const h = Object.fromEntries((m.payload?.headers || []).map((x) => [x.name, x.value]));
       const who = isAgence(h.From) ? ("NOUS (agence · " + String(h.From).replace(/<.*$/, "").trim() + ")") : "CRÉATEUR";
       const body = extractBody(m.payload) || m.snippet || "";
-      return who + " : " + body;
-    }).join("\n\n---\n\n").slice(0, 7000);
+      const tag = (i === msgs.length - 1) ? "DERNIER MESSAGE (le plus récent, il fait foi) · " : "";
+      return tag + who + " : " + body;
+    });
+    let transcript = parts.join("\n\n---\n\n");
+    if (transcript.length > 7000) transcript = "(…début du fil coupé…)\n\n" + transcript.slice(-7000);
     return { ok: true, from: pick.h.From || "", subject: pick.h.Subject || "", date: pick.h.Date || "", text: extractBody(pick.m.payload) || pick.m.snippet || "", transcript };
   } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
 }

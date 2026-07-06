@@ -1040,9 +1040,11 @@ function saveCopilot(o) { try { fs.writeFileSync(COPILOT_STORE, JSON.stringify(o
 function loadCopilot() {
   let store; try { store = JSON.parse(fs.readFileSync(COPILOT_STORE, "utf8")); } catch (e) { return { proposals: [] }; }
   let purged = 0;
-  // Régénération one-shot : les décisions créées AVANT le correctif d'étiquetage (les collègues
-  // passaient pour des créateurs, chiffres faux) sont supprimées pour être réanalysées proprement.
-  const FIX_ETIQUETAGE = Date.parse("2026-07-06T01:10:00+02:00");
+  // Régénération one-shot : les décisions créées AVANT le dernier correctif du classifieur
+  // (transcript tronqué par la fin -> l'IA jugeait sur de vieux messages et inversait le sens,
+  // ex. « Keylanne veut décliner » alors qu'elle écrivait « je suis partante ») sont supprimées
+  // pour être réanalysées proprement avec le prompt corrigé.
+  const FIX_ETIQUETAGE = Date.parse("2026-07-06T12:50:00+02:00");
   const avant = (store.proposals || []).length;
   store.proposals = (store.proposals || []).filter((p) => !(p.status === "pending" && p.categorie !== "interne" && (p.at || 0) < FIX_ETIQUETAGE));
   purged += avant - store.proposals.length;
@@ -1097,6 +1099,8 @@ async function copilotClassify({ creator, subject, received, transcript }) {
     "question = si decision, la question fermée à poser à la CP (ex. 'Vanina veut décaler son post du 9 au 15 juillet, on accepte ?'), sinon chaîne vide.",
     "RÈGLES ABSOLUES : dans le fil, les messages marqués 'NOUS (agence…)' viennent de NOTRE équipe (Rozenn, Kendia, Amena… sont des collègues, JAMAIS des créateurs). La question porte UNIQUEMENT sur ce que demande le CRÉATEUR.",
     "N'invente JAMAIS un montant, une quantité ou une contre-proposition : reprends EXACTEMENT les chiffres et termes écrits dans le fil, en attribuant chaque proposition à la bonne personne. Si les chiffres sont ambigus, pose la question sans chiffres ('X propose un tarif, tu veux regarder ?').",
+    "LE DERNIER MESSAGE FAIT FOI : ton résumé et ta question portent sur le message le plus récent du créateur (marqué 'DERNIER MESSAGE' en bas du fil). Les messages plus anciens ne sont que du contexte : si le créateur a changé d'avis entre-temps, c'est sa DERNIÈRE position qui compte.",
+    "NE DÉFORME JAMAIS LE SENS : accepter n'est pas refuser. Dans resume, cite entre guillemets une phrase clé du dernier message du créateur (ses mots exacts, courts) pour que la CP puisse vérifier d'un coup d'œil.",
   ].join("\n");
   const ctx = "Créateur : " + (creator || "?") + "\nSujet : " + (subject || "") + "\n\n" + (transcript ? ("Fil :\n" + String(transcript).slice(0, 5000)) : ("Message :\n" + String(received || "").slice(0, 3000)));
   const hasOpenAI = !!process.env.OPENAI_API_KEY, hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
