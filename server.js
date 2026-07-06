@@ -223,6 +223,7 @@ async function fetchRows() {
 // === App ================================================================
 const app = express();
 app.use(express.json({ limit: "12mb" })); // 12 Mo : permet l'upload des documents de fiche marque (base64)
+app.use(express.urlencoded({ extended: false })); // formulaires simples (consigne copilote depuis Slack)
 app.use(cookieParser());
 function setAuthCookie(res, payload) {
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "30d" });
@@ -1123,13 +1124,13 @@ function copilotSlackText(p) {
       + "\n\n" + (p.reply ? ("<" + copilotLink(p.id, "send") + "|📤 Envoyer>  ·  ") : "") + "<" + copilotLink(p.id, "self") + "|✍️ Je gère dans le cockpit>";
   }
   if (p.status === "ready") {
-    return "*Étape 2/2 · Relis et envoie* ✍️ (réponse à *" + who + "*" + brand + ", rédigée selon ta décision : " + (p.decision === "accept" ? "oui ✅" : "non ❌") + ")\n\n>>> " + String(p.reply || "").slice(0, 900)
+    return "*Étape 2/2 · Relis et envoie* ✍️ (réponse à *" + who + "*" + brand + ", rédigée selon " + (p.decision === "accept" ? "ta décision : oui ✅" : p.decision === "refuse" ? "ta décision : non ❌" : "ta consigne ✍️") + ")\n\n>>> " + String(p.reply || "").slice(0, 900)
       + "\n\n<" + copilotLink(p.id, "send") + "|📤 Envoyer>  ·  <" + copilotLink(p.id, "self") + "|✍️ Je gère dans le cockpit>";
   }
   if (p.categorie === "decision") {
     return "*Étape 1/2 · Décision* 🔔 *" + (p.question || p.resume) + "*\n_(" + who + brand + " · boîte " + p.cpName + ")_\n\n"
-      + "<" + copilotLink(p.id, "accept") + "|✅ Oui>  ·  <" + copilotLink(p.id, "refuse") + "|❌ Non>  ·  <" + copilotLink(p.id, "self") + "|✍️ Je gère moi-même>"
-      + "\n_Clique un choix : je rédige la réponse dans ce sens et je te l'envoie à relire._";
+      + "<" + copilotLink(p.id, "accept") + "|✅ Oui>  ·  <" + copilotLink(p.id, "refuse") + "|❌ Non>  ·  <" + copilotLink(p.id, "directive") + "|💬 Je donne ma consigne>  ·  <" + copilotLink(p.id, "self") + "|✍️ Je gère moi-même>"
+      + "\n_Clique un choix : je rédige la réponse dans ce sens et je te l'envoie à relire. « Consigne » = tu écris quoi répondre (ex. propose 500 €), je rédige._";
   }
   return "✉️ *" + who + "*" + brand + " : " + (p.resume || p.subject || "nouveau message") + "\n\n_Réponse prête (voix Hyped) :_\n>>> " + String(p.reply || "(IA indisponible, ouvre le cockpit)").slice(0, 900)
     + "\n\n<" + copilotLink(p.id, "send") + "|📤 Envoyer>  ·  <" + copilotLink(p.id, "self") + "|✍️ Je gère dans le cockpit>";
@@ -1289,13 +1290,20 @@ app.get("/copilot/act", (req, res) => {
   if (p.status === "handled") return res.send(copilotPage("Déjà traité ✅", "Ce mail a déjà été géré (réponse envoyée directement depuis Gmail, ou traité dans le cockpit). Rien n'a été envoyé en double, rien à faire."));
   if (p.status === "self" && action !== "send") return res.send(copilotPage("C'est toi qui gères ✍️", "Ce mail t'attend dans le cockpit, onglet Messages."));
   const q = "id=" + encodeURIComponent(String(id)) + "&action=" + encodeURIComponent(String(action)) + "&sig=" + encodeURIComponent(String(sig));
+  if (action === "directive") {
+    // Page avec champ texte : la CP écrit sa consigne, l'IA rédige dans ce sens
+    const form = "<form method=\"POST\" action=\"/copilot/act/do?" + q + "\" style=\"margin-top:14px;text-align:left\">"
+      + "<textarea name=\"text\" required rows=\"4\" placeholder=\"Ex. propose 500 € pour 1 Reel + 2 stories, livraison avant le 20 juillet\" style=\"width:100%;box-sizing:border-box;font-family:inherit;font-size:14px;padding:10px 12px;border:1px solid #E4E0D5;border-radius:10px\"></textarea>"
+      + "<button type=\"submit\" style=\"margin-top:10px;font-family:inherit;font-size:14px;font-weight:600;padding:10px 18px;border-radius:10px;border:none;background:#2C9087;color:#fff;cursor:pointer\">Générer la réponse ✍️</button></form>";
+    return res.send(copilotPage("Ta consigne 💬", "Dis-moi quoi répondre à " + (p.creator || "ce contact") + " : je rédige le mail dans ce sens et je te l'envoie à relire.").replace("</div></body>", form + "</div></body>"));
+  }
   const runner = "<script>fetch('/copilot/act/do?" + q + "',{method:'POST'}).then(r=>r.text()).then(h=>{document.open();document.write(h);document.close();}).catch(()=>{var d=document.querySelector('p');if(d)d.textContent='Petit souci réseau, recharge cette page pour réessayer.';});</script>"
     + "<noscript><form method=\"POST\" action=\"/copilot/act/do?" + q + "\" style=\"text-align:center;margin-top:14px\"><button style=\"font-family:inherit;font-size:14px;padding:10px 18px;border-radius:10px;border:1px solid #E4E0D5;background:#2C9087;color:#fff;cursor:pointer\">Continuer</button></form></noscript>";
   return res.send(copilotPage("Un instant ⏳", "J'exécute ton choix, la confirmation arrive dans une seconde.").replace("</body>", runner + "</body>"));
 });
 // Exécution d'une action copilote. Partagée entre les liens Slack (/copilot/act/do)
 // et les boutons du cockpit (/api/copilot/act). Renvoie { code, title, msg }.
-async function copilotExecute(id, action) {
+async function copilotExecute(id, action, text) {
   const store = loadCopilot(); store.proposals = store.proposals || [];
   const p = store.proposals.find((x) => x.id === id);
   if (!p) return { code: 404, title: "Introuvable", msg: "Cette proposition n'existe plus (elle a peut-être expiré)." };
@@ -1318,10 +1326,17 @@ async function copilotExecute(id, action) {
       } catch (e) {}
       return { code: 200, title: "C'est fait ! 🎉", msg: "La réponse est partie chez " + (p.creator || p.to) + ", depuis la boîte de " + p.cpName + ", signature comprise. Le mail est marqué traité dans le cockpit." };
     }
-    if (action === "accept" || action === "refuse") {
-      const directive = action === "accept"
-        ? "La CP ACCEPTE la demande du créateur (" + (p.resume || p.question) + "). Confirme-lui gentiment que c'est ok."
-        : "La CP REFUSE la demande du créateur (" + (p.resume || p.question) + "). Dis-le avec tact, sans fermer la relation, propose une alternative si pertinent.";
+    if (action === "accept" || action === "refuse" || action === "directive") {
+      let directive;
+      if (action === "directive") {
+        const consigne = String(text || "").trim().slice(0, 1000);
+        if (!consigne) return { code: 400, title: "Consigne vide ✍️", msg: "Écris ta consigne (ex. « propose 500 € pour 1 Reel + 2 stories ») puis renvoie." };
+        directive = "INSTRUCTION PRÉCISE DE LA CHEFFE DE PROJET (à appliquer à la lettre, elle prime sur tout) : " + consigne;
+      } else {
+        directive = action === "accept"
+          ? "La CP ACCEPTE la demande du créateur (" + (p.resume || p.question) + "). Confirme-lui gentiment que c'est ok."
+          : "La CP REFUSE la demande du créateur (" + (p.resume || p.question) + "). Dis-le avec tact, sans fermer la relation, propose une alternative si pertinent.";
+      }
       let transcript = "";
       try { const full = await gm.fetchThreadText(p.cpEmail, p.threadId); if (full && full.ok) transcript = full.transcript || full.text || ""; } catch (e) {}
       let planning = ""; try { planning = planningForBrand(await fetchRows(), p.brand); } catch (e) {}
@@ -1330,7 +1345,7 @@ async function copilotExecute(id, action) {
       p.reply = rep.body; p.status = "ready"; p.decision = action; p.decidedAt = Date.now(); saveCopilot(store);
       const slackUser = COPILOT.slackIds[p.cpEmail] || "";
       if (slackUser) await copilotNotify({ slackUser, text: "<@" + slackUser + "> " + copilotSlackText(p) }); // mention = vraie notification
-      return { code: 200, title: "C'est noté " + (action === "accept" ? "✅" : "❌"), msg: "L'IA a rédigé la réponse dans ce sens. Relis-la et envoie-la en un clic (ici ou sur Slack)." };
+      return { code: 200, title: "C'est noté " + (action === "accept" ? "✅" : action === "refuse" ? "❌" : "✍️"), msg: "L'IA a rédigé la réponse " + (action === "directive" ? "selon ta consigne" : "dans ce sens") + ". Relis-la et envoie-la en un clic (ici ou sur Slack)." };
     }
     if (action === "self") {
       p.status = "self"; p.decidedAt = Date.now(); saveCopilot(store);
@@ -1348,7 +1363,7 @@ async function copilotExecute(id, action) {
 app.post("/copilot/act/do", async (req, res) => {
   const { id, action } = req.query || {};
   if (!copilotActOk(req)) return res.status(403).send(copilotPage("Lien invalide 🤔", "Ce lien n'est pas valide ou a été modifié. Repasse par le message Slack."));
-  const out = await copilotExecute(String(id), String(action));
+  const out = await copilotExecute(String(id), String(action), req.body && req.body.text);
   res.status(out.code).send(copilotPage(out.title, out.msg + " Tu peux fermer cette page."));
 });
 // --- Copilote dans le cockpit : mêmes décisions que sur Slack, en un clic -----
@@ -1368,14 +1383,14 @@ app.get("/api/copilot/box", auth, (req, res) => {
 });
 app.post("/api/copilot/act", auth, async (req, res) => {
   if (!COPILOT.enabled) return res.status(400).json({ error: "copilote désactivé" });
-  const { id, action } = req.body || {};
-  if (!id || !["send", "accept", "refuse", "self"].includes(String(action))) return res.status(400).json({ error: "action inconnue" });
+  const { id, action, text } = req.body || {};
+  if (!id || !["send", "accept", "refuse", "self", "directive"].includes(String(action))) return res.status(400).json({ error: "action inconnue" });
   const store = loadCopilot();
   const p = (store.proposals || []).find((x) => x.id === String(id));
   if (!p) return res.status(404).json({ error: "proposition introuvable" });
   // Chacune agit sur SA boîte ; les superviseures peuvent agir sur toutes
   if (p.cpEmail !== req.user.email && req.user.role !== "supervisor") return res.status(403).json({ error: "pas ta boîte" });
-  const out = await copilotExecute(String(id), String(action));
+  const out = await copilotExecute(String(id), String(action), text);
   res.status(out.code === 200 ? 200 : out.code).json({ ok: out.code === 200, title: out.title, msg: out.msg });
 });
 // Mail de demande de stats/bilan (J+5 après publication)
