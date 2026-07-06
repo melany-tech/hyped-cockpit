@@ -1474,7 +1474,7 @@ const ONBOARDING_STEPS = [
   { id: "outils", group: "1 · Je m'installe ☕", label: "Récupérer mes accès outils : Kolsquare (+ Authenticator), Yousign, Drive", hint: "c'est Mélany qui gère les accès. Kolsquare = veille et reporting, Yousign = contrats, Drive = contenus et contrats" },
   { id: "guide", group: "2 · Je comprends l'agence 📖", label: "Lire le Guide CP : l'agence, ses valeurs, la voix Hyped", link: "/guide", hint: "20 minutes : comment on parle aux créatrices, le process de A à Z, les dix onglets du cockpit" },
   { id: "plaquettes", group: "2 · Je comprends l'agence 📖", label: "Relire les plaquettes de l'agence", hint: "ce qu'on vend aux marques et comment on le présente, demande-les sur Slack si tu ne les as pas" },
-  { id: "process", group: "2 · Je comprends l'agence 📖", label: "Lire les Fiches de Process influence (la passation)", hint: "12 fiches étape par étape : veille Kolsquare, prise de contact, négo, gifting, contrats Yousign, reporting, facturation. Demande le PDF à Mélany sur Slack" },
+  { id: "process", group: "2 · Je comprends l'agence 📖", label: "Lire les Fiches de Process influence (la passation)", hint: "12 fiches étape par étape : veille Kolsquare, prise de contact, négo, gifting, contrats Yousign, reporting, facturation. Le PDF est dans le Drive, Mélany te l'a partagé" },
   { id: "story", group: "2 · Je comprends l'agence 📖", label: "Lire un storytelling de marque", hint: "pour comprendre la méthode Hyped de A à Z, demande un exemple récent à Mélany" },
   { id: "marques", group: "2 · Je comprends l'agence 📖", label: "Découvrir les fiches marques", hint: "onglet Marques : histoire de chaque marque, consignes pour l'IA, points de vigilance" },
   { id: "camp", group: "2 · Je comprends l'agence 📖", label: "Regarder les campagnes en cours", hint: "onglet Campagnes : qui fait quoi en ce moment, marque par marque, et où en sont les calendriers" },
@@ -1515,11 +1515,13 @@ app.get("/api/onboarding", auth, (req, res) => {
   }
   res.json({ mine, attach, team });
 });
-// Ajout / remplacement / suppression de l'encart matériel (superviseures uniquement)
+// Ajout / remplacement / suppression de l'encart matériel : superviseures pour n'importe qui,
+// et la personne concernée peut aussi gérer son PROPRE encart (il n'est visible que d'elle).
 app.post("/api/onboarding/attach", auth, (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
   const { email, title, text, image, remove } = req.body || {};
-  const e = String(email || "").toLowerCase();
+  const me0 = String(req.user.email || "").toLowerCase();
+  const e = String(email || me0).toLowerCase();
+  if (req.user.role !== "supervisor" && e !== me0) return res.status(403).json({ error: "réservé aux superviseures" });
   if (!ONBOARDING_USERS.includes(e)) return res.status(400).json({ error: "cette personne n'a pas de parcours d'arrivée" });
   const store = loadOnb(); store._attach = store._attach || {};
   const fname = e.replace(/[^a-z0-9@.-]/g, "_") + ".img";
