@@ -1469,11 +1469,17 @@ const ONBOARDING_STEPS = [
   { id: "pwd", group: "1 · Je m'installe ☕", label: "Changer mon mot de passe", hint: "menu avatar en haut à droite → 🔑 Mot de passe" },
   { id: "slack", group: "1 · Je m'installe ☕", label: "Activer mon compte Slack et me présenter à l'équipe", hint: "c'est là qu'arrivent les notifications du copilote" },
   { id: "gmail", group: "1 · Je m'installe ☕", label: "Connecter mon Gmail au cockpit", hint: "onglet Messages → « Connecter mon Gmail » (se coche tout seul une fois fait)" },
+  { id: "signature", group: "1 · Je m'installe ☕", label: "Créer ma signature Gmail", hint: "Gmail → Paramètres → Signature (le copilote l'ajoute automatiquement à chaque réponse envoyée)" },
+  { id: "whatsapp", group: "1 · Je m'installe ☕", label: "Être ajoutée aux groupes WhatsApp clients", hint: "demande à Mélany ou Rozenn de t'ajouter, puis présente-toi en deux lignes" },
   { id: "guide", group: "2 · Je comprends l'agence 📖", label: "Lire le Guide CP : l'agence, ses valeurs, la voix Hyped", link: "/guide", hint: "20 minutes : comment on parle aux créatrices, le process de A à Z, les dix onglets du cockpit" },
+  { id: "plaquettes", group: "2 · Je comprends l'agence 📖", label: "Relire les plaquettes de l'agence", hint: "ce qu'on vend aux marques et comment on le présente, demande-les sur Slack si tu ne les as pas" },
+  { id: "story", group: "2 · Je comprends l'agence 📖", label: "Lire un storytelling de marque", hint: "pour comprendre la méthode Hyped de A à Z, demande un exemple récent à Mélany" },
   { id: "marques", group: "2 · Je comprends l'agence 📖", label: "Découvrir les fiches marques", hint: "onglet Marques : histoire de chaque marque, consignes pour l'IA, points de vigilance" },
   { id: "camp", group: "2 · Je comprends l'agence 📖", label: "Regarder les campagnes en cours", hint: "onglet Campagnes : qui fait quoi en ce moment, marque par marque, et où en sont les calendriers" },
+  { id: "fils", group: "3 · Je me lance 🚀", label: "Lire quelques anciens échanges avec des créatrices", hint: "dans ta boîte ou l'onglet Messages : imprègne-toi du ton, des relances, des négociations" },
   { id: "todo", group: "3 · Je me lance 🚀", label: "Parcourir ma to-do (mes créatrices à contacter)", hint: "onglet To-do, tes premières tâches t'y attendent" },
   { id: "contact", group: "3 · Je me lance 🚀", label: "Envoyer mon premier message à une créatrice", hint: "lance-toi, la voix Hyped est dans le guide, et l'équipe est sur Slack si tu doutes 🫶" },
+  { id: "debrief", group: "3 · Je me lance 🚀", label: "Débrief de fin de journée avec Mélany ou Rozenn", hint: "questions, impressions, ce qui reste flou : rien n'est bête ✨" },
 ];
 // Encart « Matériel » (QR eSIM, codes wifi…) : ajouté par une superviseure depuis le cockpit,
 // stocké sur le DISQUE PERSISTANT (jamais dans le dépôt public !), servi uniquement à la
