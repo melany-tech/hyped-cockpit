@@ -338,4 +338,35 @@ Pour régénérer : `python3 cp_guide_build.py` puis copier le PDF dans `deploy/
 
 *Note du 1/07/2026 (soir) : purge complète des tirets quadratins (interface, sujets de mails, prompt IA) déployée en prod (commit `ddc2a6a`), et ajout au prompt IA d'une règle interdisant les tirets quadratins dans les réponses aux créateurs.*
 
+---
+
+## 18. Addendum du 4-6 juillet 2026 : copilote mails, fiches marques, To-do, sécurité
+
+**Copilote mails (le gros morceau).** `server.js` (bloc « Copilote ») + `mail-analyzer.js` + `gmail-oauth.js`.
+- Boucle toutes les 5 min (`copilotTick`) sur les boîtes de `COPILOT_CPS` (env Render). Actuel : rozenn, amena, prunelle (kendia retirée, adresse supprimée). Boîte non connectée = sautée avec log.
+- Pour chaque réponse créateur : classification IA `routine`/`decision` + réponse rédigée (voix Hyped), notification Slack en DM avec mention (`COPILOT_SLACK_IDS`, JSON email vers ID Slack). Pendant l'absence d'Amena, ses notifs sont routées vers Mélany (U066ESCJK35) : à rebasculer vers U09CHH6N6LX à son retour.
+- Notifications en direct via `SLACK_BOT_TOKEN` (chat.postMessage, 0 crédit Make, `unfurl_links:false`), repli automatique sur le webhook Make.
+- Actions par liens signés HMAC (timing-safe). IMPORTANT : le GET est SANS effet (page qui exécute en JS via POST `/copilot/act/do`) car le robot d'aperçu Slack « visitait » les liens et déclenchait des envois fantômes.
+- Choix : Oui / Non / **consigne libre** (formulaire texte : l'IA rédige selon l'instruction) / Je gère. Confirmations « C'est fait » sur Slack après envoi ou « je gère ».
+- Détections : réponse envoyée directement depuis Gmail = proposition classée + Slack ; fil « traité » qui reçoit un nouveau message créateur = réouvert automatiquement.
+- Garde-fous IA (`claudeReply`) : langue du mail reçu, jamais valider un tarif non décidé, directive limitée à la question tranchée, prénom seul, pas de tiret quadratin. Contextes injectés : planning marque 6 semaines (`planningForBrand`, règles 3 j/semaine, idéal mar-mer-jeu), consignes fiche marque (`iaNotes`), histoire de la marque (`histoire`).
+- Étiquetage des fils (`fetchThreadText`) : toute adresse @hyped-agency.fr = « NOUS (agence · prénom) ». Avant, les collègues passaient pour des créateurs (bug grave en négo).
+- Mails de collègues sur des fils externes (marque détectée ou participant externe via `threadHasExternal`) : aucune proposition. Purge à la lecture (`loadCopilot`) des propositions internes périmées.
+- Cockpit : panneau « Copilote » dans Messages (toutes boîtes pour les superviseures) + boutons directement sur les lignes de mails. API : `GET /api/copilot/box`, `POST /api/copilot/act`.
+- Debug : `GET /copilot/tick?s=COPILOT_SECRET` force un passage et liste les 10 dernières propositions.
+
+**Fiches marques.** Nouveau champ « Consignes pour l'IA » (`iaNotes`, base, superviseures) appliqué à chaque réponse de la marque ; le champ « Histoire » sert de contexte pour présenter la marque aux créateurs.
+
+**Onglet To-do.** Tâches Notion par marque avec cases à cocher (statut « Fait » synchronisé). CP : ses tâches ; superviseures : filtre Moi / équipe / par membre. Les tâches de Mélany ne sont visibles que par elle. API : `GET /api/todo`, `POST /api/todo/check`.
+
+**Filtres actifs (barre latérale).** Pastilles cliquables : 🙋 Moi (défaut superviseures), 👥 Toute l'équipe, membres combinables. Mémorisé en localStorage.
+
+**Messages.** Date/heure sur chaque mail, entités HTML décodées, section « Autres mails reçus » (internes, CC, hors collabs : plus rien d'invisible), lecture portée à 80 fils.
+
+**Sécurité (audit du 4/07).** Comptes : `loadUsers` lit d'abord `/var/data/users.json` (persistant) ; changement de mot de passe par chacune via menu avatar (POST `/api/account/password`) ; TANT QUE personne n'a changé son mot de passe, la prod tourne sur `users.example.json` (public, hash partagé) : à faire changer d'urgence. Anti brute force sur /api/login (8 échecs = 10 min). Anti-XSS sur les pages copilote. Signature HMAC timing-safe. Guide v3 : consigne libre, To-do, garde-fous documentés.
+
+**Point de vigilance.** L'invalid_grant de la boîte Kendia venait de la suppression du compte. Si un invalid_grant apparaît sur une boîte EXISTANTE au bout d'environ 7 jours, l'app OAuth Google est en mode « Test » : passer l'écran de consentement en « Production » (ou « Interne ») dans la console Google Cloud pour des jetons permanents.
+
+---
+
 *Fin du document de passation. En cas de doute sur une décision produit (voix IA, gifting, formulations), se référer à Melany : le ton et les règles métier priment sur la technique.*

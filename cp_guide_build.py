@@ -113,13 +113,14 @@ S.append(sec(1, "En 30 secondes", "C'est quoi, la règle d'or, et comment te con
   + steps(["Va sur le lien du cockpit, entre ton email @hyped-agency.fr et ton mot de passe.",
            "Clique <b>« Connecter mon Gmail »</b> dans Messages. C'est ta boîte à toi, personne d'autre ne la voit. <b>Cette étape est indispensable</b> : sans elle, ni tes mails créateurs ni le copilote Slack (§10) ne fonctionnent.",
            "C'est tout. À partir de là, tes réponses créateurs remontent toutes seules."])))
-S.append(sec(2, "La barre de gauche", "Neuf onglets. Clique, ça change de page.",
+S.append(sec(2, "La barre de gauche", "Dix onglets. Clique, ça change de page.",
   "<table class='t'><tr><th>ONGLET</th><th>CE QUE TU Y TROUVES</th></tr>"
   "<tr><td class='c1'>▦ Cockpit</td><td>Ta page d'accueil : tes 4 indicateurs, tes priorités, ton agenda, le pipeline.</td></tr>"
   "<tr><td class='c1'>Profils</td><td>Les créateurs à contacter (la veille / le sourcing).</td></tr>"
   "<tr><td class='c1'>Campagnes</td><td>Une carte par marque, avec l'avancement.</td></tr>"
   "<tr><td class='c1'>Contenus</td><td>Les contenus de tes collabs en cours (à lancer, en production, à valider).</td></tr>"
   "<tr><td class='c1'>Marques <span class='new'>NOUVEAU</span></td><td>La fiche d'identité de chaque marque : contexte, contacts, docs, réseaux (§9).</td></tr>"
+  "<tr><td class='c1'>To-do <span class='new'>NOUVEAU</span></td><td>Tes tâches à faire, regroupées par marque. Une case cochée = « Fait » dans Notion, tout est synchronisé.</td></tr>"
   "<tr><td class='c1'>Contacts</td><td>L'annuaire de tous tes créateurs, avec leur statut.</td></tr>"
   "<tr><td class='c1'>Calendrier</td><td>Le mois avec tes collabs. Nouveau : chaque jour est cliquable et les flèches ‹ › naviguent de mois en mois.</td></tr>"
   "<tr><td class='c1'>Messages</td><td>Tes mails créateurs, classés, avec les réponses déjà prêtes.</td></tr>"
@@ -138,7 +139,7 @@ S.append(sec(4, "Sourcer &amp; contacter un créateur", "Tu ajoutes un profil, l
          "Quand c'est parti, clique « Marquer comme contacté »."])
   + box("RELANCE AUTOMATIQUE", "<p>Si le créateur ne répond pas sous 3 jours, une tâche « Relancer [créateur] » apparaît toute seule dans tes priorités. Tu n'as plus à y penser.</p>", teal=True)))
 S.append(sec(5, "Tes mails créateurs", "Le truc qui te décharge vraiment. Onglet Messages.",
-  "<p>Toutes les réponses de tes créateurs remontent ici, classées : réponse, preview, logistique, facture. (Les pubs, le recrutement et les newsletters sont ignorés.)</p>"
+  "<p>Toutes les réponses de tes créateurs remontent ici, classées : réponse, preview, logistique, facture, avec la date et l'heure de réception. Les pubs et newsletters sont ignorées, et tout le reste (mails internes, mails où tu es en copie, hors collabs) est rangé dans la section dépliable « 📥 Autres mails reçus » en bas : rien n'est invisible.</p>"
   + box("UNE RÉPONSE RÉDIGÉE SUR-MESURE (IA)", "<p>Quand tu cliques « ✍️ Répondre », le cockpit lit vraiment le message reçu (tout le fil) et rédige une réponse adaptée, dans la voix Hyped, en s'adressant au créateur par son prénom. Le bouton Régénérer te propose une autre version si besoin.</p>", teal=True)
   + "<p><b>Répondre en 2 secondes</b></p>"
   + steps(["Clique « ✍️ Répondre ». Tu vois d'abord le message reçu (et le lien « Ouvrir le fil dans Gmail »).",
@@ -182,22 +183,25 @@ S.append(sec(9, "Les fiches marques", "Toute la mémoire de l'agence, marque par
   "<li><b>L'interlocuteur principal</b> côté marque : tout le monde (bouton « modifier »).</li>"
   "<li><b>Documents &amp; liens good to know</b> : tout le monde peut ajouter un lien (veille, moodboard) ou une pièce jointe (brief influenceurs, jusqu'à 10 Mo).</li>"
   "<li><b>Contexte ajouté par l'équipe</b> : des notes signées et datées. La première info utile que tu apprends sur une marque, note-la ici pour les copines.</li></ul>"
+  "<p><b>🤖 La fiche nourrit l'IA.</b> Le champ « Consignes pour l'IA » (rempli par Mélany) est appliqué à chaque réponse rédigée pour cette marque : ton à adopter, choses à ne jamais dire, code promo, règles de dates... Et le champ « Histoire » sert à l'IA pour présenter la marque quand un créateur pose la question. Plus la fiche est riche, meilleures sont les réponses.</p>"
   + box("LE RÉFLEXE", "<p>Nouvel interlocuteur chez la marque ? Nouvelle info importante ? Mets la fiche à jour tout de suite. C'est ce qui fait que personne ne repart de zéro.</p>", teal=True), new=True))
 S.append(sec(10, "Le copilote Slack", "Tes mails te suivent sur Slack, tu décides en un clic.",
   "<p>Le copilote lit ta boîte toutes les 5 minutes. Pour chaque mail qui compte (réponse créateur, mail interne), il te <b>prépare la réponse</b> et t'envoie un message privé Slack (conversation « Make », avec une mention pour te notifier). <b>Rien ne part jamais sans ton clic.</b></p>"
   "<div class='slack'><div class='from'>Make <span class='app'>APPLI</span></div>"
   "<p><span class='men'>@Toi</span> <b>Étape 1/2 · Décision 🔔 Léa veut décaler son post du 9 au 15 juillet, on accepte ?</b><br><i>(un créateur · In Haircare · boîte Kendia)</i></p>"
-  "<p><span class='lnk'>✅ Oui</span> · <span class='lnk'>❌ Non</span> · <span class='lnk'>✍️ Je gère moi-même</span></p>"
-  "<p style='color:#56666D'><i>Clique un choix : je rédige la réponse dans ce sens et je te l'envoie à relire.</i></p></div>"
+  "<p><span class='lnk'>✅ Oui</span> · <span class='lnk'>❌ Non</span> · <span class='lnk'>💬 Je donne ma consigne</span> · <span class='lnk'>✍️ Je gère moi-même</span></p>"
+  "<p style='color:#56666D'><i>Clique un choix : je rédige la réponse dans ce sens et je te l'envoie à relire. « Consigne » = tu écris quoi répondre (ex. propose 500 €), je rédige.</i></p></div>"
   "<div class='slack'><div class='from'>Make <span class='app'>APPLI</span></div>"
   "<p><span class='men'>@Toi</span> <b>Étape 2/2 · Relis et envoie ✍️</b> (réponse à <b>Léa</b> · In Haircare, rédigée selon ta décision : oui ✅)</p>"
   "<div class='q'>Hello Léa,<br>Trop contente de te lire ! Pas de souci pour décaler la publication au 15 juillet...<br>À très vite,<br>Kendia</div>"
   "<p><span class='lnk'>📤 Envoyer</span> · <span class='lnk'>✍️ Je gère dans le cockpit</span></p></div>"
   "<ul>"
   "<li><b>Mail simple</b> (adresse reçue, merci, logistique) : tu reçois directement la réponse prête + « 📤 Envoyer ».</li>"
-  "<li><b>Mail à décision</b> (décaler une date, budget, désaccord) : d'abord la question (étape 1/2), puis la réponse à relire (étape 2/2).</li>"
-  "<li><b>Mail interne</b> (un membre de l'équipe) : tu es notifiée aussi, avec une réponse proposée sur un ton collègue.</li>"
+  "<li><b>Mail à décision</b> (décaler une date, budget, désaccord) : d'abord la question (étape 1/2), puis la réponse à relire (étape 2/2). Le bouton <b>💬 « Je donne ma consigne »</b> te laisse écrire exactement quoi répondre (ex. « propose 500 € pour 1 Reel + 2 stories ») : l'IA rédige dans ce sens.</li>"
+  "<li><b>Mail interne</b> (une vraie question d'une collègue, hors fils créateurs) : tu es notifiée aussi, avec une réponse proposée sur un ton collègue.</li>"
   "</ul>"
+  "<p><b>Les mêmes boutons dans le cockpit.</b> Onglet Messages : le panneau « 🤖 Copilote » en haut regroupe les décisions en attente, et les boutons Oui / Non / 💬 Consigne / Envoyer apparaissent aussi directement sur la ligne du mail concerné. Slack et cockpit sont synchronisés : une décision prise d'un côté disparaît de l'autre.</p>"
+  "<p><b>Ses garde-fous :</b> l'IA répond dans la <b>langue du mail reçu</b> (anglais si le mail est en anglais), elle ne valide <b>jamais un tarif ou un budget</b> qui n'a pas été explicitement décidé (elle répond « je valide en interne et je reviens vers toi ») et un clic validé ne s'applique qu'à la question posée, rien d'autre. Quand tu envoies, tu reçois un « ✅ C'est fait ! » sur Slack ; si tu réponds directement depuis Gmail, le copilote le détecte et classe tout seul. Et si un créateur relance sur un fil déjà traité, le fil ressort automatiquement.</p>"
   + box("LA RÈGLE SIMPLE", "<p><b>Réponds toujours au message Slack le plus récent.</b> Quand tu envoies, le mail part depuis ta boîte Gmail, avec ta signature, et il est marqué « Traité » dans le cockpit. « ✍️ Je gère » = rien ne part, le mail t'attend dans le cockpit comme d'habitude.</p>", teal=True)
   + box("POUR QUE ÇA MARCHE", "<p>Il faut avoir fait « Connecter mon Gmail » dans le cockpit (§1). Sans ça, le copilote ne peut pas lire ta boîte et tu ne recevras rien sur Slack.</p>"), new=True))
 S.append(sec(11, "Tes 3 réflexes", "À garder en tête, c'est tout l'esprit du cockpit.",
