@@ -1058,6 +1058,9 @@ function copilotSign(id, action) { return crypto.createHmac("sha256", COPILOT.se
 function copilotLink(id, action) { return COPILOT.publicUrl + "/copilot/act?id=" + encodeURIComponent(id) + "&action=" + action + "&sig=" + copilotSign(id, action); }
 function copilotCpName(email) { const u = USERS.find((x) => String(x.email).toLowerCase() === email); return u ? u.name : email.split("@")[0]; }
 function mailAddr(from) { const m = String(from || "").match(/<([^>]+)>/); return m ? m[1].trim() : (String(from || "").includes("@") ? String(from).trim() : ""); }
+// Nom affiché de l'expéditeur, tiré de l'en-tête From (« Julie Dupont <julie@x.com> » -> « Julie Dupont »).
+// Sert quand le nom ne matche aucun créateur des calendriers : fini l'« expéditeur inconnu » sec.
+function fromLabelOf(from) { const n = String(from || "").replace(/<[^>]*>/g, "").replace(/["']/g, "").trim(); return n || mailAddr(from); }
 async function copilotNotify(payload) {
   // Trajet direct cockpit -> Slack (0 crédit Make) si SLACK_BOT_TOKEN est configuré ; sinon via le webhook Make.
   const botToken = process.env.SLACK_BOT_TOKEN || "";
@@ -1121,7 +1124,10 @@ async function copilotInternalReply({ cp, fromName, subject, received, transcrip
   return hasOpenAI ? callOpenAI(sys, ctx) : callAnthropic(sys, ctx);
 }
 function copilotSlackText(p) {
-  const who = p.creator || "un créateur";
+  // Identité de l'expéditeur : nom matché dans les calendriers, sinon nom de l'en-tête From,
+  // et l'adresse mail en plus quand le nom n'est pas un créateur connu (on sait QUI parle).
+  const who = p.creator || p.fromLabel || "un créateur";
+  const whoFull = who + (!p.creator && p.to ? (" · " + p.to) : "");
   const brand = p.brand ? (" · " + p.brand) : "";
   if (p.categorie === "interne") {
     return "📨 Interne · *" + (p.creator || p.to || "quelqu'un de l'équipe") + "* → boîte " + p.cpName + " : " + (p.subject || "(sans objet)")
@@ -1134,9 +1140,12 @@ function copilotSlackText(p) {
       + "\n\n<" + copilotLink(p.id, "send") + "|📤 Envoyer>  ·  <" + copilotLink(p.id, "self") + "|✍️ Je gère dans le cockpit>";
   }
   if (p.categorie === "decision") {
-    return "*Étape 1/2 · Décision* 🔔 *" + (p.question || p.resume) + "*\n_(" + who + brand + " · boîte " + p.cpName + ")_\n\n"
-      + "<" + copilotLink(p.id, "accept") + "|✅ Oui>  ·  <" + copilotLink(p.id, "refuse") + "|❌ Non>  ·  <" + copilotLink(p.id, "directive") + "|💬 Je donne ma consigne>  ·  <" + copilotLink(p.id, "self") + "|✍️ Je gère moi-même>"
-      + "\n_Clique un choix : je rédige la réponse dans ce sens et je te l'envoie à relire. « Consigne » = tu écris quoi répondre (ex. propose 500 €), je rédige._";
+    return "*Étape 1/2 · Décision* 🔔 *" + (p.question || p.resume) + "*\n_(" + whoFull + brand + " · boîte " + p.cpName + ")_\n\n"
+      + "<" + copilotLink(p.id, "accept") + "|✅ Oui>  ·  <" + copilotLink(p.id, "refuse") + "|❌ Non>  ·  <" + copilotLink(p.id, "directive") + "|💬 Je te dis quoi répondre>  ·  <" + copilotLink(p.id, "self") + "|✍️ Je gère moi-même>"
+      + "\n\n_Comment ça marche : rien ne part tout seul, tu relis toujours le mail avant l'envoi._"
+      + "\n_• ✅ Oui ou ❌ Non : je rédige un mail qui répond oui (ou non) à la question ci-dessus._"
+      + "\n_• 💬 Je te dis quoi répondre : tu m'écris ta réponse avec tes mots (ex. « propose 500 € max »), j'en fais un mail propre._"
+      + "\n_• ✍️ Je gère moi-même : je ne fais rien, tu réponds toi-même._";
   }
   return "✉️ *" + who + "*" + brand + " : " + (p.resume || p.subject || "nouveau message") + "\n\n_Réponse prête (voix Hyped) :_\n>>> " + String(p.reply || "(IA indisponible, ouvre le cockpit)").slice(0, 900)
     + "\n\n<" + copilotLink(p.id, "send") + "|📤 Envoyer>  ·  <" + copilotLink(p.id, "self") + "|✍️ Je gère dans le cockpit>";
@@ -1195,7 +1204,7 @@ async function copilotTick() {
           id: crypto.randomBytes(8).toString("hex"),
           cpEmail: email, cpName: copilotCpName(email),
           msgId: m.id || m.threadId, threadId: m.threadId,
-          to: mailAddr(m.from), creator, brand: m.brand || "", subject: m.subject || "",
+          to: mailAddr(m.from), creator, fromLabel: fromLabelOf(m.from), brand: m.brand || "", subject: m.subject || "",
           categorie: cls.categorie, resume: cls.resume, question: cls.question,
           reply: rep && rep.ok ? rep.body : "",
           status: "pending", at: Date.now(),
@@ -1233,7 +1242,7 @@ async function copilotTick() {
             id: crypto.randomBytes(8).toString("hex"),
             cpEmail: email, cpName: copilotCpName(email),
             msgId: m.id || m.threadId, threadId: m.threadId,
-            to: fromAddr, creator: fromName, brand: m.brand || "", subject: m.subject || "",
+            to: fromAddr, creator: fromName, fromLabel: fromName, brand: m.brand || "", subject: m.subject || "",
             categorie: "interne", resume: String(m.snippet || "").slice(0, 200), question: "",
             reply: rep && rep.ok ? rep.body : "",
             status: "pending", at: Date.now(),
@@ -1301,7 +1310,7 @@ app.get("/copilot/act", (req, res) => {
     const form = "<form method=\"POST\" action=\"/copilot/act/do?" + q + "\" style=\"margin-top:14px;text-align:left\">"
       + "<textarea name=\"text\" required rows=\"4\" placeholder=\"Ex. propose 500 € pour 1 Reel + 2 stories, livraison avant le 20 juillet\" style=\"width:100%;box-sizing:border-box;font-family:inherit;font-size:14px;padding:10px 12px;border:1px solid #E4E0D5;border-radius:10px\"></textarea>"
       + "<button type=\"submit\" style=\"margin-top:10px;font-family:inherit;font-size:14px;font-weight:600;padding:10px 18px;border-radius:10px;border:none;background:#2C9087;color:#fff;cursor:pointer\">Générer la réponse ✍️</button></form>";
-    return res.send(copilotPage("Ta consigne 💬", "Dis-moi quoi répondre à " + (p.creator || "ce contact") + " : je rédige le mail dans ce sens et je te l'envoie à relire.").replace("</div></body>", form + "</div></body>"));
+    return res.send(copilotPage("Dis-moi quoi répondre 💬", "Écris ta réponse pour " + (p.creator || p.fromLabel || "ce contact") + " avec tes mots (ex. « propose 500 € max », « demande-lui ses stats »). J'en fais un mail propre et je te l'envoie à relire avant tout envoi.").replace("</div></body>", form + "</div></body>"));
   }
   const runner = "<script>fetch('/copilot/act/do?" + q + "',{method:'POST'}).then(r=>r.text()).then(h=>{document.open();document.write(h);document.close();}).catch(()=>{var d=document.querySelector('p');if(d)d.textContent='Petit souci réseau, recharge cette page pour réessayer.';});</script>"
     + "<noscript><form method=\"POST\" action=\"/copilot/act/do?" + q + "\" style=\"text-align:center;margin-top:14px\"><button style=\"font-family:inherit;font-size:14px;padding:10px 18px;border-radius:10px;border:1px solid #E4E0D5;background:#2C9087;color:#fff;cursor:pointer\">Continuer</button></form></noscript>";
@@ -1384,7 +1393,7 @@ app.get("/api/copilot/box", auth, (req, res) => {
     // superviseure sans filtre : elle voit les décisions de TOUTES les boîtes ; sinon la boîte affichée
     .filter((p) => ((sup && !asked) ? true : p.cpEmail === t.email))
     .slice(-30).reverse()
-    .map((p) => ({ id: p.id, cpName: p.cpName, threadId: p.threadId, creator: p.creator, brand: p.brand, subject: p.subject, categorie: p.categorie, resume: p.resume, question: p.question, reply: p.reply, status: p.status, decision: p.decision, at: p.at }));
+    .map((p) => ({ id: p.id, cpName: p.cpName, threadId: p.threadId, creator: p.creator, fromLabel: p.fromLabel || "", to: p.to || "", brand: p.brand, subject: p.subject, categorie: p.categorie, resume: p.resume, question: p.question, reply: p.reply, status: p.status, decision: p.decision, at: p.at }));
   res.json({ enabled: true, proposals: list });
 });
 app.post("/api/copilot/act", auth, async (req, res) => {

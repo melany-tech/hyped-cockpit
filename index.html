@@ -232,6 +232,8 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .cpwho{font-size:13.5px}
 .cpsubj{font-size:12.5px;color:#56666D;margin-top:2px}
 .cptag{background:#EAF4F3;color:#2C9087;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:600}
+.cpmail{font-size:11.5px;color:#9aa6a8;font-weight:500}
+.cpqui{cursor:pointer;color:#2C9087;font-size:12px;font-weight:600;text-decoration:underline;white-space:nowrap}
 .cpq{font-size:13.5px;margin:8px 0;font-weight:600}
 .cplab{font-size:12px;color:#56666D;margin-bottom:6px}
 .cprep{white-space:pre-wrap;font-size:13px;background:var(--soft);border-radius:10px;padding:10px 12px;margin-bottom:8px}
@@ -1223,17 +1225,24 @@ async function loadCopilotBox(who){
   try{
     const r=await api('/api/copilot/box'+(who?('?as='+encodeURIComponent(who)):''));
     if(!r.ok){show(box,false);return;}
-    const d=await r.json(); const ps=(d&&d.proposals)||[];
+    const d=await r.json(); let ps=(d&&d.proposals)||[];
+    // Le panneau copilote respecte le filtre membre actif : « Moi » = ma boîte seulement,
+    // membres cochés = leurs boîtes, « Toute l'équipe » = toutes les boîtes.
+    const fparts=(VIEWER&&VIEWER.role==='supervisor')?cpSelParts():[];
+    if(fparts.length) ps=ps.filter(p=>fparts.some(x=>nlow(x)===nlow(p.cpName||'')));
     if(!ps.length){box.innerHTML='';show(box,false);return;}
     box.innerHTML='<div class="cphead">🤖 Copilote · '+ps.length+' décision(s) en attente <span class="cpsub">mêmes choix que sur Slack, en un clic</span></div>'
       +ps.map(p=>{
-        const who2=esc(p.creator||'expéditeur inconnu'), br=p.brand?(' · '+esc(p.brand)):'';
+        const disp=p.creator||p.fromLabel||p.to||'expéditeur inconnu';
+        const who2=esc(disp), br=p.brand?(' · '+esc(p.brand)):'';
+        const mailTag=(p.to&&nlow(p.to)!==nlow(disp))?(' <span class="cpmail">'+esc(p.to)+'</span>'):'';
+        const quiTag=(p.creator||p.fromLabel)?(' · <a class="cpqui" data-qui="'+esc(disp)+'">👤 Qui c\'est ?</a>'):'';
         const boxTag=p.cpName?(' · <span class="cptag">boîte '+esc(p.cpName)+'</span>'):'';
-        const head='<div class="cpwho"><b>'+who2+'</b>'+br+boxTag+(p.categorie==='interne'?' · <span class="cptag">interne</span>':'')+'</div>'
+        const head='<div class="cpwho"><b>'+who2+'</b>'+mailTag+br+boxTag+(p.categorie==='interne'?' · <span class="cptag">interne</span>':'')+quiTag+'</div>'
           +(p.subject?('<div class="cpsubj">'+esc(p.subject)+'</div>'):'');
         if(p.categorie==='decision'&&p.status==='pending'){
           return '<div class="cpcard">'+head+'<div class="cpq">'+esc(p.question||p.resume||'')+'</div>'
-            +'<div class="cpbtns"><button class="lk" data-id="'+p.id+'" data-cpact="accept">✅ Oui</button><button class="lk" data-id="'+p.id+'" data-cpact="refuse">❌ Non</button><button class="lk" data-id="'+p.id+'" data-cpact="directive">💬 Ma consigne</button><button class="lk" data-id="'+p.id+'" data-cpact="self">✍️ Je gère moi-même</button></div></div>';
+            +'<div class="cpbtns"><button class="lk" data-id="'+p.id+'" data-cpact="accept">✅ Oui</button><button class="lk" data-id="'+p.id+'" data-cpact="refuse">❌ Non</button><button class="lk" data-id="'+p.id+'" data-cpact="directive">💬 Je te dis quoi répondre</button><button class="lk" data-id="'+p.id+'" data-cpact="self">✍️ Je gère moi-même</button></div></div>';
         }
         const rep=p.reply?('<div class="cprep">'+esc(String(p.reply).slice(0,600))+(String(p.reply).length>600?'…':'')+'</div>'):'';
         const lab=p.status==='ready'?('Réponse rédigée selon ta décision ('+(p.decision==='accept'?'oui ✅':'non ❌')+') : relis et envoie'):'Réponse prête (voix Hyped) : relis et envoie';
@@ -1241,9 +1250,10 @@ async function loadCopilotBox(who){
           +'<div class="cpbtns">'+(p.reply?('<button class="lk" data-id="'+p.id+'" data-cpact="send">📤 Envoyer</button>'):'')+'<button class="lk" data-id="'+p.id+'" data-cpact="self">✍️ Je gère moi-même</button></div></div>';
       }).join('');
     show(box,true);
+    box.querySelectorAll('a.cpqui').forEach(a=>a.onclick=()=>quiEstCe(a.dataset.qui));
     box.querySelectorAll('button[data-cpact]').forEach(b=>b.onclick=async()=>{
       let text;
-      if(b.dataset.cpact==='directive'){ text=prompt('Ta consigne pour la réponse (ex. « propose 500 € pour 1 Reel + 2 stories », « demande-lui sa tranche de prix ») :'); if(!text||!text.trim())return; }
+      if(b.dataset.cpact==='directive'){ text=prompt('Écris ta réponse avec tes mots, j\'en fais un mail propre que tu reliras avant envoi.\nEx. « propose 500 € pour 1 Reel + 2 stories », « demande-lui sa tranche de prix » :'); if(!text||!text.trim())return; }
       b.disabled=true; b.textContent='…';
       const rr=await api('/api/copilot/act',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:b.dataset.id,action:b.dataset.cpact,text})});
       const dd=await rr.json().catch(()=>({}));
@@ -1252,6 +1262,17 @@ async function loadCopilotBox(who){
     });
     decorateMailRows(ps,who);
   }catch(e){show(box,false);}
+}
+// « Qui c'est ? » : ouvre la page Contacts avec la recherche préremplie sur l'expéditeur.
+// Si le nom complet ne matche rien, on retente avec le prénom seul (les calendriers n'ont
+// souvent que le prénom). Si toujours rien : la personne n'est pas encore suivie chez nous.
+function quiEstCe(name){
+  navToView('contacts');
+  setTimeout(()=>{
+    const trySearch=q=>{ const si=$('ctsearchinput'); if(!si)return 0; si.value=q; si.dispatchEvent(new Event('input')); return [...document.querySelectorAll('#ctlist .ctrow')].filter(r=>r.style.display!=='none').length; };
+    if(!trySearch(name)) trySearch(String(name).split(/\s+/)[0]||name);
+    const si=$('ctsearchinput'); if(si)si.focus();
+  },80);
 }
 // Boutons Oui/Non/Envoyer directement SUR la ligne du mail concerné (comme sur Slack)
 function decorateMailRows(ps,who){
@@ -1263,7 +1284,7 @@ function decorateMailRows(ps,who){
     if(!info)return;
     const div=document.createElement('div'); div.className='cprowbtns';
     if(p.categorie==='decision'&&p.status==='pending'){
-      div.innerHTML='<span class="cplab2">🤖 '+esc(p.question||p.resume||'Décision demandée')+'</span><button class="lk" data-id="'+esc(p.id)+'" data-cpact="accept">✅ Oui</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="refuse">❌ Non</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="directive">💬 Ma consigne</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="self">✍️ Je gère</button>';
+      div.innerHTML='<span class="cplab2">🤖 '+esc(p.question||p.resume||'Décision demandée')+'</span><button class="lk" data-id="'+esc(p.id)+'" data-cpact="accept">✅ Oui</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="refuse">❌ Non</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="directive">💬 Je te dis quoi répondre</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="self">✍️ Je gère</button>';
     }else if(p.reply){
       div.innerHTML='<span class="cplab2">🤖 Réponse prête'+(p.status==='ready'?(' · décision : '+(p.decision==='accept'?'oui ✅':'non ❌')):'')+'</span><button class="lk" data-id="'+esc(p.id)+'" data-cpact="send">📤 Envoyer</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="self">✍️ Je gère</button>';
     }else return;
@@ -1271,7 +1292,7 @@ function decorateMailRows(ps,who){
     div.querySelectorAll('button[data-cpact]').forEach(b=>b.onclick=async(ev)=>{
       ev.stopPropagation();
       let text;
-      if(b.dataset.cpact==='directive'){ text=prompt('Ta consigne pour la réponse (ex. « propose 500 € pour 1 Reel + 2 stories », « demande-lui sa tranche de prix ») :'); if(!text||!text.trim())return; }
+      if(b.dataset.cpact==='directive'){ text=prompt('Écris ta réponse avec tes mots, j\'en fais un mail propre que tu reliras avant envoi.\nEx. « propose 500 € pour 1 Reel + 2 stories », « demande-lui sa tranche de prix » :'); if(!text||!text.trim())return; }
       b.disabled=true; b.textContent='…';
       const rr=await api('/api/copilot/act',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:b.dataset.id,action:b.dataset.cpact,text})});
       const dd=await rr.json().catch(()=>({}));
