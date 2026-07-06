@@ -182,6 +182,30 @@ async function threadHasExternal(email, threadId) {
   } catch (e) { return false; }
 }
 
+// Premier contact EXTERNE d'un fil ({ addr, name } ou null). Priorité aux expéditeurs externes
+// (le vrai interlocuteur), sinon les destinataires (À/Cc). Sert à la reprise des fils d'une
+// ex-collègue : la réponse doit partir vers le contact externe, jamais vers l'ex-collègue.
+async function threadExternalContact(email, threadId) {
+  const gmail = gmailFor(email);
+  if (!gmail || !threadId) return null;
+  try {
+    const t = await gmail.users.threads.get({ userId: "me", id: threadId, format: "metadata", metadataHeaders: ["From", "To", "Cc"] });
+    const parse = (v) => String(v || "").split(",").map((s) => s.trim()).filter((s) => s.includes("@") && !/@hyped-agency\.fr/i.test(s));
+    const froms = [], dests = [];
+    for (const m of (t.data.messages || [])) {
+      const h = Object.fromEntries((m.payload?.headers || []).map((x) => [x.name, x.value]));
+      froms.push(...parse(h.From));
+      dests.push(...parse(h.To), ...parse(h.Cc));
+    }
+    const s = froms[froms.length - 1] || dests[0]; // dernier expéditeur externe, sinon 1er destinataire externe
+    if (!s) return null;
+    const am = s.match(/<([^>]+)>/);
+    const addr = am ? am[1].trim() : s.trim();
+    const name = s.replace(/<[^>]*>/g, "").replace(/["']/g, "").trim();
+    return { addr, name: name && name !== addr ? name : "" };
+  } catch (e) { return null; }
+}
+
 // --- Pièces jointes + liens de transfert (WeTransfer, Drive, Dropbox…) -----
 function humanSize(n) {
   n = Number(n) || 0;
@@ -363,4 +387,4 @@ async function draftsToValidate(email) {
   return { count: keep.length };
 }
 
-module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, analyzeFor, calendarToday, createDraft, sendEmail, draftsToValidate, fetchThreadText, lastReplyFromMe, threadHasExternal, getSignature, getAttachment, SCOPES };
+module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, analyzeFor, calendarToday, createDraft, sendEmail, draftsToValidate, fetchThreadText, lastReplyFromMe, threadHasExternal, threadExternalContact, getSignature, getAttachment, SCOPES };

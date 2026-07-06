@@ -1033,6 +1033,9 @@ const COPILOT = {
   slackIds: (() => { try { return JSON.parse(process.env.COPILOT_SLACK_IDS || "{}"); } catch (e) { return {}; } })(),
   publicUrl: (process.env.PUBLIC_URL || "https://hyped-cockpit.onrender.com").replace(/\/$/, ""),
   includeTeam: process.env.COPILOT_INCLUDE_TEAM === "1", // notifier aussi les mails internes @hyped-agency.fr
+  // Ex-collègues parties de l'agence : plus personne ne gère leurs fils. Quand un de leurs mails
+  // (avec une CP en copie) implique un contact externe, la CP en copie reprend le lead.
+  departed: String(process.env.COPILOT_DEPARTED || "kendia@hyped-agency.fr").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean),
 };
 function saveCopilot(o) { try { fs.writeFileSync(COPILOT_STORE, JSON.stringify(o)); } catch (e) { try { console.error("[copilot] ECRITURE copilot.json ECHOUEE :", e.message); } catch (e2) {} } }
 // Nettoyage à la lecture : les propositions « interne » liées à une marque ou vieilles de 12 h
@@ -1238,13 +1241,38 @@ async function copilotTick() {
           if (seen.has(email + "|" + (m.id || m.threadId))) continue;
           const fromAddr = mailAddr(m.from);
           if (fromAddr.toLowerCase() === email) continue; // ses propres mails, non merci
+          let ext = null; try { ext = await gm.threadExternalContact(email, m.threadId); } catch (e) {}
+          // Ex-collègue PARTIE (ex. Kendia) : plus personne ne gère ses fils. Si le fil implique
+          // un contact externe, la CP en copie reprend le lead : proposition adressée au contact
+          // EXTERNE (jamais à l'ex-collègue), avec le circuit décision habituel.
+          if (COPILOT.departed.includes(fromAddr.toLowerCase()) && ext) {
+            let transcript = "";
+            try { const full = await gm.fetchThreadText(email, m.threadId); if (full && full.ok) transcript = full.transcript || full.text || ""; } catch (e) {}
+            const creator = ext.name || ext.addr;
+            const cls = await copilotClassify({ creator, subject: m.subject, received: m.snippet, transcript });
+            const rep = await claudeReply({ cp: copilotCpName(email), creator, brand: m.brand, category: "réponse", received: m.snippet, subject: m.subject, transcript, planning: planningForBrand(collabs, m.brand), brandNotes: brandNotesFor(m.brand), brandInfo: brandInfoFor(m.brand) });
+            const p = {
+              id: crypto.randomBytes(8).toString("hex"),
+              cpEmail: email, cpName: copilotCpName(email),
+              msgId: m.id || m.threadId, threadId: m.threadId,
+              to: ext.addr, creator, fromLabel: creator, brand: m.brand || "", subject: m.subject || "",
+              categorie: cls.categorie, resume: "🔁 Reprise du fil de " + (fromLabelOf(m.from) || "une ex-collègue") + " (plus dans l'agence) · " + (cls.resume || ""), question: cls.question,
+              reply: rep && rep.ok ? rep.body : "",
+              status: "pending", at: Date.now(),
+            };
+            store.proposals.push(p);
+            seen.add(email + "|" + p.msgId);
+            const su2 = COPILOT.slackIds[email] || "";
+            if (su2) await copilotNotify({ slackUser: su2, text: "<@" + su2 + "> " + copilotSlackText(p) });
+            continue;
+          }
           // Fil de COLLAB (marque détectée) écrit par une collègue : c'est ELLE qui gère le créateur,
           // il n'y a rien à lui répondre. Sans ce garde-fou, l'IA proposait de répondre à sa collègue
           // sur ses propres mails sortants (mails en copie) : absurde.
           if (m.brand) continue;
           // Même règle si le fil implique un participant EXTERNE (créateur/marque hors calendriers) :
           // ce n'est pas une conversation interne, la collègue gère.
-          try { if (await gm.threadHasExternal(email, m.threadId)) continue; } catch (e) {}
+          if (ext) continue;
           let transcript = "";
           try { const full = await gm.fetchThreadText(email, m.threadId); if (full && full.ok) transcript = full.transcript || full.text || ""; } catch (e) {}
           const fromName = String(m.from || "").replace(/<[^>]*>/, "").trim() || fromAddr;
