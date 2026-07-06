@@ -1242,12 +1242,12 @@ async function loadCopilotBox(who){
           +(p.subject?('<div class="cpsubj">'+esc(p.subject)+'</div>'):'');
         if(p.categorie==='decision'&&p.status==='pending'){
           return '<div class="cpcard">'+head+'<div class="cpq">'+esc(p.question||p.resume||'')+'</div>'
-            +'<div class="cpbtns"><button class="lk" data-id="'+p.id+'" data-cpact="accept">✅ Oui</button><button class="lk" data-id="'+p.id+'" data-cpact="refuse">❌ Non</button><button class="lk" data-id="'+p.id+'" data-cpact="directive">💬 Je te dis quoi répondre</button><button class="lk" data-id="'+p.id+'" data-cpact="self">✍️ Je gère moi-même</button></div></div>';
+            +'<div class="cpbtns"><button class="lk" data-id="'+p.id+'" data-cpact="accept">✅ Oui</button><button class="lk" data-id="'+p.id+'" data-cpact="refuse">❌ Non</button><button class="lk" data-id="'+p.id+'" data-cpact="directive">💬 Je te dis quoi répondre</button><button class="lk" data-id="'+p.id+'" data-cpact="self">✍️ Je gère moi-même</button><button class="lk" data-id="'+p.id+'" data-cpact="seen">👁️ Vu, rien à répondre</button></div></div>';
         }
         const rep=p.reply?('<div class="cprep">'+esc(String(p.reply).slice(0,600))+(String(p.reply).length>600?'…':'')+'</div>'):'';
         const lab=p.status==='ready'?('Réponse rédigée selon ta décision ('+(p.decision==='accept'?'oui ✅':'non ❌')+') : relis et envoie'):'Réponse prête (voix Hyped) : relis et envoie';
         return '<div class="cpcard">'+head+'<div class="cpq">'+esc(p.resume||'')+'</div><div class="cplab">'+lab+'</div>'+rep
-          +'<div class="cpbtns">'+(p.reply?('<button class="lk" data-id="'+p.id+'" data-cpact="send">📤 Envoyer</button>'):'')+'<button class="lk" data-id="'+p.id+'" data-cpact="self">✍️ Je gère moi-même</button></div></div>';
+          +'<div class="cpbtns">'+(p.reply?('<button class="lk" data-id="'+p.id+'" data-cpact="send">📤 Envoyer</button>'):'')+'<button class="lk" data-id="'+p.id+'" data-cpact="self">✍️ Je gère moi-même</button><button class="lk" data-id="'+p.id+'" data-cpact="seen">👁️ Vu, rien à répondre</button></div></div>';
       }).join('');
     show(box,true);
     box.querySelectorAll('a.cpqui').forEach(a=>a.onclick=()=>quiEstCe(a.dataset.qui));
@@ -1258,7 +1258,7 @@ async function loadCopilotBox(who){
       const rr=await api('/api/copilot/act',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:b.dataset.id,action:b.dataset.cpact,text})});
       const dd=await rr.json().catch(()=>({}));
       alert((dd.title||'')+(dd.msg?('\n'+dd.msg):'')||(rr.ok?'OK':'Erreur'));
-      loadCopilotBox(who); if(b.dataset.cpact==='send')loadMail();
+      loadCopilotBox(who); if(b.dataset.cpact==='send'||b.dataset.cpact==='seen')loadMail();
     });
     decorateMailRows(ps,who);
   }catch(e){show(box,false);}
@@ -1284,9 +1284,9 @@ function decorateMailRows(ps,who){
     if(!info)return;
     const div=document.createElement('div'); div.className='cprowbtns';
     if(p.categorie==='decision'&&p.status==='pending'){
-      div.innerHTML='<span class="cplab2">🤖 '+esc(p.question||p.resume||'Décision demandée')+'</span><button class="lk" data-id="'+esc(p.id)+'" data-cpact="accept">✅ Oui</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="refuse">❌ Non</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="directive">💬 Je te dis quoi répondre</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="self">✍️ Je gère</button>';
+      div.innerHTML='<span class="cplab2">🤖 '+esc(p.question||p.resume||'Décision demandée')+'</span><button class="lk" data-id="'+esc(p.id)+'" data-cpact="accept">✅ Oui</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="refuse">❌ Non</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="directive">💬 Je te dis quoi répondre</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="self">✍️ Je gère</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="seen">👁️ Vu</button>';
     }else if(p.reply){
-      div.innerHTML='<span class="cplab2">🤖 Réponse prête'+(p.status==='ready'?(' · décision : '+(p.decision==='accept'?'oui ✅':'non ❌')):'')+'</span><button class="lk" data-id="'+esc(p.id)+'" data-cpact="send">📤 Envoyer</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="self">✍️ Je gère</button>';
+      div.innerHTML='<span class="cplab2">🤖 Réponse prête'+(p.status==='ready'?(' · décision : '+(p.decision==='accept'?'oui ✅':'non ❌')):'')+'</span><button class="lk" data-id="'+esc(p.id)+'" data-cpact="send">📤 Envoyer</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="self">✍️ Je gère</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="seen">👁️ Vu</button>';
     }else return;
     info.appendChild(div);
     div.querySelectorAll('button[data-cpact]').forEach(b=>b.onclick=async(ev)=>{

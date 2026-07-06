@@ -634,6 +634,8 @@ async function claudeReply({ cp, creator, brand, category, received, subject, tr
     "STYLE : n'utilise JAMAIS de tiret quadratin, c'est-à-dire le caractère « — », dans tes réponses : préfère une virgule, deux-points ou une nouvelle phrase.",
     "LANGUE (PRIORITÉ ABSOLUE) : tu réponds TOUJOURS dans la LANGUE du dernier message reçu. Mail en anglais = réponse ENTIÈREMENT en anglais (même chaleur, mêmes règles, salutation adaptée type 'Hi [prénom],'). Mail en français = réponse en français. Ne mélange jamais les deux.",
     "RÈGLE D'OR : tu réponds VRAIMENT au contenu du dernier message : tu reprends ses points, réponds à ses questions, rebondis sur ce qu'il dit. JAMAIS de réponse générique.",
+    "SENS DES ÉCHANGES (NE JAMAIS INVERSER) : c'est L'AGENCE (nous) qui envoie au créateur le contrat, le brief et les produits ; c'est le CRÉATEUR qui les reçoit. Ne dis JAMAIS « j'ai bien reçu le contrat / le brief / les produits » : c'est LUI qui les reçoit, pas toi. Ce que TOI tu reçois de lui : previews, contenus, factures, infos postales, stats.",
+    "ÉTAPES D'UNE COLLAB, dans l'ordre : 1 prise de contact, 2 accord du créateur, 3 NOUS envoyons contrat + brief, 4 le créateur SIGNE le contrat, 5 NOUS envoyons les produits, 6 le créateur crée le contenu et NOUS envoie la preview, 7 validation par nous, 8 publication, 9 facture s'il y a rémunération. Quand le créateur confirme une étape, ta réponse acte cette étape et amène NATURELLEMENT à la SUIVANTE (ex. il a reçu contrat + brief -> tu te réjouis et l'invites à signer le contrat, en rappelant la suite).",
     "RÈGLE BUDGET, déterminer le type : la collab est rémunérée UNIQUEMENT si un budget / tarif / facture / paiement a déjà été ACTÉ par l'agence dans le fil. Sinon c'est un envoi de produits (gifting). N'affirme JAMAIS que c'est payé si ça n'a pas été acté.",
     "RÈGLE BUDGET, comment l'annoncer (FORMULATION OBLIGATOIRE, à respecter à la lettre) :",
     "  - On n'IMPOSE jamais et on ne REFUSE jamais frontalement. INTERDITS ABSOLUS (ne JAMAIS écrire) : 'on ne pourra pas activer le budget', 'on ne peut pas te rémunérer', 'ce n'est pas rémunéré', 'pas de budget', 'non rémunéré', 'collab non payée', 'en échange de ton contenu'.",
@@ -1047,7 +1049,9 @@ function loadCopilot() {
   // (transcript tronqué par la fin -> l'IA jugeait sur de vieux messages et inversait le sens,
   // ex. « Keylanne veut décliner » alors qu'elle écrivait « je suis partante ») sont supprimées
   // pour être réanalysées proprement avec le prompt corrigé.
-  const FIX_ETIQUETAGE = Date.parse("2026-07-06T12:50:00+02:00");
+  // (13:55 : re-bump après l'ajout des règles « sens des échanges » et « étapes d'une collab » :
+  // les réponses qui inversaient les rôles, ex. « j'ai bien reçu le contrat », sont réécrites.)
+  const FIX_ETIQUETAGE = Date.parse("2026-07-06T13:55:00+02:00");
   // Les « internes » créés avant le scan To/Cc sont repassés au filtre : un mail de collègue
   // adressé à une externe (collègue qui gère, on est juste en copie) ne doit RIEN proposer.
   const FIX_INTERNE = Date.parse("2026-07-06T13:05:00+02:00");
@@ -1147,11 +1151,11 @@ function copilotSlackText(p) {
     return "📨 Interne · *" + (p.creator || p.to || "quelqu'un de l'équipe") + "* → boîte " + p.cpName + " : " + (p.subject || "(sans objet)")
       + (p.resume ? ("\n_" + p.resume + "_") : "")
       + (p.reply ? ("\n\n_Réponse proposée :_\n>>> " + String(p.reply).slice(0, 900)) : "")
-      + "\n\n" + (p.reply ? ("<" + copilotLink(p.id, "send") + "|📤 Envoyer>  ·  ") : "") + "<" + copilotLink(p.id, "self") + "|✍️ Je gère dans le cockpit>";
+      + "\n\n" + (p.reply ? ("<" + copilotLink(p.id, "send") + "|📤 Envoyer>  ·  ") : "") + "<" + copilotLink(p.id, "self") + "|✍️ Je gère dans le cockpit>  ·  <" + copilotLink(p.id, "seen") + "|👁️ Vu, rien à répondre>";
   }
   if (p.status === "ready") {
     return "*Étape 2/2 · Relis et envoie* ✍️ (réponse à *" + who + "*" + brand + ", rédigée selon " + (p.decision === "accept" ? "ta décision : oui ✅" : p.decision === "refuse" ? "ta décision : non ❌" : "ta consigne ✍️") + ")\n\n>>> " + String(p.reply || "").slice(0, 900)
-      + "\n\n<" + copilotLink(p.id, "send") + "|📤 Envoyer>  ·  <" + copilotLink(p.id, "self") + "|✍️ Je gère dans le cockpit>";
+      + "\n\n<" + copilotLink(p.id, "send") + "|📤 Envoyer>  ·  <" + copilotLink(p.id, "self") + "|✍️ Je gère dans le cockpit>  ·  <" + copilotLink(p.id, "seen") + "|👁️ Vu, rien à répondre>";
   }
   if (p.categorie === "decision") {
     return "*Étape 1/2 · Décision* 🔔 *" + (p.question || p.resume) + "*\n_(" + whoFull + brand + " · boîte " + p.cpName + ")_\n\n"
@@ -1159,10 +1163,11 @@ function copilotSlackText(p) {
       + "\n\n_Comment ça marche : rien ne part tout seul, tu relis toujours le mail avant l'envoi._"
       + "\n_• ✅ Oui ou ❌ Non : je rédige un mail qui répond oui (ou non) à la question ci-dessus._"
       + "\n_• 💬 Je te dis quoi répondre : tu m'écris ta réponse avec tes mots (ex. « propose 500 € max »), j'en fais un mail propre._"
-      + "\n_• ✍️ Je gère moi-même : je ne fais rien, tu réponds toi-même._";
+      + "\n_• ✍️ Je gère moi-même : je ne fais rien, tu réponds toi-même._"
+      + "\n_• <" + copilotLink(p.id, "seen") + "|👁️ Vu, rien à répondre> : je classe le mail, rien ne part._";
   }
   return "✉️ *" + who + "*" + brand + " : " + (p.resume || p.subject || "nouveau message") + "\n\n_Réponse prête (voix Hyped) :_\n>>> " + String(p.reply || "(IA indisponible, ouvre le cockpit)").slice(0, 900)
-    + "\n\n<" + copilotLink(p.id, "send") + "|📤 Envoyer>  ·  <" + copilotLink(p.id, "self") + "|✍️ Je gère dans le cockpit>";
+    + "\n\n<" + copilotLink(p.id, "send") + "|📤 Envoyer>  ·  <" + copilotLink(p.id, "self") + "|✍️ Je gère dans le cockpit>  ·  <" + copilotLink(p.id, "seen") + "|👁️ Vu, rien à répondre>";
 }
 let COPILOT_RUNNING = false;
 async function copilotTick() {
@@ -1401,6 +1406,13 @@ async function copilotExecute(id, action, text) {
       if (slackUser) await copilotNotify({ slackUser, text: "<@" + slackUser + "> " + copilotSlackText(p) }); // mention = vraie notification
       return { code: 200, title: "C'est noté " + (action === "accept" ? "✅" : action === "refuse" ? "❌" : "✍️"), msg: "L'IA a rédigé la réponse " + (action === "directive" ? "selon ta consigne" : "dans ce sens") + ". Relis-la et envoie-la en un clic (ici ou sur Slack)." };
     }
+    if (action === "seen") {
+      // « Vu, rien à répondre » : on classe la proposition ET on marque le fil traité dans le
+      // cockpit (la carte et la notice sur la ligne du mail disparaissent). Rien n'est envoyé.
+      p.status = "handled"; p.decidedAt = Date.now(); saveCopilot(store);
+      try { markTreated(p.cpEmail, p.threadId, { by: p.cpName + " (vu, sans réponse)", action: "vu" }); } catch (e) {}
+      return { code: 200, title: "Vu 👌", msg: "Mail classé, rien n'a été envoyé. Il ressortira si " + (p.creator || p.fromLabel || "le contact") + " écrit à nouveau." };
+    }
     if (action === "self") {
       p.status = "self"; p.decidedAt = Date.now(); saveCopilot(store);
       try {
@@ -1438,7 +1450,7 @@ app.get("/api/copilot/box", auth, (req, res) => {
 app.post("/api/copilot/act", auth, async (req, res) => {
   if (!COPILOT.enabled) return res.status(400).json({ error: "copilote désactivé" });
   const { id, action, text } = req.body || {};
-  if (!id || !["send", "accept", "refuse", "self", "directive"].includes(String(action))) return res.status(400).json({ error: "action inconnue" });
+  if (!id || !["send", "accept", "refuse", "self", "directive", "seen"].includes(String(action))) return res.status(400).json({ error: "action inconnue" });
   const store = loadCopilot();
   const p = (store.proposals || []).find((x) => x.id === String(id));
   if (!p) return res.status(404).json({ error: "proposition introuvable" });
