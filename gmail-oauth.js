@@ -164,14 +164,19 @@ async function lastReplyFromMe(email, threadId) {
 
 // Le fil contient-il un participant EXTERNE (créateur, marque…) ? Sert au copilote :
 // un mail de collègue sur une conversation externe n'est pas un « mail interne » à répondre.
+// IMPORTANT : on regarde From ET To/Cc. Cas vécu : Kendia répond à l'agente d'une influenceuse
+// et met Rozenn en copie -> dans la boîte de Rozenn, le fil ne contient QUE le message de Kendia
+// (From interne), mais il est adressé À une externe. Sans le scan des destinataires, le copilote
+// prenait ça pour un mail interne et proposait à Rozenn de… répondre à Kendia. Absurde.
 async function threadHasExternal(email, threadId) {
   const gmail = gmailFor(email);
   if (!gmail || !threadId) return false;
   try {
-    const t = await gmail.users.threads.get({ userId: "me", id: threadId, format: "metadata", metadataHeaders: ["From"] });
+    const t = await gmail.users.threads.get({ userId: "me", id: threadId, format: "metadata", metadataHeaders: ["From", "To", "Cc"] });
+    const isExt = (v) => String(v || "").split(",").some((a) => a.includes("@") && !/@hyped-agency\.fr/i.test(a));
     for (const m of (t.data.messages || [])) {
       const h = Object.fromEntries((m.payload?.headers || []).map((x) => [x.name, x.value]));
-      if (h.From && !/@hyped-agency\.fr/i.test(String(h.From))) return true;
+      if (isExt(h.From) || isExt(h.To) || isExt(h.Cc)) return true;
     }
     return false;
   } catch (e) { return false; }

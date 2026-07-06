@@ -1045,8 +1045,15 @@ function loadCopilot() {
   // ex. « Keylanne veut décliner » alors qu'elle écrivait « je suis partante ») sont supprimées
   // pour être réanalysées proprement avec le prompt corrigé.
   const FIX_ETIQUETAGE = Date.parse("2026-07-06T12:50:00+02:00");
+  // Les « internes » créés avant le scan To/Cc sont repassés au filtre : un mail de collègue
+  // adressé à une externe (collègue qui gère, on est juste en copie) ne doit RIEN proposer.
+  const FIX_INTERNE = Date.parse("2026-07-06T13:05:00+02:00");
   const avant = (store.proposals || []).length;
-  store.proposals = (store.proposals || []).filter((p) => !(p.status === "pending" && p.categorie !== "interne" && (p.at || 0) < FIX_ETIQUETAGE));
+  store.proposals = (store.proposals || []).filter((p) => {
+    if (p.status !== "pending") return true;
+    if (p.categorie === "interne") return (p.at || 0) >= FIX_INTERNE;
+    return (p.at || 0) >= FIX_ETIQUETAGE;
+  });
   purged += avant - store.proposals.length;
   for (const p of store.proposals || []) {
     if ((p.status === "pending" || p.status === "ready") && p.categorie === "interne" && (p.brand || (Date.now() - (p.at || 0)) > 12 * 3600 * 1000)) {
