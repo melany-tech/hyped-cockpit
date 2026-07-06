@@ -251,6 +251,12 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .onbdot.on{background:#2C9087}
 .onbnext{font-size:12px;color:#8A948F;margin-top:3px}
 .onbgroup{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#C77F2A;margin:12px 0 4px;padding-left:2px}
+.onbimg{display:block;max-width:190px;border:1px solid #E4E0D5;border-radius:12px;padding:8px;background:#fff;margin:6px 0 4px 36px}
+.onbattach{margin-top:8px;font-size:12.5px}
+.onbattach summary{cursor:pointer;color:#2C9087;font-weight:600}
+.onbattach input.onb-t,.onbattach textarea{width:100%;box-sizing:border-box;margin-top:8px;font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid #E4E0D5;border-radius:8px}
+.onbattach input.onb-f{margin:8px 0;font-size:12px}
+.onbattach .onb-d{color:#C2553B;margin-left:8px}
 .cpqui{cursor:pointer;color:#2C9087;font-size:12px;font-weight:600;text-decoration:underline;white-space:nowrap}
 .cpq{font-size:13.5px;margin:8px 0;font-weight:600}
 .cplab{font-size:12px;color:#56666D;margin-bottom:6px}
@@ -906,17 +912,48 @@ async function loadOnboarding(){
             const gh=(s.group&&(!i||d.mine[i-1].group!==s.group))?('<div class="onbgroup">'+esc(s.group)+'</div>'):'';
             return gh+'<label class="onbrow'+(s.done?' done':'')+'"><input type="checkbox" data-onb="'+esc(s.id)+'"'+(s.done?' checked':'')+'><span class="onblbl">'+esc(s.label)+(s.link?(' <a href="'+esc(s.link)+'" target="_blank" rel="noopener">ouvrir ↗</a>'):'')+'<span class="onbhint">'+esc(s.hint||'')+'</span></span></label>';
           }).join('');
+        if(d.attach){
+          html+='<div class="onbgroup">📱 '+esc(d.attach.title)+'</div>'
+            +'<label class="onbrow'+(d.attach.done?' done':'')+'"><input type="checkbox" data-onb="attach"'+(d.attach.done?' checked':'')+'><span class="onblbl">'+esc(d.attach.title)
+            +'<span class="onbhint" style="white-space:pre-line">'+esc(d.attach.text||'')+'</span></span></label>'
+            +(d.attach.hasImg?('<img class="onbimg" src="/api/onboarding/file" alt="QR code">'):'');
+        }
       }
     }
     if(d.team&&d.team.length){
       html+='<p class="pt"'+(html?' style="margin-top:16px"':'')+'><span class="pi">🎀</span> Onboarding en cours</p>'
-        +d.team.map(t=>'<div class="onbteam"><b>'+esc(t.name)+'</b> · '+t.done+'/'+t.total+' étapes <span class="onbdots">'+t.steps.map(s=>'<span class="onbdot'+(s.done?' on':'')+'" title="'+esc(s.label)+(s.done?' ✔':'')+'"></span>').join('')+'</span><div class="onbnext">'+(t.steps.find(s=>!s.done)?('prochaine étape : '+esc(t.steps.find(s=>!s.done).label)):'')+'</div></div>').join('');
+        +d.team.map(t=>'<div class="onbteam"><b>'+esc(t.name)+'</b> · '+t.done+'/'+t.total+' étapes <span class="onbdots">'+t.steps.map(s=>'<span class="onbdot'+(s.done?' on':'')+'" title="'+esc(s.label)+(s.done?' ✔':'')+'"></span>').join('')+'</span><div class="onbnext">'+(t.steps.find(s=>!s.done)?('prochaine étape : '+esc(t.steps.find(s=>!s.done).label)):'')+'</div>'
+          +'<details class="onbattach"><summary>📎 '+(t.hasAttach?'Modifier l\'encart matériel':'Ajouter un encart matériel')+' (QR eSIM, codes, wifi…)</summary>'
+          +'<input class="onb-t" data-mail="'+esc(t.email)+'" placeholder="Titre (ex. Installer ton eSIM pro)" maxlength="80">'
+          +'<textarea class="onb-x" rows="3" placeholder="Texte / codes (ex. code de confirmation 667742, PIN 1234)"></textarea>'
+          +'<input class="onb-f" type="file" accept="image/*"> <button class="btn onb-s">Enregistrer</button>'+(t.hasAttach?' <button class="lk onb-d">Supprimer l\'encart</button>':'')+'</details></div>').join('');
     }
     if(!html){show(box,false);return;}
     box.innerHTML=html; show(box,true);
     box.querySelectorAll('input[data-onb]').forEach(c=>c.onchange=async()=>{
       try{ await api('/api/onboarding/check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:c.dataset.onb,done:c.checked})}); }catch(e){}
       loadOnboarding();
+    });
+    box.querySelectorAll('details.onbattach').forEach(dt=>{
+      const email=dt.querySelector('.onb-t').dataset.mail;
+      const save=dt.querySelector('.onb-s'), del=dt.querySelector('.onb-d');
+      save.onclick=async()=>{
+        const title=dt.querySelector('.onb-t').value.trim(), text=dt.querySelector('.onb-x').value.trim(), f=dt.querySelector('.onb-f').files[0];
+        if(!title&&!text&&!f){alert('Mets au moins un titre, un texte ou une image.');return;}
+        save.disabled=true; save.textContent='…';
+        const send=async(image)=>{
+          const r=await api('/api/onboarding/attach',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,title,text,image})});
+          const dd=await r.json().catch(()=>({}));
+          alert(r.ok?'Encart enregistré ✅ Il apparaît dans son parcours d\'arrivée.':(dd.error||'Erreur'));
+          loadOnboarding();
+        };
+        if(f){ const rd=new FileReader(); rd.onload=()=>send(rd.result); rd.readAsDataURL(f); } else send(null);
+      };
+      if(del)del.onclick=async()=>{
+        if(!confirm('Supprimer l\'encart matériel (texte + image) ?'))return;
+        await api('/api/onboarding/attach',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,remove:true})});
+        loadOnboarding();
+      };
     });
   }catch(e){show(box,false);}
 }

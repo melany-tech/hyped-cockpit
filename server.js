@@ -1475,6 +1475,11 @@ const ONBOARDING_STEPS = [
   { id: "todo", group: "3 · Je me lance 🚀", label: "Parcourir ma to-do (mes créatrices à contacter)", hint: "onglet To-do, tes premières tâches t'y attendent" },
   { id: "contact", group: "3 · Je me lance 🚀", label: "Envoyer mon premier message à une créatrice", hint: "lance-toi, la voix Hyped est dans le guide, et l'équipe est sur Slack si tu doutes 🫶" },
 ];
+// Encart « Matériel » (QR eSIM, codes wifi…) : ajouté par une superviseure depuis le cockpit,
+// stocké sur le DISQUE PERSISTANT (jamais dans le dépôt public !), servi uniquement à la
+// personne concernée (ou aux superviseures) une fois connectée.
+const ONB_FILES = path.join(DATA_DIR, "onb_files");
+try { fs.mkdirSync(ONB_FILES, { recursive: true }); } catch (e) {}
 function loadOnb() { try { return JSON.parse(fs.readFileSync(ONBOARDING_STORE, "utf8")); } catch (e) { return {}; } }
 function saveOnb(o) { try { fs.writeFileSync(ONBOARDING_STORE, JSON.stringify(o)); } catch (e) { try { console.error("[onboarding] écriture échouée :", e.message); } catch (e2) {} } }
 function onbFor(email) {
@@ -1484,22 +1489,73 @@ function onbFor(email) {
 }
 app.get("/api/onboarding", auth, (req, res) => {
   const me = String(req.user.email || "").toLowerCase();
+  const store = loadOnb();
   const mine = ONBOARDING_USERS.includes(me) ? onbFor(me) : null;
+  let attach = null;
+  if (mine) {
+    const a = (store._attach || {})[me];
+    if (a) attach = { title: a.title || "Matériel", text: a.text || "", hasImg: !!a.img, done: !!(store[me] || {}).attach };
+  }
   let team = [];
   if (req.user.role === "supervisor") {
     team = ONBOARDING_USERS.filter((e) => e !== me).map((e) => {
       const st = onbFor(e);
       const u = USERS.find((x) => String(x.email).toLowerCase() === e);
-      return { name: u ? u.name : e, steps: st.map((s) => ({ id: s.id, label: s.label, done: s.done })), done: st.filter((s) => s.done).length, total: st.length };
+      return { email: e, name: u ? u.name : e, hasAttach: !!(store._attach || {})[e], steps: st.map((s) => ({ id: s.id, label: s.label, done: s.done })), done: st.filter((s) => s.done).length, total: st.length };
     }).filter((t) => t.done < t.total); // parcours terminé : on ne l'affiche plus
   }
-  res.json({ mine, team });
+  res.json({ mine, attach, team });
+});
+// Ajout / remplacement / suppression de l'encart matériel (superviseures uniquement)
+app.post("/api/onboarding/attach", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  const { email, title, text, image, remove } = req.body || {};
+  const e = String(email || "").toLowerCase();
+  if (!ONBOARDING_USERS.includes(e)) return res.status(400).json({ error: "cette personne n'a pas de parcours d'arrivée" });
+  const store = loadOnb(); store._attach = store._attach || {};
+  const fname = e.replace(/[^a-z0-9@.-]/g, "_") + ".img";
+  if (remove) {
+    delete store._attach[e];
+    try { fs.unlinkSync(path.join(ONB_FILES, fname)); } catch (err) {}
+    if (store[e]) delete store[e].attach;
+    saveOnb(store);
+    return res.json({ ok: true });
+  }
+  const a = { title: String(title || "Matériel").slice(0, 80), text: String(text || "").slice(0, 1500), img: "" };
+  if (image) {
+    const m = String(image).match(/^data:(image\/(?:png|jpe?g|webp|gif));base64,(.+)$/);
+    if (!m) return res.status(400).json({ error: "image invalide (png/jpg/webp/gif)" });
+    const buf = Buffer.from(m[2], "base64");
+    if (buf.length > 5 * 1024 * 1024) return res.status(400).json({ error: "image trop lourde (5 Mo max)" });
+    try { fs.writeFileSync(path.join(ONB_FILES, fname), buf); } catch (err) { return res.status(500).json({ error: "écriture impossible" }); }
+    a.img = fname; a.mime = m[1];
+  } else {
+    const prev = store._attach[e]; if (prev && prev.img) { a.img = prev.img; a.mime = prev.mime; } // texte modifié, image conservée
+  }
+  store._attach[e] = a;
+  if (store[e]) delete store[e].attach; // nouvel encart : la case redevient à cocher
+  saveOnb(store);
+  res.json({ ok: true });
+});
+// L'image (QR…) : servie uniquement à la personne concernée ou aux superviseures
+app.get("/api/onboarding/file", auth, (req, res) => {
+  const me = String(req.user.email || "").toLowerCase();
+  const target = req.user.role === "supervisor" ? String(req.query.email || me).toLowerCase() : me;
+  if (target !== me && req.user.role !== "supervisor") return res.status(403).end();
+  const a = (loadOnb()._attach || {})[target];
+  if (!a || !a.img) return res.status(404).end();
+  try {
+    const buf = fs.readFileSync(path.join(ONB_FILES, a.img));
+    res.setHeader("Content-Type", a.mime || "image/png");
+    res.setHeader("Cache-Control", "private, no-store");
+    res.send(buf);
+  } catch (e) { res.status(404).end(); }
 });
 app.post("/api/onboarding/check", auth, (req, res) => {
   const me = String(req.user.email || "").toLowerCase();
   if (!ONBOARDING_USERS.includes(me)) return res.status(403).json({ error: "pas de checklist pour ce compte" });
   const { id, done } = req.body || {};
-  if (!ONBOARDING_STEPS.some((s) => s.id === String(id))) return res.status(400).json({ error: "étape inconnue" });
+  if (!ONBOARDING_STEPS.some((s) => s.id === String(id)) && String(id) !== "attach") return res.status(400).json({ error: "étape inconnue" });
   const store = loadOnb(); store[me] = store[me] || {};
   if (done === false) delete store[me][String(id)]; else store[me][String(id)] = Date.now();
   saveOnb(store);
