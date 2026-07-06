@@ -117,18 +117,21 @@ async function fetchThreadText(email, threadId) {
   try {
     const t = await gmail.users.threads.get({ userId: "me", id: threadId, format: "full" });
     const msgs = t.data.messages || [];
-    const mine = String(email || "").toLowerCase();
-    // dernier message dont l'expéditeur n'est PAS la boîte connectée
+    // TOUTE adresse @hyped-agency.fr = l'agence (pas seulement la boîte connectée) :
+    // sinon les mails des collègues (Rozenn, Kendia…) passaient pour ceux du créateur
+    // et l'IA attribuait les propositions de l'agence au créateur. Catastrophique en négo.
+    const isAgence = (from) => /@hyped-agency\.fr/i.test(String(from || ""));
+    // dernier message dont l'expéditeur n'est PAS l'agence (= le vrai dernier mot du créateur)
     let pick = null;
     for (let i = msgs.length - 1; i >= 0; i--) {
       const h = Object.fromEntries((msgs[i].payload?.headers || []).map((x) => [x.name, x.value]));
-      if (!String(h.From || "").toLowerCase().includes(mine)) { pick = { m: msgs[i], h }; break; }
+      if (!isAgence(h.From)) { pick = { m: msgs[i], h }; break; }
     }
     if (!pick) { const m = msgs[msgs.length - 1]; pick = { m, h: Object.fromEntries((m?.payload?.headers || []).map((x) => [x.name, x.value])) }; }
     // transcript complet du fil (du + ancien au + récent), pour juger sur l'historique
     const transcript = msgs.map((m) => {
       const h = Object.fromEntries((m.payload?.headers || []).map((x) => [x.name, x.value]));
-      const who = String(h.From || "").toLowerCase().includes(mine) ? "NOUS (agence)" : "CRÉATEUR";
+      const who = isAgence(h.From) ? ("NOUS (agence · " + String(h.From).replace(/<.*$/, "").trim() + ")") : "CRÉATEUR";
       const body = extractBody(m.payload) || m.snippet || "";
       return who + " : " + body;
     }).join("\n\n---\n\n").slice(0, 7000);

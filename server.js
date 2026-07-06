@@ -1021,6 +1021,12 @@ function saveCopilot(o) { try { fs.writeFileSync(COPILOT_STORE, JSON.stringify(o
 function loadCopilot() {
   let store; try { store = JSON.parse(fs.readFileSync(COPILOT_STORE, "utf8")); } catch (e) { return { proposals: [] }; }
   let purged = 0;
+  // Régénération one-shot : les décisions créées AVANT le correctif d'étiquetage (les collègues
+  // passaient pour des créateurs, chiffres faux) sont supprimées pour être réanalysées proprement.
+  const FIX_ETIQUETAGE = Date.parse("2026-07-06T01:10:00+02:00");
+  const avant = (store.proposals || []).length;
+  store.proposals = (store.proposals || []).filter((p) => !(p.status === "pending" && p.categorie !== "interne" && (p.at || 0) < FIX_ETIQUETAGE));
+  purged += avant - store.proposals.length;
   for (const p of store.proposals || []) {
     if ((p.status === "pending" || p.status === "ready") && p.categorie === "interne" && (p.brand || (Date.now() - (p.at || 0)) > 12 * 3600 * 1000)) {
       p.status = "handled"; p.decidedAt = Date.now(); purged++;
@@ -1067,6 +1073,8 @@ async function copilotClassify({ creator, subject, received, transcript }) {
     "\"routine\" = le reste : envoi d'adresse postale, remerciement, confirmation simple, question logistique basique.",
     "resume = une phrase factuelle qui dit ce que le créateur demande ou annonce.",
     "question = si decision, la question fermée à poser à la CP (ex. 'Vanina veut décaler son post du 9 au 15 juillet, on accepte ?'), sinon chaîne vide.",
+    "RÈGLES ABSOLUES : dans le fil, les messages marqués 'NOUS (agence…)' viennent de NOTRE équipe (Rozenn, Kendia, Amena… sont des collègues, JAMAIS des créateurs). La question porte UNIQUEMENT sur ce que demande le CRÉATEUR.",
+    "N'invente JAMAIS un montant, une quantité ou une contre-proposition : reprends EXACTEMENT les chiffres et termes écrits dans le fil, en attribuant chaque proposition à la bonne personne. Si les chiffres sont ambigus, pose la question sans chiffres ('X propose un tarif, tu veux regarder ?').",
   ].join("\n");
   const ctx = "Créateur : " + (creator || "?") + "\nSujet : " + (subject || "") + "\n\n" + (transcript ? ("Fil :\n" + String(transcript).slice(0, 5000)) : ("Message :\n" + String(received || "").slice(0, 3000)));
   const hasOpenAI = !!process.env.OPENAI_API_KEY, hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
