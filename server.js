@@ -295,11 +295,7 @@ app.get("/api/overview", auth, async (req, res) => {
     const scoped = viewCp && viewCp !== "ALL"; // si oui, on cale TOUT sur cette CP (cohérent avec la liste)
     const mine = (resp) => scoped ? (normName(resp) === normName(viewCp)) : (isSup || teamReq || normName(resp) === me);
     // 1) tâches veille (Prise de contact / Relance créateur), non "Fait"
-    const tasks = []; let cur;
-    do {
-      const r = await notion.databases.query({ database_id: TASKS_DB, start_cursor: cur, page_size: 100 });
-      r.results.forEach((pg) => tasks.push(mapTask(pg))); cur = r.has_more ? r.next_cursor : null;
-    } while (cur);
+    const tasks = await fetchAllTasks();
     const open = tasks.filter((t) => t.statut !== "Fait" && mine(t.responsable));
     const C = {};
     const B = (b) => (C[b] = C[b] || { brand: b, aContacter: 0, relances: 0, contenus: 0, recus: 0 });
@@ -420,7 +416,7 @@ app.get("/api/gmail/callback", async (req, res) => {
 });
 // Cache court de l'analyse Gmail par boîte (évite de tout relire à chaque rechargement)
 const INBOX_CACHE = {}; // email -> { at, data }
-const INBOX_TTL = 60 * 1000; // 60 s
+const INBOX_TTL = 3 * 60 * 1000; // 3 min (bouton Actualiser = fresh=1 pour forcer)
 app.get("/api/gmail/inbox", auth, async (req, res) => {
   if (!gm.ENABLED) return res.json({ enabled: false });
   try {
@@ -754,7 +750,7 @@ app.post("/api/collab/:id/advance", auth, async (req, res) => {
     if (i >= STAGE_ORDER.length - 1) return res.json({ ok: false, done: true, message: "déjà à la dernière étape" });
     const next = STAGE_ORDER[i + 1];
     const nm = title(pg.properties?.["Nom"]) || String(req.body?.name || "") || null;
-    await notion.pages.update({ page_id: req.params.id, properties: { "Statut": { select: { name: next } } } });
+    await notion.pages.update({ page_id: req.params.id, properties: { "Statut": { select: { name: next } } } }); invalidateTasksCache();
     CACHE = { at: 0, rows: [] }; // force le rafraîchissement des collabs
     logActivity({ type: "etape", creator: nm, cp: req.user.name, extra: STAGE_LABEL[next] });
     recordHistory(req.params.id, { name: nm, brand: String(req.body?.brand || ""), url: pg.url }, { by: req.user.name, action: "etape", detail: STAGE_LABEL[next] });
@@ -783,6 +779,20 @@ function mapTask(pg) {
     echeance: p["Échéance"]?.date?.start || null, url: pg.url,
   };
 }
+// Cache partagé de la base Tâches (60 s) : évite de rescanner Notion à chaque panneau.
+// Invalidé à chaque écriture pour rester frais après un clic.
+let TASKS_CACHE = { at: 0, all: [] };
+function invalidateTasksCache() { TASKS_CACHE.at = 0; }
+async function fetchAllTasks() {
+  if (Date.now() - TASKS_CACHE.at < 60000 && TASKS_CACHE.all.length) return TASKS_CACHE.all;
+  const all = []; let cursor;
+  do {
+    const r = await notion.databases.query({ database_id: TASKS_DB, start_cursor: cursor, page_size: 100 });
+    r.results.forEach((pg) => all.push(mapTask(pg))); cursor = r.has_more ? r.next_cursor : null;
+  } while (cursor);
+  TASKS_CACHE = { at: Date.now(), all };
+  return all;
+}
 // id Notion d'une personne d'après son prénom (pour le champ Interlocuteur)
 async function userIdByName(name) {
   if (!Object.keys(EMAIL2ID).length) { try { await resolveUsers(); } catch (e) {} }
@@ -800,11 +810,7 @@ async function userIdByName(name) {
 app.get("/api/todos", auth, async (req, res) => {
   if (DEMO || !notion) return res.json({ enabled: false, tasks: [] });
   try {
-    const all = []; let cursor;
-    do {
-      const r = await notion.databases.query({ database_id: TASKS_DB, start_cursor: cursor, page_size: 100 });
-      r.results.forEach((pg) => all.push(mapTask(pg))); cursor = r.has_more ? r.next_cursor : null;
-    } while (cursor);
+    const all = await fetchAllTasks();
     const isSup = req.user.role === "supervisor";
     const view = String(req.query.view || "");
     const teamReq = String(req.query.team || "") === "1" && !isSup; // CP en vue équipe (congés)
@@ -829,12 +835,12 @@ app.post("/api/todos", auth, async (req, res) => {
     "Responsable": { select: { name: resp } },
   };
   if (req.body?.echeance) props["Échéance"] = { date: { start: req.body.echeance } };
-  try { const pg = await notion.pages.create({ parent: { database_id: TASKS_DB }, properties: props }); res.json({ ok: true, id: pg.id }); }
+  try { const pg = await notion.pages.create({ parent: { database_id: TASKS_DB }, properties: props }); invalidateTasksCache(); res.json({ ok: true, id: pg.id }); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.post("/api/todos/:id/done", auth, async (req, res) => {
   if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
-  try { await notion.pages.update({ page_id: req.params.id, properties: { "Statut": { select: { name: "Fait" } } } }); res.json({ ok: true }); }
+  try { await notion.pages.update({ page_id: req.params.id, properties: { "Statut": { select: { name: "Fait" } } } }); invalidateTasksCache(); res.json({ ok: true }); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1402,11 +1408,7 @@ function genStatsFR(brand, name, cp) {
 app.get("/api/todo", auth, async (req, res) => {
   if (DEMO || !notion) return res.json({ enabled: false, taches: [] });
   try {
-    const all = []; let cursor;
-    do {
-      const r = await notion.databases.query({ database_id: TASKS_DB, start_cursor: cursor, page_size: 100 });
-      r.results.forEach((pg) => all.push(mapTask(pg))); cursor = r.has_more ? r.next_cursor : null;
-    } while (cursor);
+    const all = await fetchAllTasks();
     const me = normName(req.user.name);
     const sup = req.user.role === "supervisor";
     const qui = String(req.query.qui || "").trim(); // superviseures : filtre par personne
@@ -1431,7 +1433,7 @@ app.post("/api/todo/check", auth, async (req, res) => {
     const pg = await notion.pages.retrieve({ page_id: id });
     const t = mapTask(pg);
     if (req.user.role !== "supervisor" && normName(t.responsable || "") !== normName(req.user.name)) return res.status(403).json({ error: "pas ta tâche" });
-    await notion.pages.update({ page_id: id, properties: { "Statut": { select: { name: req.body?.done ? "Fait" : "À faire" } } } });
+    await notion.pages.update({ page_id: id, properties: { "Statut": { select: { name: req.body?.done ? "Fait" : "À faire" } } } }); invalidateTasksCache();
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: String(e && e.message || e).slice(0, 160) }); }
 });
@@ -1441,14 +1443,7 @@ const INHAIRCARE_DB = "380f8ac3-c3ae-80ce-ba4c-e8e82490edc6";
 app.get("/api/sourcing", auth, async (req, res) => {
   if (DEMO || !notion) return res.json({ enabled: false, profils: [] });
   try {
-    const all = []; let cursor;
-    do {
-      const r = await notion.databases.query({
-        database_id: TASKS_DB, start_cursor: cursor, page_size: 100,
-        filter: { property: "Type", select: { equals: "Prise de contact" } },
-      });
-      r.results.forEach((pg) => all.push(mapTask(pg))); cursor = r.has_more ? r.next_cursor : null;
-    } while (cursor);
+    const all = (await fetchAllTasks()).filter((t) => t.type === "Prise de contact");
     const me = normName(req.user.name);
     const sup = req.user.role === "supervisor";
     const profils = all
