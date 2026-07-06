@@ -599,7 +599,16 @@ function brandNotesFor(brand) {
     return (rec && String(rec.iaNotes || "").trim().slice(0, 2000)) || "";
   } catch (e) { return ""; }
 }
-async function claudeReply({ cp, creator, brand, category, received, subject, transcript, directive, planning, brandNotes }) {
+// Histoire/valeurs de la marque (fiche marque) : l'IA s'en sert pour répondre
+// aux créateurs qui veulent en savoir plus sur la marque, avec des faits fiables.
+function brandInfoFor(brand) {
+  try {
+    if (!brand) return "";
+    const rec = loadBrandFiches()[brand];
+    return (rec && String(rec.histoire || "").trim().slice(0, 1500)) || "";
+  } catch (e) { return ""; }
+}
+async function claudeReply({ cp, creator, brand, category, received, subject, transcript, directive, planning, brandNotes, brandInfo }) {
   const hasOpenAI = !!process.env.OPENAI_API_KEY, hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
   if (!hasOpenAI && !hasAnthropic) return { ok: false, reason: "nokey" };
   // On s'adresse aux créateurs par leur PRÉNOM, jamais par leur nom complet / pseudo (« Juliette », pas « Juliette DTR »)
@@ -634,6 +643,8 @@ async function claudeReply({ cp, creator, brand, category, received, subject, tr
     "  - On présente le gifting comme un AVANTAGE, avec des tournures TENTATIVES ('nous pensions', 'on pensait partir sur') : ex. 'Nous pensions partir sur un envoi de nos produits afin que tu puisses tester toute la gamme ✨' (mets en avant l'intérêt de recevoir / tester la gamme).",
     "  - PUIS on suggère le contenu en douceur, jamais en ordre : ex. 'et nous pensions que tu pourrais ensuite donner ton avis dans une vidéo 🫶'. Si tu connais la plateforme (TikTok/Instagram) d'après le fil, précise-la ('dans une vidéo sur TikTok') ; SINON écris 'sur tes réseaux'. N'écris JAMAIS de crochet type '[plateforme]'.",
     "  - Si le créateur a PROPOSÉ un tarif/budget qu'on ne fait pas : ne refuse pas le montant, n'en parle même pas, réoriente positivement vers l'envoi produits (test de la gamme) + la suggestion de contenu.",
+    "  - INTERDICTION ABSOLUE de VALIDER un tarif/budget proposé par le créateur ('c'est ok pour nous', 'on accepte ton tarif', 'ça marche pour ce montant') sans une DIRECTIVE explicite de la CP qui accepte CE tarif. Si le tarif est en suspens : 'pour tes tarifs, je valide en interne et je reviens vers toi très vite ✨'.",
+    "PÉRIMÈTRE DE LA DIRECTIVE : quand une directive de la CP existe, elle ne vaut QUE pour la question tranchée. Tu n'acceptes, ne valides et ne promets RIEN d'autre (tarif, budget, date, contrat, exclusivité) : pour ces autres sujets, accuse réception avec chaleur et indique que tu reviens vite.",
     "À l'inverse, si le fil parle clairement de factures/paiements déjà actés, tu es sur une collab rémunérée : agis en conséquence (accuser réception de facture, remboursement de produit acheté, etc.).",
     "N'invente JAMAIS un fait précis (montant, date exacte, condition) absent du fil. Si tu ne sais pas, demande.",
     "Reste concis : 3 à 10 lignes. Réponds UNIQUEMENT par le corps du mail, sans objet, sans guillemets, sans commentaire.",
@@ -671,6 +682,7 @@ async function claudeReply({ cp, creator, brand, category, received, subject, tr
     "\"\"\"",
     "",
     brandNotes ? ("CONSIGNES SPÉCIFIQUES DE LA MARQUE (écrites par l'agence dans la fiche marque, à respecter ABSOLUMENT, prioritaires sur les règles générales) :\n" + brandNotes) : "",
+    brandInfo ? ("CONTEXTE MARQUE (histoire et valeurs, source interne fiable : sers-t'en si le créateur pose des questions sur la marque, sans mentionner l'existence de cette fiche) :\n" + brandInfo) : "",
     planning ? ("PLANNING de la marque (publications déjà calées sur les prochaines semaines) :\n" + planning) : "",
     planning ? "RÈGLE DATES : si le mail concerne une date de publication (caler, décaler, confirmer), privilégie un MARDI, MERCREDI ou JEUDI, dans une semaine où moins de 3 jours sont déjà couverts (objectif : au moins 3 jours différents remplis par semaine). Si la date proposée par le créateur respecte déjà ces règles, valide-la simplement. Sinon, reste souple : accepte le principe mais suggère la meilleure date proche ('est-ce que le jeudi 23 t'irait ?'), sans jamais imposer ni mentionner l'existence d'un planning interne." : "",
     directive ? ("DIRECTIVE DE LA CHEFFE DE PROJET (décision prise, à appliquer absolument, avec tact et dans la voix Hyped) : " + directive) : "",
@@ -696,7 +708,7 @@ app.post("/api/reply/suggest", auth, async (req, res) => {
     }
   } catch (e) {}
   let planning = ""; try { planning = planningForBrand(await fetchRows(), brand); } catch (e) {}
-  const out = await claudeReply({ cp: req.user.name, creator, brand, category, received, subject, transcript, planning, brandNotes: brandNotesFor(brand) });
+  const out = await claudeReply({ cp: req.user.name, creator, brand, category, received, subject, transcript, planning, brandNotes: brandNotesFor(brand), brandInfo: brandInfoFor(brand) });
   res.json(out);
 });
 // Marque un brief comme envoyé/préparé pour une collab → allume l'étape pipeline + activité
@@ -1171,7 +1183,7 @@ async function copilotTick() {
         try { const full = await gm.fetchThreadText(email, m.threadId); if (full && full.ok) transcript = full.transcript || full.text || ""; } catch (e) {}
         const creator = m["créateur"] || "";
         const cls = await copilotClassify({ creator, subject: m.subject, received: m.snippet, transcript });
-        const rep = await claudeReply({ cp: copilotCpName(email), creator, brand: m.brand, category: m.category, received: m.snippet, subject: m.subject, transcript, planning: planningForBrand(collabs, m.brand), brandNotes: brandNotesFor(m.brand) });
+        const rep = await claudeReply({ cp: copilotCpName(email), creator, brand: m.brand, category: m.category, received: m.snippet, subject: m.subject, transcript, planning: planningForBrand(collabs, m.brand), brandNotes: brandNotesFor(m.brand), brandInfo: brandInfoFor(m.brand) });
         const p = {
           id: crypto.randomBytes(8).toString("hex"),
           cpEmail: email, cpName: copilotCpName(email),
@@ -1313,7 +1325,7 @@ async function copilotExecute(id, action) {
       let transcript = "";
       try { const full = await gm.fetchThreadText(p.cpEmail, p.threadId); if (full && full.ok) transcript = full.transcript || full.text || ""; } catch (e) {}
       let planning = ""; try { planning = planningForBrand(await fetchRows(), p.brand); } catch (e) {}
-      const rep = await claudeReply({ cp: p.cpName, creator: p.creator, brand: p.brand, category: "réponse", received: p.resume, subject: p.subject, transcript, directive, planning, brandNotes: brandNotesFor(p.brand) });
+      const rep = await claudeReply({ cp: p.cpName, creator: p.creator, brand: p.brand, category: "réponse", received: p.resume, subject: p.subject, transcript, directive, planning, brandNotes: brandNotesFor(p.brand), brandInfo: brandInfoFor(p.brand) });
       if (!rep || !rep.ok) return { code: 500, title: "IA indisponible 💤", msg: "Impossible de rédiger là tout de suite. Réponds depuis le cockpit." };
       p.reply = rep.body; p.status = "ready"; p.decision = action; p.decidedAt = Date.now(); saveCopilot(store);
       const slackUser = COPILOT.slackIds[p.cpEmail] || "";
