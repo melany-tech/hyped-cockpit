@@ -1459,6 +1459,52 @@ app.post("/api/copilot/act", auth, async (req, res) => {
   const out = await copilotExecute(String(id), String(action), text);
   res.status(out.code === 200 ? 200 : out.code).json({ ok: out.code === 200, title: out.title, msg: out.msg });
 });
+// --- Onboarding des nouvelles arrivantes -------------------------------------
+// Checklist de bienvenue dans le cockpit de la personne (cases persistées sur disque),
+// progression visible des superviseures. Nouvelle arrivante = ajouter son adresse dans
+// la variable d'env ONBOARDING_USERS (adresses séparées par des virgules).
+const ONBOARDING_STORE = path.join(DATA_DIR, "onboarding.json");
+const ONBOARDING_USERS = String(process.env.ONBOARDING_USERS || "prunelle@hyped-agency.fr").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+const ONBOARDING_STEPS = [
+  { id: "pwd", group: "1 · Je m'installe ☕", label: "Changer mon mot de passe", hint: "menu avatar en haut à droite → 🔑 Mot de passe" },
+  { id: "slack", group: "1 · Je m'installe ☕", label: "Activer mon compte Slack et me présenter à l'équipe", hint: "c'est là qu'arrivent les notifications du copilote" },
+  { id: "gmail", group: "1 · Je m'installe ☕", label: "Connecter mon Gmail au cockpit", hint: "onglet Messages → « Connecter mon Gmail » (se coche tout seul une fois fait)" },
+  { id: "guide", group: "2 · Je comprends l'agence 📖", label: "Lire le Guide CP : l'agence, ses valeurs, la voix Hyped", link: "/guide", hint: "20 minutes : comment on parle aux créatrices, le process de A à Z, les dix onglets du cockpit" },
+  { id: "marques", group: "2 · Je comprends l'agence 📖", label: "Découvrir les fiches marques", hint: "onglet Marques : histoire de chaque marque, consignes pour l'IA, points de vigilance" },
+  { id: "camp", group: "2 · Je comprends l'agence 📖", label: "Regarder les campagnes en cours", hint: "onglet Campagnes : qui fait quoi en ce moment, marque par marque, et où en sont les calendriers" },
+  { id: "todo", group: "3 · Je me lance 🚀", label: "Parcourir ma to-do (mes créatrices à contacter)", hint: "onglet To-do, tes premières tâches t'y attendent" },
+  { id: "contact", group: "3 · Je me lance 🚀", label: "Envoyer mon premier message à une créatrice", hint: "lance-toi, la voix Hyped est dans le guide, et l'équipe est sur Slack si tu doutes 🫶" },
+];
+function loadOnb() { try { return JSON.parse(fs.readFileSync(ONBOARDING_STORE, "utf8")); } catch (e) { return {}; } }
+function saveOnb(o) { try { fs.writeFileSync(ONBOARDING_STORE, JSON.stringify(o)); } catch (e) { try { console.error("[onboarding] écriture échouée :", e.message); } catch (e2) {} } }
+function onbFor(email) {
+  const done = loadOnb()[email] || {};
+  // « gmail » se coche automatiquement dès que la boîte est vraiment connectée
+  return ONBOARDING_STEPS.map((s) => ({ ...s, done: !!done[s.id] || (s.id === "gmail" && gm.ENABLED && gm.isConnected(email)) }));
+}
+app.get("/api/onboarding", auth, (req, res) => {
+  const me = String(req.user.email || "").toLowerCase();
+  const mine = ONBOARDING_USERS.includes(me) ? onbFor(me) : null;
+  let team = [];
+  if (req.user.role === "supervisor") {
+    team = ONBOARDING_USERS.filter((e) => e !== me).map((e) => {
+      const st = onbFor(e);
+      const u = USERS.find((x) => String(x.email).toLowerCase() === e);
+      return { name: u ? u.name : e, steps: st.map((s) => ({ id: s.id, label: s.label, done: s.done })), done: st.filter((s) => s.done).length, total: st.length };
+    }).filter((t) => t.done < t.total); // parcours terminé : on ne l'affiche plus
+  }
+  res.json({ mine, team });
+});
+app.post("/api/onboarding/check", auth, (req, res) => {
+  const me = String(req.user.email || "").toLowerCase();
+  if (!ONBOARDING_USERS.includes(me)) return res.status(403).json({ error: "pas de checklist pour ce compte" });
+  const { id, done } = req.body || {};
+  if (!ONBOARDING_STEPS.some((s) => s.id === String(id))) return res.status(400).json({ error: "étape inconnue" });
+  const store = loadOnb(); store[me] = store[me] || {};
+  if (done === false) delete store[me][String(id)]; else store[me][String(id)] = Date.now();
+  saveOnb(store);
+  res.json({ ok: true });
+});
 // Mail de demande de stats/bilan (J+5 après publication)
 function genStatsFR(brand, name, cp) {
   return `Hello ${name} ✨\n\nMerci encore pour ta superbe collab avec ${brand} ! 🤍\n\nPour clôturer la campagne côté marque, est-ce que tu pourrais m'envoyer les statistiques de tes contenus : vues, portée/impressions, likes, partages, enregistrements, et les captures des stories ?\n\nUn petit screenshot de chaque contenu suffit largement. Ça nous permet de faire le bilan avec ${brand}.\n\nMerci d'avance et à très vite,\n${cp}`;

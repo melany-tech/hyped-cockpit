@@ -233,6 +233,24 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .cpsubj{font-size:12.5px;color:#56666D;margin-top:2px}
 .cptag{background:#EAF4F3;color:#2C9087;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:600}
 .cpmail{font-size:11.5px;color:#9aa6a8;font-weight:500}
+/* Onboarding : parcours d'arrivée */
+.onbbar{height:8px;background:#EFEBE0;border-radius:6px;overflow:hidden;margin:4px 0 6px}
+.onbfill{height:100%;background:linear-gradient(90deg,#2C9087,#5BB8AE);border-radius:6px;transition:width .3s}
+.onbcount{font-size:12px;color:#8A948F;margin-bottom:10px}
+.onbrow{display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border-radius:10px;cursor:pointer}
+.onbrow:hover{background:#F7F5EE}
+.onbrow.done .onblbl{color:#9aa6a8;text-decoration:line-through}
+.onbrow input{margin-top:3px;accent-color:#2C9087;width:16px;height:16px;cursor:pointer}
+.onblbl{font-size:13.5px;font-weight:600;color:#2A3439}
+.onblbl a{color:#2C9087}
+.onbhint{display:block;font-size:12px;font-weight:400;color:#8A948F;margin-top:1px;text-decoration:none}
+.onbrow.done .onbhint{text-decoration:none}
+.onbteam{padding:8px 10px;border-radius:10px;background:#F7F5EE;margin-top:6px;font-size:13.5px}
+.onbdots{margin-left:8px;display:inline-flex;gap:4px;vertical-align:middle}
+.onbdot{width:10px;height:10px;border-radius:50%;background:#E4E0D5;display:inline-block}
+.onbdot.on{background:#2C9087}
+.onbnext{font-size:12px;color:#8A948F;margin-top:3px}
+.onbgroup{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#C77F2A;margin:12px 0 4px;padding-left:2px}
 .cpqui{cursor:pointer;color:#2C9087;font-size:12px;font-weight:600;text-decoration:underline;white-space:nowrap}
 .cpq{font-size:13.5px;margin:8px 0;font-weight:600}
 .cplab{font-size:12px;color:#56666D;margin-bottom:6px}
@@ -559,6 +577,9 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
     <div id="searchbar" class="searchbar hidden"><input id="searchinput" placeholder="Rechercher un profil, une collab, une marque…"></div>
     <div id="cards" class="hidden"></div>
 
+  <!-- Onboarding (nouvelles arrivantes + suivi superviseures) -->
+  <section class="panel hidden" id="onbpanel"></section>
+
   <!-- 4 indicateurs -->
   <div class="statcards" id="statcards"></div>
 
@@ -662,7 +683,7 @@ function setupChrome(){
   showView('cockpit');
 }
 const VIEW_MAP={ profils:['srcpanel','brandpanel'], contenus:['listpanel','brandpanel','fillpanel'], messages:['mailpanel'] };
-const ALL_BLOCKS=['statcards','agendapanel','todopanel','pipelinepanel','brandpanel','fillpanel','srcpanel','listpanel','mailpanel'];
+const ALL_BLOCKS=['onbpanel','statcards','agendapanel','todopanel','pipelinepanel','brandpanel','fillpanel','srcpanel','listpanel','mailpanel'];
 function navGo(a){ document.querySelectorAll('.sb-nav .nav').forEach(x=>x.classList.toggle('on',x===a)); showView(a.dataset.go); }
 function navToView(v){ const a=[...document.querySelectorAll('.sb-nav .nav')].find(x=>x.dataset.go===v); if(a)navGo(a); else showView(v); }
 function statCardGo(act){
@@ -862,11 +883,42 @@ async function load(){
   renderCalbar();
   loadVisios();
   loadTodo();
+  loadOnboarding();      // parcours d'arrivée (nouvelles) + suivi superviseures
   loadOverview();        // pipeline + vue par marque + indicateurs
   loadSourcing();
   loadMail();
   loadDrafts();
   loadActivity();        // footer « Dernières activités »
+}
+// --- Onboarding : parcours d'arrivée -------------------------------------
+async function loadOnboarding(){
+  const box=$('onbpanel'); if(!box)return;
+  try{
+    const r=await api('/api/onboarding'); if(!r.ok){show(box,false);return;}
+    const d=await r.json();
+    let html='';
+    if(d.mine){
+      const done=d.mine.filter(s=>s.done).length, tot=d.mine.length, pct=Math.round(done/tot*100);
+      if(done<tot){
+        html+='<p class="pt"><span class="pi">🎀</span> Bienvenue '+esc(VIEWER.name)+' · ton parcours d\'arrivée</p>'
+          +'<div class="onbbar"><div class="onbfill" style="width:'+pct+'%"></div></div><div class="onbcount">'+done+'/'+tot+' étape'+(done>1?'s':'')+' faite'+(done>1?'s':'')+' · coche au fur et à mesure, ça s\'enregistre tout seul ✨</div>'
+          +d.mine.map((s,i)=>{
+            const gh=(s.group&&(!i||d.mine[i-1].group!==s.group))?('<div class="onbgroup">'+esc(s.group)+'</div>'):'';
+            return gh+'<label class="onbrow'+(s.done?' done':'')+'"><input type="checkbox" data-onb="'+esc(s.id)+'"'+(s.done?' checked':'')+'><span class="onblbl">'+esc(s.label)+(s.link?(' <a href="'+esc(s.link)+'" target="_blank" rel="noopener">ouvrir ↗</a>'):'')+'<span class="onbhint">'+esc(s.hint||'')+'</span></span></label>';
+          }).join('');
+      }
+    }
+    if(d.team&&d.team.length){
+      html+='<p class="pt"'+(html?' style="margin-top:16px"':'')+'><span class="pi">🎀</span> Onboarding en cours</p>'
+        +d.team.map(t=>'<div class="onbteam"><b>'+esc(t.name)+'</b> · '+t.done+'/'+t.total+' étapes <span class="onbdots">'+t.steps.map(s=>'<span class="onbdot'+(s.done?' on':'')+'" title="'+esc(s.label)+(s.done?' ✔':'')+'"></span>').join('')+'</span><div class="onbnext">'+(t.steps.find(s=>!s.done)?('prochaine étape : '+esc(t.steps.find(s=>!s.done).label)):'')+'</div></div>').join('');
+    }
+    if(!html){show(box,false);return;}
+    box.innerHTML=html; show(box,true);
+    box.querySelectorAll('input[data-onb]').forEach(c=>c.onchange=async()=>{
+      try{ await api('/api/onboarding/check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:c.dataset.onb,done:c.checked})}); }catch(e){}
+      loadOnboarding();
+    });
+  }catch(e){show(box,false);}
 }
 // --- Indicateurs (4 cartes du haut) -------------------------------------
 let OVERVIEW=null, TODO_COUNT=0;
