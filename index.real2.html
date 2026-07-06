@@ -845,7 +845,8 @@ async function load(){
   if(isSup){
     const present=ROWS.map(x=>x.cp).filter(Boolean);
     // Pastilles : 🙋 Moi (défaut) · 👥 Toute l'équipe · membres cochables un par un
-    CP_OTHERS=[...new Set([...(d.team||[]),...present])].filter(n=>n&&nlow(n)!==nlow(VIEWER.name)).sort();
+    // Kendia a quitté l'agence : on l'exclut du filtre même si d'anciennes collabs portent encore son nom
+    CP_OTHERS=[...new Set([...(d.team||[]),...present])].filter(n=>n&&nlow(n)!==nlow(VIEWER.name)&&nlow(n)!=='kendia').sort();
     if(!CPFILTER_INIT){
       let saved=''; try{saved=localStorage.getItem('hc_cpsel')||'';}catch(e){}
       $('cpfilter').value=saved||VIEWER.name; // par défaut : sa vue à elle
