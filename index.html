@@ -1442,8 +1442,8 @@ function render(){
   const total=list.length;
   $('totalchip').textContent=total?(total+' à traiter'):'Tout est à jour ✅';
   const dstr=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
-  if(isSup&&(!f||f==='ALL')){$('greeting').textContent='Vue pilote · toute l\'équipe';$('subtitle').textContent=total+' actions · clients actifs · '+dstr;}
-  else{const who=isSup?f:VIEWER.name;$('greeting').textContent='Bonjour '+who+' 👋';$('subtitle').textContent='Voici tes priorités du jour · '+dstr;}
+  if(isSup&&!parts.length){$('greeting').textContent='Vue pilote · toute l\'équipe';$('subtitle').textContent=total+' actions · clients actifs · '+dstr;}
+  else{const who=isSup?parts.join(' + '):VIEWER.name;$('greeting').textContent='Bonjour '+who+' 👋';$('subtitle').textContent='Voici tes priorités du jour · '+dstr;}
   if($('avname')){$('avname').textContent=VIEWER.name||'';$('avini').textContent=((VIEWER.name||'·').trim()[0]||'·').toUpperCase();}
   updateStats();
   if(!total){$('list').innerHTML='<div class="state">Rien en attente, tout est à jour 🎉</div>';return;}
