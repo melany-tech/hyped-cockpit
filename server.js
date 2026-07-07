@@ -1001,6 +1001,16 @@ app.post("/api/brand/:name", auth, (req, res) => {
     rec.interlocuteurs = rec.interlocuteurs.concat([cleanIt(it)]).slice(-20);
     changes.push("interlocuteur");
   }
+  if (body.editInterlocuteur) { // modification d'un interlocuteur existant : toutes les CP
+    const it = body.editInterlocuteur || {};
+    migrateIts();
+    const x = rec.interlocuteurs.find((y) => y.at === Number(it.at));
+    if (!x) return res.status(404).json({ error: "interlocuteur introuvable" });
+    if (!String(it.nom || "").trim() && !String(it.email || "").trim()) return res.status(400).json({ error: "il faut au moins un nom ou un email" });
+    x.nom = String(it.nom || "").slice(0, 120); x.email = String(it.email || "").slice(0, 200); x.tel = String(it.tel || "").slice(0, 40); x.role = String(it.role || "").slice(0, 120);
+    x.by = req.user.name;
+    changes.push("interlocuteur modifié");
+  }
   if (body.deleteInterlocuteurAt) { // suppression d'un interlocuteur : responsable uniquement
     if (!isSup) return res.status(403).json({ error: "Seule la responsable peut supprimer un interlocuteur" });
     migrateIts();
