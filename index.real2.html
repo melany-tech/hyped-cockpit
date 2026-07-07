@@ -269,6 +269,8 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .thmsg.ext{background:#F7F5EE}
 .thwho{font-weight:700;font-size:11px;color:#56666D;margin-bottom:2px;text-transform:uppercase;letter-spacing:.04em}
 .thbody{white-space:pre-line;color:#2A3439}
+.cplastlab{font-size:10.5px;font-weight:700;color:#8A948F;text-transform:uppercase;letter-spacing:.06em;margin-top:7px}
+.cplast{background:#F7F5EE;border-radius:10px;padding:8px 10px;font-size:12.5px;white-space:pre-line;color:#2A3439;margin:3px 0 2px}
 .cpq{font-size:13.5px;margin:8px 0;font-weight:600}
 .cplab{font-size:12px;color:#56666D;margin-bottom:6px}
 .cprep{white-space:pre-wrap;font-size:13px;background:var(--soft);border-radius:10px;padding:10px 12px;margin-bottom:8px}
@@ -1406,7 +1408,11 @@ async function loadCopilotBox(who){
           +(p.subject?('<div class="cpsubj">'+esc(p.subject)+'</div>'):'')
           +'<div class="cpthreadbox" style="display:none"></div>';
         if(p.categorie==='decision'&&p.status==='pending'){
-          return '<div class="cpcard">'+head+'<div class="cpq">'+esc(p.question||p.resume||'')+'</div>'
+          // Le VRAI message du créateur d'abord, puis la question de l'IA : on décide en connaissance de cause
+          const lm=p.lastMsg
+            ?('<div class="cplastlab">✉️ Son message</div><div class="cplast">'+esc(String(p.lastMsg).slice(0,700))+(String(p.lastMsg).length>700?'…':'')+'</div>')
+            :('<div class="cplast cplastload" data-id="'+esc(p.id)+'">Chargement de son message…</div>');
+          return '<div class="cpcard">'+head+lm+'<div class="cplastlab">🤖 La question</div><div class="cpq">'+esc(p.question||p.resume||'')+'</div>'
             +'<div class="cpbtns"><button class="lk" data-id="'+p.id+'" data-cpact="accept">✅ Oui</button><button class="lk" data-id="'+p.id+'" data-cpact="refuse">❌ Non</button><button class="lk" data-id="'+p.id+'" data-cpact="directive">💬 Je te dis quoi répondre</button><button class="lk" data-id="'+p.id+'" data-cpact="self">✍️ Je gère moi-même</button><button class="lk" data-id="'+p.id+'" data-cpact="seen">👁️ Vu, rien à répondre</button></div></div>';
         }
         const rep=p.reply?('<div class="cprep">'+esc(String(p.reply).slice(0,600))+(String(p.reply).length>600?'…':'')+'</div>'):'';
@@ -1416,6 +1422,21 @@ async function loadCopilotBox(who){
       }).join('');
     show(box,true);
     box.querySelectorAll('a.cpqui:not(.cpthread)').forEach(a=>a.onclick=()=>quiEstCe(a.dataset.qui));
+    // Anciennes cartes (créées avant l'ajout) : on va chercher le dernier message du créateur dans le fil
+    box.querySelectorAll('.cplastload').forEach(async el=>{
+      try{
+        const r=await api('/api/copilot/thread?id='+encodeURIComponent(el.dataset.id));
+        const d=await r.json().catch(()=>({}));
+        if(d&&d.ok&&d.transcript){
+          let lastC='';
+          String(d.transcript).replace(/^\(…début du fil coupé…\)\s*/,'').split('\n\n---\n\n').forEach(s=>{
+            const m=s.trim().match(/^(?:DERNIER MESSAGE[^·]*·\s*)?CRÉATEUR\s*:\s*([\s\S]*)$/); if(m)lastC=m[1];
+          });
+          if(lastC){ el.outerHTML='<div class="cplastlab">✉️ Son message</div><div class="cplast">'+esc(lastC.slice(0,700))+(lastC.length>700?'…':'')+'</div>'; return; }
+        }
+        el.remove();
+      }catch(e){ el.remove(); }
+    });
     // 📖 Le fil complet de la conversation, sans repasser par Gmail
     box.querySelectorAll('a.cpthread').forEach(a=>a.onclick=async()=>{
       const card=a.closest('.cpcard'); const bx=card&&card.querySelector('.cpthreadbox'); if(!bx)return;

@@ -1322,8 +1322,8 @@ async function copilotTick() {
           unmarkTreated(email, m.threadId); delete tt[m.threadId];
         }
         if (seen.has(email + "|" + (m.id || m.threadId))) continue; // déjà proposé
-        let transcript = "";
-        try { const full = await gm.fetchThreadText(email, m.threadId); if (full && full.ok) transcript = full.transcript || full.text || ""; } catch (e) {}
+        let transcript = "", lastText = "";
+        try { const full = await gm.fetchThreadText(email, m.threadId); if (full && full.ok) { transcript = full.transcript || full.text || ""; lastText = full.text || ""; } } catch (e) {}
         const creator = m["créateur"] || "";
         const cls = await copilotClassify({ creator, subject: m.subject, received: m.snippet, transcript });
         const rep = await claudeReply({ cp: copilotCpName(email), creator, brand: m.brand, category: m.category, received: m.snippet, subject: m.subject, transcript, planning: planningForBrand(collabs, m.brand), brandNotes: brandNotesFor(m.brand), brandInfo: brandInfoFor(m.brand) });
@@ -1332,6 +1332,7 @@ async function copilotTick() {
           cpEmail: email, cpName: copilotCpName(email),
           msgId: m.id || m.threadId, threadId: m.threadId,
           to: mailAddr(m.from), creator, fromLabel: fromLabelOf(m.from), brand: m.brand || "", subject: m.subject || "",
+          lastMsg: String(lastText || m.snippet || "").slice(0, 1500), // le VRAI dernier message du créateur, affiché sur la carte
           categorie: cls.categorie, resume: cls.resume, question: cls.question,
           reply: rep && rep.ok ? rep.body : "",
           status: "pending", at: Date.now(),
@@ -1359,8 +1360,8 @@ async function copilotTick() {
           // un contact externe, la CP en copie reprend le lead : proposition adressée au contact
           // EXTERNE (jamais à l'ex-collègue), avec le circuit décision habituel.
           if (COPILOT.departed.includes(fromAddr.toLowerCase()) && ext) {
-            let transcript = "";
-            try { const full = await gm.fetchThreadText(email, m.threadId); if (full && full.ok) transcript = full.transcript || full.text || ""; } catch (e) {}
+            let transcript = "", lastText2 = "";
+            try { const full = await gm.fetchThreadText(email, m.threadId); if (full && full.ok) { transcript = full.transcript || full.text || ""; lastText2 = full.text || ""; } } catch (e) {}
             const creator = ext.name || ext.addr;
             const cls = await copilotClassify({ creator, subject: m.subject, received: m.snippet, transcript });
             const rep = await claudeReply({ cp: copilotCpName(email), creator, brand: m.brand, category: "réponse", received: m.snippet, subject: m.subject, transcript, planning: planningForBrand(collabs, m.brand), brandNotes: brandNotesFor(m.brand), brandInfo: brandInfoFor(m.brand) });
@@ -1369,6 +1370,7 @@ async function copilotTick() {
               cpEmail: email, cpName: copilotCpName(email),
               msgId: m.id || m.threadId, threadId: m.threadId,
               to: ext.addr, creator, fromLabel: creator, brand: m.brand || "", subject: m.subject || "",
+              lastMsg: String(lastText2 || m.snippet || "").slice(0, 1500),
               categorie: cls.categorie, resume: "🔁 Reprise du fil de " + (fromLabelOf(m.from) || "une ex-collègue") + " (plus dans l'agence) · " + (cls.resume || ""), question: cls.question,
               reply: rep && rep.ok ? rep.body : "",
               status: "pending", at: Date.now(),
@@ -1552,7 +1554,7 @@ app.get("/api/copilot/box", auth, (req, res) => {
     // superviseure sans filtre : elle voit les décisions de TOUTES les boîtes ; sinon la boîte affichée
     .filter((p) => ((sup && !asked) ? true : p.cpEmail === t.email))
     .slice(-30).reverse()
-    .map((p) => ({ id: p.id, cpName: p.cpName, threadId: p.threadId, creator: p.creator, fromLabel: p.fromLabel || "", to: p.to || "", brand: p.brand, subject: p.subject, categorie: p.categorie, resume: p.resume, question: p.question, reply: p.reply, status: p.status, decision: p.decision, at: p.at }));
+    .map((p) => ({ id: p.id, cpName: p.cpName, threadId: p.threadId, creator: p.creator, fromLabel: p.fromLabel || "", to: p.to || "", brand: p.brand, subject: p.subject, lastMsg: p.lastMsg || "", categorie: p.categorie, resume: p.resume, question: p.question, reply: p.reply, status: p.status, decision: p.decision, at: p.at }));
   res.json({ enabled: true, proposals: list });
 });
 // Le fil complet d'une proposition : Rozenn n'a plus à retourner dans Gmail pour
