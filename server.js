@@ -1485,7 +1485,7 @@ const ONBOARDING_STEPS = [
   { id: "outils", group: "1 · Je m'installe ☕", label: "Récupérer mes accès outils : Kolsquare (+ Authenticator), Yousign, Drive", hint: "c'est Mélany qui gère les accès. Kolsquare = veille et reporting, Yousign = contrats, Drive = contenus et contrats" },
   { id: "plaquettes", group: "2 · Je comprends l'agence 📖", label: "Relire les plaquettes de l'agence", hint: "ce qu'on vend aux marques et comment on le présente, demande-les sur Slack si tu ne les as pas" },
   { id: "process", group: "2 · Je comprends l'agence 📖", label: "Lire les Fiches de Process influence (la passation)", link: "/process", hint: "12 fiches étape par étape : veille Kolsquare, prise de contact, négo, gifting, contrats Yousign, reporting, facturation" },
-  { id: "story", group: "2 · Je comprends l'agence 📖", label: "Lire un storytelling de marque", hint: "pour comprendre la méthode Hyped de A à Z, demande un exemple récent à Mélany" },
+  { id: "story", group: "2 · Je comprends l'agence 📖", label: "Lire un storytelling de marque (GLASH Paris)", link: "/story", hint: "un vrai exemple récent, pour comprendre la méthode Hyped de A à Z" },
   { id: "marques", group: "2 · Je comprends l'agence 📖", label: "Découvrir les fiches marques", hint: "onglet Marques : histoire de chaque marque, consignes pour l'IA, points de vigilance" },
   { id: "camp", group: "2 · Je comprends l'agence 📖", label: "Regarder les campagnes en cours", hint: "onglet Campagnes : qui fait quoi en ce moment, marque par marque, et où en sont les calendriers" },
   { id: "fils", group: "3 · Je me lance 🚀", label: "Lire quelques anciens échanges avec des créatrices", hint: "dans ta boîte ou l'onglet Messages : imprègne-toi du ton, des relances, des négociations" },
@@ -1561,17 +1561,21 @@ app.post("/api/onboarding/attach", auth, (req, res) => {
 // --- Documents internes d'onboarding (ex. fiches de process) : stockés sur le DISQUE
 // PERSISTANT, jamais dans le dépôt public GitHub. Dépôt par un compte connecté de l'équipe,
 // lecture derrière le login du cockpit uniquement.
+const ONB_DOCS = { process: "process.pdf", story: "story.pdf" }; // documents internes servis derrière le login
 app.post("/api/onboarding/doc", auth, (req, res) => {
+  const name = String((req.body || {}).name || "process");
+  if (!ONB_DOCS[name]) return res.status(400).json({ error: "document inconnu" });
   const m = String((req.body || {}).base64 || "").match(/^data:application\/pdf;base64,(.+)$/);
   if (!m) return res.status(400).json({ error: "PDF attendu" });
   const buf = Buffer.from(m[1], "base64");
   if (buf.length > 10 * 1024 * 1024) return res.status(400).json({ error: "10 Mo max" });
-  try { fs.writeFileSync(path.join(ONB_FILES, "process.pdf"), buf); } catch (e) { return res.status(500).json({ error: "écriture impossible" }); }
-  res.json({ ok: true, size: buf.length });
+  try { fs.writeFileSync(path.join(ONB_FILES, ONB_DOCS[name]), buf); } catch (e) { return res.status(500).json({ error: "écriture impossible" }); }
+  res.json({ ok: true, name, size: buf.length });
 });
-app.get("/process", auth, (req, res) => {
-  const p = path.join(ONB_FILES, "process.pdf");
-  if (!fs.existsSync(p)) return res.status(404).send(copilotPage("Pas encore là 📄", "Les fiches de process n'ont pas encore été déposées."));
+app.get(["/process", "/story"], auth, (req, res) => {
+  const name = req.path.replace("/", "");
+  const p = path.join(ONB_FILES, ONB_DOCS[name]);
+  if (!fs.existsSync(p)) return res.status(404).send(copilotPage("Pas encore là 📄", "Ce document n'a pas encore été déposé."));
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Cache-Control", "private, no-store");
   res.send(fs.readFileSync(p));
