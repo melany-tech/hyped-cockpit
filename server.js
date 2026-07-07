@@ -616,7 +616,20 @@ function brandInfoFor(brand) {
     return (rec && String(rec.histoire || "").trim().slice(0, 1500)) || "";
   } catch (e) { return ""; }
 }
-async function claudeReply({ cp, creator, brand, category, received, subject, transcript, directive, planning, brandNotes, brandInfo }) {
+// Consigne de la marque sur UN profil précis (ex. « uniquement gifting », « en crosspost »),
+// venue de la shortlist importée : on la retrouve via la tâche « Prise de contact » du créateur,
+// et elle suit le profil pendant TOUTE la conversation.
+async function profileNoteFor(creator) {
+  if (!creator) return "";
+  try {
+    const all = await fetchAllTasks();
+    const n = normName(String(creator).replace(/^@/, ""));
+    if (!n) return "";
+    const hit = all.find((t) => t.type === "Prise de contact" && normName(String(t.task).replace(/^contacter\s+/i, "").replace(/^@/, "")) === n);
+    return hit && hit.commentaire ? String(hit.commentaire).slice(0, 500) : "";
+  } catch (e) { return ""; }
+}
+async function claudeReply({ cp, creator, brand, category, received, subject, transcript, directive, planning, brandNotes, brandInfo, profileNote }) {
   const hasOpenAI = !!process.env.OPENAI_API_KEY, hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
   if (!hasOpenAI && !hasAnthropic) return { ok: false, reason: "nokey" };
   // On s'adresse aux créateurs par leur PRÉNOM, jamais par leur nom complet / pseudo (« Juliette », pas « Juliette DTR »)
@@ -655,6 +668,7 @@ async function claudeReply({ cp, creator, brand, category, received, subject, tr
     "  - Si le créateur a PROPOSÉ un tarif/budget qu'on ne fait pas : ne refuse pas le montant, n'en parle même pas, réoriente positivement vers l'envoi produits (test de la gamme) + la suggestion de contenu.",
     "  - INTERDICTION ABSOLUE de VALIDER un tarif/budget proposé par le créateur ('c'est ok pour nous', 'on accepte ton tarif', 'ça marche pour ce montant') sans une DIRECTIVE explicite de la CP qui accepte CE tarif. Si le tarif est en suspens : 'pour tes tarifs, je valide en interne et je reviens vers toi très vite ✨'.",
     "PÉRIMÈTRE DE LA DIRECTIVE : quand une directive de la CP existe, elle ne vaut QUE pour la question tranchée. Tu n'acceptes, ne valides et ne promets RIEN d'autre (tarif, budget, date, contrat, exclusivité) : pour ces autres sujets, accuse réception avec chaleur et indique que tu reviens vite.",
+    profileNote ? ("CONSIGNE DE LA MARQUE SUR CE PROFIL, valable pendant TOUTE la collab, elle prime sur le reste : « " + String(profileNote).slice(0, 400) + " ». Ex. « uniquement gifting » = tu n'évoques JAMAIS de rémunération pour ce profil, même s'il en demande : tu réorientes gentiment vers l'envoi de produits.") : "",
     "À l'inverse, si le fil parle clairement de factures/paiements déjà actés, tu es sur une collab rémunérée : agis en conséquence (accuser réception de facture, remboursement de produit acheté, etc.).",
     "N'invente JAMAIS un fait précis (montant, date exacte, condition) absent du fil. Si tu ne sais pas, demande.",
     "Reste concis : 3 à 10 lignes. Réponds UNIQUEMENT par le corps du mail, sans objet, sans guillemets, sans commentaire.",
@@ -718,7 +732,7 @@ app.post("/api/reply/suggest", auth, async (req, res) => {
     }
   } catch (e) {}
   let planning = ""; try { planning = planningForBrand(await fetchRows(), brand); } catch (e) {}
-  const out = await claudeReply({ cp: req.user.name, creator, brand, category, received, subject, transcript, planning, brandNotes: brandNotesFor(brand), brandInfo: brandInfoFor(brand) });
+  const out = await claudeReply({ cp: req.user.name, creator, brand, category, received, subject, transcript, planning, brandNotes: brandNotesFor(brand), brandInfo: brandInfoFor(brand), profileNote: await profileNoteFor(creator) });
   res.json(out);
 });
 // Marque un brief comme envoyé/préparé pour une collab → allume l'étape pipeline + activité
@@ -1076,6 +1090,8 @@ app.post("/api/contact/message", auth, async (req, res) => {
   const creator = String((req.body || {}).creator || "").slice(0, 80);
   const brand = String((req.body || {}).brand || "").slice(0, 80);
   const disp = String((req.body || {}).disp || "").slice(0, 200);
+  let consignes = String((req.body || {}).consignes || "").slice(0, 600); // consignes de la marque sur CE profil (import shortlist)
+  if (!consignes) consignes = await profileNoteFor(String((req.body || {}).creator || "")); // fallback : retrouvées via la tâche du profil
   const langRaw = String((req.body || {}).lang || "auto");
   let lang = langRaw === "en" ? "en" : langRaw === "fr" ? "fr" : "auto";
   // Langue par défaut de certaines marques quand la fiche est muette (mode Auto).
@@ -1099,12 +1115,14 @@ app.post("/api/contact/message", auth, async (req, res) => {
       : "LANGUE : déduis-la de la MARQUE : si son histoire ou les consignes montrent une marque / audience anglophone (marché UK ou US, communication en anglais), écris TOUT le message en anglais ; sinon en français.",
     "PRÉNOM : " + (prenom ? ("adresse-toi à « " + prenom + " »") : "prénom INCONNU : salutation SANS prénom (« Hello ! J'espère que tu vas bien » / « Hi! Hope you're doing well »). N'écris JAMAIS [prénom] ni aucun crochet : le message doit partir tel quel") + ".",
     "N'invente AUCUN fait précis sur le créateur (pas de stats, de vidéo ou de post inventés).",
-  ].join("\n");
+    consignes ? ("CONSIGNES DE LA MARQUE SUR CE PROFIL (PRIORITAIRES, à respecter à la lettre) : « " + consignes + " ». Exemples d'application : « gifting uniquement » = ne promets et ne laisse entrevoir AUCUNE rémunération ; « en crosspost » = précise que la marque souhaite repartager le contenu sur ses propres réseaux ; un budget indiqué = c'est ton plafond interne, ne le révèle PAS dans le message.") : "",
+  ].filter(Boolean).join("\n");
   const info = brandInfoFor(brand) || "";
   const notes = brandNotesFor(brand) || "";
   const ctx = "Marque : " + (brand || "?")
     + (info ? ("\n\nHISTOIRE / IDENTITÉ DE LA MARQUE :\n" + info) : "")
     + (notes ? ("\n\nCONSIGNES DE LA RESPONSABLE POUR CETTE MARQUE :\n" + notes) : "")
+    + (profNote ? ("\n\nCONSIGNE DE LA MARQUE SUR CE PROFIL (elle prime, ex. « uniquement gifting » = ne jamais évoquer de rémunération) :\n" + profNote) : "")
     + "\n\nLivrables envisagés : " + (disp || "à définir ensemble")
     + "\nCréateur : " + (creator || "inconnu");
   try {
@@ -1326,7 +1344,7 @@ async function copilotTick() {
         try { const full = await gm.fetchThreadText(email, m.threadId); if (full && full.ok) { transcript = full.transcript || full.text || ""; lastText = full.text || ""; } } catch (e) {}
         const creator = m["créateur"] || "";
         const cls = await copilotClassify({ creator, subject: m.subject, received: m.snippet, transcript });
-        const rep = await claudeReply({ cp: copilotCpName(email), creator, brand: m.brand, category: m.category, received: m.snippet, subject: m.subject, transcript, planning: planningForBrand(collabs, m.brand), brandNotes: brandNotesFor(m.brand), brandInfo: brandInfoFor(m.brand) });
+        const rep = await claudeReply({ cp: copilotCpName(email), creator, brand: m.brand, category: m.category, received: m.snippet, subject: m.subject, transcript, planning: planningForBrand(collabs, m.brand), brandNotes: brandNotesFor(m.brand), brandInfo: brandInfoFor(m.brand), profileNote: await profileNoteFor(creator) });
         const p = {
           id: crypto.randomBytes(8).toString("hex"),
           cpEmail: email, cpName: copilotCpName(email),
@@ -1364,7 +1382,7 @@ async function copilotTick() {
             try { const full = await gm.fetchThreadText(email, m.threadId); if (full && full.ok) { transcript = full.transcript || full.text || ""; lastText2 = full.text || ""; } } catch (e) {}
             const creator = ext.name || ext.addr;
             const cls = await copilotClassify({ creator, subject: m.subject, received: m.snippet, transcript });
-            const rep = await claudeReply({ cp: copilotCpName(email), creator, brand: m.brand, category: "réponse", received: m.snippet, subject: m.subject, transcript, planning: planningForBrand(collabs, m.brand), brandNotes: brandNotesFor(m.brand), brandInfo: brandInfoFor(m.brand) });
+            const rep = await claudeReply({ cp: copilotCpName(email), creator, brand: m.brand, category: "réponse", received: m.snippet, subject: m.subject, transcript, planning: planningForBrand(collabs, m.brand), brandNotes: brandNotesFor(m.brand), brandInfo: brandInfoFor(m.brand), profileNote: await profileNoteFor(creator) });
             const p = {
               id: crypto.randomBytes(8).toString("hex"),
               cpEmail: email, cpName: copilotCpName(email),
@@ -1509,7 +1527,7 @@ async function copilotExecute(id, action, text) {
       let transcript = "";
       try { const full = await gm.fetchThreadText(p.cpEmail, p.threadId); if (full && full.ok) transcript = full.transcript || full.text || ""; } catch (e) {}
       let planning = ""; try { planning = planningForBrand(await fetchRows(), p.brand); } catch (e) {}
-      const rep = await claudeReply({ cp: p.cpName, creator: p.creator, brand: p.brand, category: "réponse", received: p.resume, subject: p.subject, transcript, directive, planning, brandNotes: brandNotesFor(p.brand), brandInfo: brandInfoFor(p.brand) });
+      const rep = await claudeReply({ cp: p.cpName, creator: p.creator, brand: p.brand, category: "réponse", received: p.resume, subject: p.subject, transcript, directive, planning, brandNotes: brandNotesFor(p.brand), brandInfo: brandInfoFor(p.brand), profileNote: await profileNoteFor(p.creator) });
       if (!rep || !rep.ok) return { code: 500, title: "IA indisponible 💤", msg: "Impossible de rédiger là tout de suite. Réponds depuis le cockpit." };
       p.reply = rep.body; p.status = "ready"; p.decision = action; p.decidedAt = Date.now(); saveCopilot(store);
       const slackUser = COPILOT.slackIds[p.cpEmail] || "";
