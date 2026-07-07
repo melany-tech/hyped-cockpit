@@ -1099,13 +1099,36 @@ const FICHE_FIELDS=[
 ];
 function fnoteDate(ts){ return new Date(ts).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}); }
 function mailify(h){ return String(h||'').replace(/([\w.+-]+@[\w-]+(?:\.[\w-]+)+)/g,'<a class="todolink" href="mailto:$1">$1</a>'); }
+// Annuaire transverse des interlocuteurs : les grands groupes ont les mêmes contacts
+// sur plusieurs marques. Sert à l'autocomplétion (nom connu = email/tel/rôle repris)
+// et à l'affichage « aussi sur … » dans les fiches.
+function allInterlocuteurs(){
+  const map={};
+  const B=(FICHES&&FICHES.brands)||{};
+  Object.keys(B).forEach(bn=>{
+    const f=B[bn]||{};
+    const list=(f.interlocuteurs||[]).slice();
+    if(f.interlocuteur&&(f.interlocuteur.nom||f.interlocuteur.email))list.push(f.interlocuteur);
+    list.forEach(x=>{
+      const k=nlow(x.nom||''); if(!k)return;
+      if(!map[k])map[k]={nom:x.nom,role:x.role||'',email:x.email||'',tel:x.tel||'',brands:[]};
+      if(!map[k].brands.includes(bn))map[k].brands.push(bn);
+      if(!map[k].email&&x.email)map[k].email=x.email;
+      if(!map[k].tel&&x.tel)map[k].tel=x.tel;
+      if(!map[k].role&&x.role)map[k].role=x.role;
+    });
+  });
+  return map;
+}
 function ficheHTML(brand,f,canBase){
+  const IMAP=allInterlocuteurs();
+  const aussi=(x)=>{ const m=IMAP[nlow(x.nom||'')]; const o=m?m.brands.filter(b2=>b2!==brand):[]; return o.length?(' <span class="fs">· aussi sur '+esc(o.join(', '))+'</span>'):''; };
   // Interlocuteurs côté marque : liste (l'ancien champ unique est fusionné dedans)
   const its=(f.interlocuteurs||[]).slice();
   if(f.interlocuteur&&(f.interlocuteur.nom||f.interlocuteur.email))its.unshift({at:0,by:'',...f.interlocuteur});
   const val=(v)=>v?mailify(linkify(v)):'<span class="empty">à compléter</span>';
   const cells=FICHE_FIELDS.map(([k,label,ph,wide])=>`<div class="fitem${wide?' wide':''}"><div class="fk">${label}</div><div class="fv">${val(f[k])}</div></div>`).join('');
-  const itv=its.length?its.map(x=>`<div class="fitrow">👤 ${esc(x.nom||'?')}${x.role?(' · '+esc(x.role)):''}${x.email?(' · <a class="todolink" href="mailto:'+esc(x.email)+'">'+esc(x.email)+'</a>'):''}${x.tel?(' · 📞 <a class="todolink" href="tel:'+esc(String(x.tel).replace(/[^+\d]/g,''))+'">'+esc(x.tel)+'</a>'):''}${x.at?` <button class="lk feditit" data-at="${x.at}" data-nom="${esc(x.nom||'')}" data-role="${esc(x.role||'')}" data-email="${esc(x.email||'')}" data-tel="${esc(x.tel||'')}" title="Modifier cet interlocuteur">✎</button>`:''}${canBase&&x.at?` <button class="lk fdelit" data-at="${x.at}" title="Supprimer cet interlocuteur">✕</button>`:''}</div>`).join(''):'<span class="empty">à compléter</span>';
+  const itv=its.length?its.map(x=>`<div class="fitrow">👤 ${esc(x.nom||'?')}${x.role?(' · '+esc(x.role)):''}${x.email?(' · <a class="todolink" href="mailto:'+esc(x.email)+'">'+esc(x.email)+'</a>'):''}${x.tel?(' · 📞 <a class="todolink" href="tel:'+esc(String(x.tel).replace(/[^+\d]/g,''))+'">'+esc(x.tel)+'</a>'):''}${aussi(x)}${x.at?` <button class="lk feditit" data-at="${x.at}" data-nom="${esc(x.nom||'')}" data-role="${esc(x.role||'')}" data-email="${esc(x.email||'')}" data-tel="${esc(x.tel||'')}" title="Modifier cet interlocuteur">✎</button>`:''}${canBase&&x.at?` <button class="lk fdelit" data-at="${x.at}" title="Supprimer cet interlocuteur">✕</button>`:''}</div>`).join(''):'<span class="empty">à compléter</span>';
   const notes=(f.notes||[]).slice().reverse().map(n=>`<div class="fnote"><div class="fm">${linkify(n.text)}</div><div class="fs">${esc(n.by||'')} · ${fnoteDate(n.at)}</div>${canBase?`<button class="fdel" data-at="${n.at}" title="Supprimer la note">✕</button>`:''}</div>`).join('');
   const fsize=(n)=>n>1048576?(n/1048576).toFixed(1)+' Mo':Math.max(1,Math.round(n/1024))+' Ko';
   const links=(f.links||[]).map(l=>`<div class="fnote"><div class="fm">🔗 <a class="todolink" href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)} ↗</a></div><div class="fs">${esc(l.by||'')} · ${fnoteDate(l.at)}</div>${canBase?`<button class="fdel fdellink" data-at="${l.at}" title="Supprimer le lien">✕</button>`:''}</div>`).join('');
@@ -1116,7 +1139,7 @@ function ficheHTML(brand,f,canBase){
     <div class="fichegrid">${cells}
       <div class="fitem wide"><div class="fk">👥 Interlocuteurs côté marque</div><div class="fv" id="fitshow">${itv} <button class="lk" id="fitedit">＋ ajouter</button></div>
         <div id="fitform" style="display:none" class="ficheform">
-          <label>Nom</label><input id="fitnom" value="">
+          <label>Nom</label><input id="fitnom" list="fitsug" value="" placeholder="tape un nom : les contacts connus se proposent tout seuls"><datalist id="fitsug">${Object.values(IMAP).map(v=>`<option value="${esc(v.nom)}">${esc(v.brands.join(', '))}</option>`).join('')}</datalist><div class="fs" id="fitsughint" style="margin:2px 0 4px"></div>
           <label>Rôle</label><input id="fitrole" value="" placeholder="ex. Responsable influence">
           <label>Email</label><input id="fitemail" value="">
           <label>Téléphone</label><input id="fittel" value="" placeholder="ex. 06 12 34 56 78">
@@ -1170,6 +1193,12 @@ function wireFiche(det,brand,rerender){
   let editAt=null; // null = ajout ; sinon = modification de l'interlocuteur portant cet identifiant
   const openItForm=(vals)=>{ q('fitnom').value=vals.nom||''; q('fitrole').value=vals.role||''; q('fitemail').value=vals.email||''; q('fittel').value=vals.tel||''; q('fitsave').textContent=editAt?'Enregistrer les modifications':'＋ Ajouter'; q('fitform').style.display='block'; const e2=q('fitedit'); if(e2)e2.style.display='none'; };
   const ie=q('fitedit'); if(ie) ie.onclick=()=>{ editAt=null; openItForm({}); };
+  // Nom connu sur une autre marque : on reprend automatiquement ses coordonnées
+  const fn=q('fitnom'); if(fn) fn.oninput=()=>{
+    const m=allInterlocuteurs()[nlow(fn.value)]; const h=q('fitsughint');
+    if(m){ if(!q('fitemail').value)q('fitemail').value=m.email||''; if(!q('fittel').value)q('fittel').value=m.tel||''; if(!q('fitrole').value)q('fitrole').value=m.role||''; if(h)h.textContent='Contact connu (sur '+m.brands.join(', ')+') : coordonnées reprises ✨'; }
+    else if(h)h.textContent='';
+  };
   det.querySelectorAll('.feditit').forEach(b=>b.onclick=()=>{ editAt=Number(b.dataset.at); openItForm(b.dataset); });
   const ic2=q('fitcancel'); if(ic2) ic2.onclick=()=>{ q('fitform').style.display='none'; editAt=null; const e2=q('fitedit'); if(e2)e2.style.display=''; };
   const is=q('fitsave'); if(is) is.onclick=async()=>{ const itv={nom:q('fitnom').value.trim(),role:q('fitrole').value.trim(),email:q('fitemail').value.trim(),tel:q('fittel').value.trim()}; if(!itv.nom&&!itv.email){alert('Il faut au moins un nom ou un email 🙂');return;} const payload=editAt?{editInterlocuteur:{...itv,at:editAt}}:{addInterlocuteur:itv}; if(await fichePost(brand,payload,null)) R(); };
@@ -1862,7 +1891,7 @@ function openCompose(row,o){
   if(nx&&nx.classList.contains('msgpanel')){nx.remove();return;}
   const inf=(o.inf&&o.inf!=='[prénom]')?o.inf:'', cp=o.cp||(VIEWER&&VIEWER.name)||'', brand=o.brand||'';
   const panel=document.createElement('div'); panel.className='msgpanel';
-  panel.innerHTML='<div class="msgbar"><span class="seg"><button data-l="auto" class="on" title="L\'IA choisit la langue selon la marque">Auto</button><button data-l="fr">FR</button><button data-l="en">EN</button></span><input class="msgdisp" value="1 Reel + 1 set de stories"></div><input class="msgto" type="email" placeholder="Email du destinataire (requis pour envoyer)"><div class="cctoggle"><button type="button" class="lk cclink">＋ Ajouter Cc / Cci</button></div><input class="msgcc" type="text" placeholder="Cc : visible par tous, séparez par une virgule" style="display:none"><input class="msgbcc" type="text" placeholder="Cci : copie cachée, séparez par une virgule" style="display:none"><textarea class="msgtxt" rows="12"></textarea><div class="msgbtns"><button class="lk msgregen" title="L\'IA réécrit le message">↻ Regénérer</button> <button class="lk msgcopy">Copier</button> <button class="lk msgdraft">📧 Brouillon</button> <button class="lk msgsend">✉️ Envoyer</button></div>';
+  panel.innerHTML='<div class="msgbar"><span class="seg"><button data-l="auto" class="on" title="L\'IA choisit la langue selon la marque">Auto</button><button data-l="fr">FR</button><button data-l="en">EN</button></span><input class="msgdisp" value="1 Reel + 1 set de stories"></div><input class="msgto" type="email" placeholder="Email du destinataire (requis pour envoyer)"><div class="cctoggle"><button type="button" class="lk cclink">＋ Ajouter Cc / Cci</button></div><input class="msgcc" type="text" placeholder="Cc : visible par tous, séparez par une virgule" style="display:none"><input class="msgbcc" type="text" placeholder="Cci : copie cachée, séparez par une virgule" style="display:none"><textarea class="msgtxt" rows="12"></textarea><div class="msgbtns"><button class="lk msgregen" title="L\'IA réécrit le message">↻ Regénérer</button> <button class="lk msgcopy">Copier</button> <button class="lk msgdraft">📧 Brouillon</button> <button class="lk msgsend">✉️ Envoyer</button> <button class="lk msgsched">🕒 Planifier</button> <span class="schedrow" style="display:none"><input type="datetime-local" class="msgwhen"> <button class="lk msgschedok">Confirmer 🕒</button></span></div>';
   row.after(panel);
   const ccInput=panel.querySelector('.msgcc'), bccInput=panel.querySelector('.msgbcc'); const ccOf=()=>(ccInput.value||'').trim(), bccOf=()=>(bccInput.value||'').trim();
   panel.querySelector('.cclink').onclick=()=>{ ccInput.style.display=''; bccInput.style.display=''; panel.querySelector('.cctoggle').style.display='none'; ccInput.focus(); };
@@ -1902,6 +1931,26 @@ function openCompose(row,o){
     const d=await r.json().catch(()=>({}));
     sbtn.textContent=(d&&d.ok)?'Envoyé ✓':(d.error||'↻ Reconnecte ton Gmail');
     setTimeout(()=>{sbtn.textContent='✉️ Envoyer';},2800);
+  };
+  // Planifier l'envoi : le serveur expédie tout seul à l'heure choisie (liste et
+  // annulation dans l'onglet Messages, bloc « envois programmés »)
+  const scb=panel.querySelector('.msgsched'), srow=panel.querySelector('.schedrow'), swhen=panel.querySelector('.msgwhen');
+  scb.onclick=()=>{
+    const vis=srow.style.display!=='none';
+    srow.style.display=vis?'none':'';
+    if(!vis&&!swhen.value){ const d=new Date(Date.now()+3600*1000); d.setMinutes(0,0,0); swhen.value=new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16); }
+  };
+  panel.querySelector('.msgschedok').onclick=async()=>{
+    const to=(panel.querySelector('.msgto').value||'').trim();
+    const ok2=panel.querySelector('.msgschedok');
+    if(!to){alert('Ajoute d\'abord l\'email du destinataire.');return;}
+    const at=swhen.value?new Date(swhen.value).getTime():0;
+    if(!at||at<Date.now()+60000){alert('Choisis une date et une heure futures.');return;}
+    ok2.textContent='…';
+    const r=await api('/api/gmail/schedule',{method:'POST',body:JSON.stringify({to,cc:ccOf(),bcc:bccOf(),subject:subjOf(),body:ta.value,at})});
+    const d=await r.json().catch(()=>({}));
+    if(d&&d.ok){ scb.textContent='🕒 Planifié : '+schedDate(at)+' ✓'; loadScheduled(); setTimeout(()=>{srow.style.display='none';ok2.textContent='Confirmer 🕒';},1800); }
+    else { ok2.textContent=d.error||'Erreur'; setTimeout(()=>ok2.textContent='Confirmer 🕒',2600); }
   };
   regen();
 }
