@@ -53,9 +53,23 @@ async function handleCallback(code, state) {
   const email = Buffer.from(state, "base64").toString("utf8");
   const c = client();
   const { tokens } = await c.getToken(code);
+  // GARDE-FOU : on vérifie que le compte Google réellement autorisé est bien CELUI du compte
+  // cockpit. Sans ça, si Chrome est connecté au Google d'une collègue au moment du clic,
+  // sa boîte se branche sur le cockpit de quelqu'un d'autre (vécu : la boîte de Rozenn
+  // affichée dans le cockpit de Prunelle). En cas d'écart : on ne stocke RIEN.
+  c.setCredentials(tokens);
+  let real = "";
+  try { const g = google.gmail({ version: "v1", auth: c }); real = String((await g.users.getProfile({ userId: "me" })).data.emailAddress || "").toLowerCase(); } catch (e) {}
+  if (real && real !== String(email).toLowerCase()) {
+    const err = new Error("mauvais compte Google");
+    err.mismatch = true; err.real = real; err.expected = email;
+    throw err;
+  }
   setToken(email, tokens); // contient refresh_token (1re fois) + access_token
   return email;
 }
+// Débrancher une boîte (mauvais compte connecté, départ…) : on supprime ses jetons.
+function disconnect(email) { const s = loadStore(); delete s[email]; saveStore(s); return true; }
 
 // --- Lecture + analyse de LA boîte de cette CP --------------------------
 function gmailFor(email) {
@@ -387,4 +401,4 @@ async function draftsToValidate(email) {
   return { count: keep.length };
 }
 
-module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, analyzeFor, calendarToday, createDraft, sendEmail, draftsToValidate, fetchThreadText, lastReplyFromMe, threadHasExternal, threadExternalContact, getSignature, getAttachment, SCOPES };
+module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, disconnect, analyzeFor, calendarToday, createDraft, sendEmail, draftsToValidate, fetchThreadText, lastReplyFromMe, threadHasExternal, threadExternalContact, getSignature, getAttachment, SCOPES };

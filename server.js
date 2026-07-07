@@ -412,7 +412,18 @@ app.get("/api/gmail/connect", auth, (req, res) => {
 });
 app.get("/api/gmail/callback", async (req, res) => {
   try { await gm.handleCallback(req.query.code, req.query.state); res.redirect("/?gmail=ok"); }
-  catch (e) { res.redirect("/?gmail=err"); }
+  catch (e) {
+    if (e && e.mismatch) return res.send(copilotPage("Mauvais compte Google 🙃", "Tu as autorisé la boîte " + e.real + " alors que ton cockpit est " + e.expected + ". Rien n'a été connecté. Recommence en choisissant le BON compte Google dans la fenêtre de connexion (ou déconnecte d'abord l'autre compte de Chrome)."));
+    res.redirect("/?gmail=err");
+  }
+});
+// Débrancher une boîte : la sienne, ou celle d'une CP si superviseure (?as=Prénom).
+app.post("/api/gmail/disconnect", auth, (req, res) => {
+  if (!gm.ENABLED) return res.status(400).json({ error: "Gmail non configuré" });
+  const t = inboxTarget(req);
+  gm.disconnect(t.email);
+  delete INBOX_CACHE[t.email];
+  res.json({ ok: true, email: t.email });
 });
 // Cache court de l'analyse Gmail par boîte (évite de tout relire à chaque rechargement)
 const INBOX_CACHE = {}; // email -> { at, data }
