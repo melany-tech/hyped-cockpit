@@ -720,7 +720,7 @@ function refreshCustomView(){
   else if(CURRENT_VIEW==='calendrier')renderCalendrier();
   else if(CURRENT_VIEW==='historique')renderHistorique();
   else if(CURRENT_VIEW==='marques')renderMarques();
-  else if(CURRENT_VIEW==='todo')renderTodo();
+  else if(CURRENT_VIEW==='todo')renderTodoTab();
 }
 function showView(v){
   CURRENT_VIEW=v;
@@ -1232,7 +1232,10 @@ let MQ_SELECTED=null;
 // ===== To-do par marque (tâches Notion, cases à cocher synchronisées) =====
 let TODO_QUI='';
 try{ TODO_QUI=localStorage.getItem('hc_todoqui')||''; }catch(e){}
-async function renderTodo(){
+// NB : renommée renderTodoTab (l'onglet To-do) pour ne plus entrer en collision avec
+// renderTodo(tasks,…) du panneau Priorités : deux fonctions du même nom, la seconde
+// écrasait la première et l'onglet restait bloqué sur « Chargement… ».
+async function renderTodoTab(){
   const w=$('todowrap'); if(!w)return;
   w.innerHTML='<div class="state">Chargement…</div>';
   try{
@@ -1264,14 +1267,14 @@ async function renderTodo(){
   }catch(e){w.innerHTML='<div class="state">Erreur de chargement.</div>';}
 }
 function wireTodo(w){
-  const sel=w.querySelector('#todoqui'); if(sel){sel.onchange=()=>{TODO_QUI=sel.value;try{localStorage.setItem('hc_todoqui',TODO_QUI);}catch(e){};renderTodo();};}
+  const sel=w.querySelector('#todoqui'); if(sel){sel.onchange=()=>{TODO_QUI=sel.value;try{localStorage.setItem('hc_todoqui',TODO_QUI);}catch(e){};renderTodoTab();};}
   // « contacter X » : bouton ✉️ qui ouvre le compositeur IA (sans cocher la case)
   w.querySelectorAll('.todomsg').forEach(b=>b.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();openCompose(b.closest('.todoitem'),{inf:b.dataset.inf,brand:b.dataset.brand,cp:(VIEWER&&VIEWER.name)||''});});
   w.querySelectorAll('input[data-tid]').forEach(cb=>{cb.onchange=async()=>{
     cb.disabled=true; const row=cb.closest('.todoitem'); if(row)row.classList.add('done');
     const r=await api('/api/todo/check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:cb.dataset.tid,done:cb.checked})});
     if(!r.ok){ if(row)row.classList.remove('done'); cb.checked=false; cb.disabled=false; const d=await r.json().catch(()=>({})); alert(d.error||'Impossible de mettre à jour.'); return; }
-    setTimeout(renderTodo,700);
+    setTimeout(renderTodoTab,700);
   };});
 }
 function renderMarques(){
