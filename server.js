@@ -1466,7 +1466,6 @@ app.post("/api/copilot/act", auth, async (req, res) => {
 const ONBOARDING_STORE = path.join(DATA_DIR, "onboarding.json");
 const ONBOARDING_USERS = String(process.env.ONBOARDING_USERS || "prunelle@hyped-agency.fr").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
 const ONBOARDING_STEPS = [
-  { id: "pwd", group: "1 · Je m'installe ☕", label: "Changer mon mot de passe", hint: "menu avatar en haut à droite → 🔑 Mot de passe" },
   { id: "slack", group: "1 · Je m'installe ☕", label: "Activer mon compte Slack et me présenter à l'équipe", hint: "c'est là qu'arrivent les notifications du copilote" },
   { id: "gmail", group: "1 · Je m'installe ☕", label: "Connecter mon Gmail au cockpit", hint: "onglet Messages → « Connecter mon Gmail » (se coche tout seul une fois fait)" },
   { id: "whatsapp", group: "1 · Je m'installe ☕", label: "Être ajoutée aux groupes WhatsApp clients", hint: "demande à Mélany ou Rozenn de t'ajouter, puis présente-toi en deux lignes" },
