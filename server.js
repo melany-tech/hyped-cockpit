@@ -1466,11 +1466,12 @@ app.post("/api/copilot/act", auth, async (req, res) => {
 const ONBOARDING_STORE = path.join(DATA_DIR, "onboarding.json");
 const ONBOARDING_USERS = String(process.env.ONBOARDING_USERS || "prunelle@hyped-agency.fr").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
 const ONBOARDING_STEPS = [
+  { id: "guide", group: "1 · Je m'installe ☕", label: "Lire le Guide CP : l'agence, ses valeurs, la voix Hyped", link: "/guide", hint: "20 minutes : comment on parle aux créatrices, le process de A à Z, les dix onglets du cockpit" },
   { id: "slack", group: "1 · Je m'installe ☕", label: "Activer mon compte Slack et me présenter à l'équipe", hint: "c'est là qu'arrivent les notifications du copilote" },
   { id: "gmail", group: "1 · Je m'installe ☕", label: "Connecter mon Gmail au cockpit", hint: "onglet Messages → « Connecter mon Gmail » (se coche tout seul une fois fait)" },
+  { id: "wabiz", group: "1 · Je m'installe ☕", label: "Installer WhatsApp Business", hint: "sur ton téléphone pro, avec ta nouvelle eSIM : c'est là que vivent les échanges clients" },
   { id: "whatsapp", group: "1 · Je m'installe ☕", label: "Être ajoutée aux groupes WhatsApp clients", hint: "demande à Mélany ou Rozenn de t'ajouter, puis présente-toi en deux lignes" },
   { id: "outils", group: "1 · Je m'installe ☕", label: "Récupérer mes accès outils : Kolsquare (+ Authenticator), Yousign, Drive", hint: "c'est Mélany qui gère les accès. Kolsquare = veille et reporting, Yousign = contrats, Drive = contenus et contrats" },
-  { id: "guide", group: "2 · Je comprends l'agence 📖", label: "Lire le Guide CP : l'agence, ses valeurs, la voix Hyped", link: "/guide", hint: "20 minutes : comment on parle aux créatrices, le process de A à Z, les dix onglets du cockpit" },
   { id: "plaquettes", group: "2 · Je comprends l'agence 📖", label: "Relire les plaquettes de l'agence", hint: "ce qu'on vend aux marques et comment on le présente, demande-les sur Slack si tu ne les as pas" },
   { id: "process", group: "2 · Je comprends l'agence 📖", label: "Lire les Fiches de Process influence (la passation)", link: "/process", hint: "12 fiches étape par étape : veille Kolsquare, prise de contact, négo, gifting, contrats Yousign, reporting, facturation" },
   { id: "story", group: "2 · Je comprends l'agence 📖", label: "Lire un storytelling de marque", hint: "pour comprendre la méthode Hyped de A à Z, demande un exemple récent à Mélany" },

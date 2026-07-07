@@ -907,17 +907,18 @@ async function loadOnboarding(){
       const done=d.mine.filter(s=>s.done).length, tot=d.mine.length, pct=Math.round(done/tot*100);
       if(done<tot){
         html+='<p class="pt"><span class="pi">🎀</span> Bienvenue '+esc(VIEWER.name)+' · ton parcours d\'arrivée</p>'
-          +'<div class="onbbar"><div class="onbfill" style="width:'+pct+'%"></div></div><div class="onbcount">'+done+'/'+tot+' étape'+(done>1?'s':'')+' faite'+(done>1?'s':'')+' · coche au fur et à mesure, ça s\'enregistre tout seul ✨</div>'
-          +d.mine.map((s,i)=>{
-            const gh=(s.group&&(!i||d.mine[i-1].group!==s.group))?('<div class="onbgroup">'+esc(s.group)+'</div>'):'';
-            return gh+'<label class="onbrow'+(s.done?' done':'')+'"><input type="checkbox" data-onb="'+esc(s.id)+'"'+(s.done?' checked':'')+'><span class="onblbl">'+esc(s.label)+(s.link?(' <a href="'+esc(s.link)+'" target="_blank" rel="noopener">ouvrir ↗</a>'):'')+'<span class="onbhint">'+esc(s.hint||'')+'</span></span></label>';
-          }).join('');
+          +'<div class="onbbar"><div class="onbfill" style="width:'+pct+'%"></div></div><div class="onbcount">'+done+'/'+tot+' étape'+(done>1?'s':'')+' faite'+(done>1?'s':'')+' · coche au fur et à mesure, ça s\'enregistre tout seul ✨</div>';
+        // Encart matériel (QR eSIM…) : tout en haut du parcours, avant les étapes
         if(d.attach){
           html+='<div class="onbgroup">📱 '+esc(d.attach.title)+'</div>'
             +'<label class="onbrow'+(d.attach.done?' done':'')+'"><input type="checkbox" data-onb="attach"'+(d.attach.done?' checked':'')+'><span class="onblbl">'+esc(d.attach.title)
             +'<span class="onbhint" style="white-space:pre-line">'+esc(d.attach.text||'')+'</span></span></label>'
             +(d.attach.hasImg?('<img class="onbimg" src="/api/onboarding/file" alt="QR code">'):'');
         }
+        html+=d.mine.map((s,i)=>{
+            const gh=(s.group&&(!i||d.mine[i-1].group!==s.group))?('<div class="onbgroup">'+esc(s.group)+'</div>'):'';
+            return gh+'<label class="onbrow'+(s.done?' done':'')+'"><input type="checkbox" data-onb="'+esc(s.id)+'"'+(s.done?' checked':'')+'><span class="onblbl">'+esc(s.label)+(s.link?(' <a href="'+esc(s.link)+'" target="_blank" rel="noopener">ouvrir ↗</a>'):'')+'<span class="onbhint">'+esc(s.hint||'')+'</span></span></label>';
+          }).join('');
       }
     }
     if(d.team&&d.team.length){
