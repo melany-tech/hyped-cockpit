@@ -1830,15 +1830,15 @@ const BRAND_INFO={
 };
 function genMessage(brand,inf,cp,disp,lang){
   const b=BRAND_INFO[brand]||{produits:(lang==='en'?'our products':'nos produits'),fr:brand+" est une marque que nous accompagnons chez Hyped Agency.",en:brand+" is a brand we work with at Hyped Agency."};
-  const who=inf||(lang==='en'?'there':'');
-  if(lang==='en') return `Hi ${who} ✨\n\nI'm ${cp} from Hyped Agency, and we're currently working with ${brand}.\n\n${b.en}\n\nI'm reaching out because we really love your content, we find it so qualitative and a great fit with the brand's universe. ✨\n\nWe'd love to send you ${b.produits} and explore a partnership around ${disp}.\n\nWould you be open to discovering the products and featuring them on your socials with ${brand}? If so, feel free to send me your full name, postal address and phone number so I can add you to our shipment.\n\nLooking forward to hearing from you,\n${cp}`;
-  return `Hello ${who} ✨\n\nJe suis ${cp}, cheffe de projet chez Hyped Agency, et je représente la marque ${brand}.\n\n${b.fr}\n\nJe te contacte car nous aimons beaucoup ton contenu, que nous trouvons très qualitatif et en parfaite adéquation avec l'univers de la marque. ✨\n\nL'idée serait de te faire découvrir ${b.produits} et de mettre en avant ${disp} dans le cadre d'un partenariat avec ${brand}.\n\nSerais-tu partante ? Je reste bien sûr disponible pour la moindre question et serais ravie d'échanger avec toi. 🤍\n\nAu plaisir de te lire,\n${cp}`;
+  const who=(inf&&inf!=='[prénom]')?(' '+inf):'';
+  if(lang==='en') return `Hi${who} ✨\n\nI'm ${cp} from Hyped Agency, and we're currently working with ${brand}.\n\n${b.en}\n\nI'm reaching out because we really love your content, we find it so qualitative and a great fit with the brand's universe. ✨\n\nWe'd love to send you ${b.produits} and explore a partnership around ${disp}.\n\nWould you be open to discovering the products and featuring them on your socials with ${brand}? If so, feel free to send me your full name, postal address and phone number so I can add you to our shipment.\n\nLooking forward to hearing from you,\n${cp}`;
+  return `Hello${who} ✨\n\nJe suis ${cp}, cheffe de projet chez Hyped Agency, et je représente la marque ${brand}.\n\n${b.fr}\n\nJe te contacte car nous aimons beaucoup ton contenu, que nous trouvons très qualitatif et en parfaite adéquation avec l'univers de la marque. ✨\n\nL'idée serait de te faire découvrir ${b.produits} et de mettre en avant ${disp} dans le cadre d'un partenariat avec ${brand}.\n\nSerais-tu partante ? Je reste bien sûr disponible pour la moindre question et serais ravie d'échanger avec toi. 🤍\n\nAu plaisir de te lire,\n${cp}`;
 }
 // Extrait le prénom d'une tâche « contacter X » ou d'un nom de profil
 function infOf(raw){
   raw=String(raw||'').replace(/^contacter\s+/i,'').trim();
-  if(!raw||/^https?:\/\//i.test(raw))return '[prénom]';
-  return raw.replace(/^@/,'').split(/[ \/(]/)[0]||'[prénom]';
+  if(!raw||/^https?:\/\//i.test(raw))return ''; // inconnu : salutation sans prénom, pas de [prénom]
+  return raw.replace(/^@/,'').split(/[ \/(]/)[0]||'';
 }
 function openMessage(btn){
   const row=btn.closest('.row');
@@ -1851,21 +1851,21 @@ function openMessage(btn){
 function openCompose(row,o){
   const nx=row.nextElementSibling;
   if(nx&&nx.classList.contains('msgpanel')){nx.remove();return;}
-  const inf=o.inf||'[prénom]', cp=o.cp||(VIEWER&&VIEWER.name)||'', brand=o.brand||'';
+  const inf=(o.inf&&o.inf!=='[prénom]')?o.inf:'', cp=o.cp||(VIEWER&&VIEWER.name)||'', brand=o.brand||'';
   const panel=document.createElement('div'); panel.className='msgpanel';
-  panel.innerHTML='<div class="msgbar"><span class="seg"><button data-l="fr" class="on">FR</button><button data-l="en">EN</button></span><input class="msgdisp" value="1 Reel + 1 set de stories"></div><input class="msgto" type="email" placeholder="Email du destinataire (requis pour envoyer)"><div class="cctoggle"><button type="button" class="lk cclink">＋ Ajouter Cc / Cci</button></div><input class="msgcc" type="text" placeholder="Cc : visible par tous, séparez par une virgule" style="display:none"><input class="msgbcc" type="text" placeholder="Cci : copie cachée, séparez par une virgule" style="display:none"><textarea class="msgtxt" rows="12"></textarea><div class="msgbtns"><button class="lk msgregen" title="L\'IA réécrit le message">↻ Regénérer</button> <button class="lk msgcopy">Copier</button> <button class="lk msgdraft">📧 Brouillon</button> <button class="lk msgsend">✉️ Envoyer</button></div>';
+  panel.innerHTML='<div class="msgbar"><span class="seg"><button data-l="auto" class="on" title="L\'IA choisit la langue selon la marque">Auto</button><button data-l="fr">FR</button><button data-l="en">EN</button></span><input class="msgdisp" value="1 Reel + 1 set de stories"></div><input class="msgto" type="email" placeholder="Email du destinataire (requis pour envoyer)"><div class="cctoggle"><button type="button" class="lk cclink">＋ Ajouter Cc / Cci</button></div><input class="msgcc" type="text" placeholder="Cc : visible par tous, séparez par une virgule" style="display:none"><input class="msgbcc" type="text" placeholder="Cci : copie cachée, séparez par une virgule" style="display:none"><textarea class="msgtxt" rows="12"></textarea><div class="msgbtns"><button class="lk msgregen" title="L\'IA réécrit le message">↻ Regénérer</button> <button class="lk msgcopy">Copier</button> <button class="lk msgdraft">📧 Brouillon</button> <button class="lk msgsend">✉️ Envoyer</button></div>';
   row.after(panel);
   const ccInput=panel.querySelector('.msgcc'), bccInput=panel.querySelector('.msgbcc'); const ccOf=()=>(ccInput.value||'').trim(), bccOf=()=>(bccInput.value||'').trim();
   panel.querySelector('.cclink').onclick=()=>{ ccInput.style.display=''; bccInput.style.display=''; panel.querySelector('.cctoggle').style.display='none'; ccInput.focus(); };
-  let lang='fr';
+  let lang='auto';
   const ta=panel.querySelector('.msgtxt'), disp=panel.querySelector('.msgdisp');
   const regen=async()=>{
     ta.value='✨ L\'IA rédige le message'+(brand?(' ('+brand+')'):'')+'…'; ta.disabled=true;
     try{
       const r=await api('/api/contact/message',{method:'POST',body:JSON.stringify({creator:inf,brand,disp:disp.value,lang})});
       const d=await r.json().catch(()=>({}));
-      ta.value=(d&&d.ok&&d.body)?d.body:genMessage(brand,inf,cp,disp.value,lang);
-    }catch(e){ta.value=genMessage(brand,inf,cp,disp.value,lang);}
+      ta.value=(d&&d.ok&&d.body)?d.body:genMessage(brand,inf,cp,disp.value,lang==='en'?'en':'fr');
+    }catch(e){ta.value=genMessage(brand,inf,cp,disp.value,lang==='en'?'en':'fr');}
     ta.disabled=false;
   };
   panel.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{lang=b.dataset.l;panel.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x===b));regen();});

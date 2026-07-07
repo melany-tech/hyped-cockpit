@@ -1043,7 +1043,8 @@ app.post("/api/contact/message", auth, async (req, res) => {
   const creator = String((req.body || {}).creator || "").slice(0, 80);
   const brand = String((req.body || {}).brand || "").slice(0, 80);
   const disp = String((req.body || {}).disp || "").slice(0, 200);
-  const lang = String((req.body || {}).lang || "fr") === "en" ? "en" : "fr";
+  const langRaw = String((req.body || {}).lang || "auto");
+  const lang = langRaw === "en" ? "en" : langRaw === "fr" ? "fr" : "auto";
   const hasOpenAI = !!process.env.OPENAI_API_KEY, hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
   if (!hasOpenAI && !hasAnthropic) return res.json({ ok: false });
   const cp = req.user.name || "la cheffe de projet";
@@ -1054,8 +1055,10 @@ app.post("/api/contact/message", auth, async (req, res) => {
     "RÈGLE D'OR ABSOLUE : ne JAMAIS proposer de budget, tarif ou rémunération en premier. Ne parle pas d'argent du tout : c'est le créateur qui annonce ses tarifs s'il y a lieu.",
     "TON (voix Hyped) : chaleureux, enthousiaste, tutoiement, emojis légers (✨ 🤍 🫶, 2-3 max).",
     "STYLE : jamais de tiret quadratin « — ». 6 à 10 lignes. Réponds UNIQUEMENT par le corps du message, sans objet, sans guillemets, sans commentaire.",
-    lang === "en" ? ("LANGUE : écris le message ENTIÈREMENT en anglais (salutation « Hi " + (prenom || "[first name]") + ", »).") : "LANGUE : français.",
-    "PRÉNOM : " + (prenom ? ("adresse-toi à « " + prenom + " »") : "prénom inconnu : écris [prénom] à la place, la CP le remplacera") + ".",
+    lang === "en" ? "LANGUE : écris le message ENTIÈREMENT en anglais."
+      : lang === "fr" ? "LANGUE : français."
+      : "LANGUE : déduis-la de la MARQUE : si son histoire ou les consignes montrent une marque / audience anglophone (marché UK ou US, communication en anglais), écris TOUT le message en anglais ; sinon en français.",
+    "PRÉNOM : " + (prenom ? ("adresse-toi à « " + prenom + " »") : "prénom INCONNU : salutation SANS prénom (« Hello ! J'espère que tu vas bien » / « Hi! Hope you're doing well »). N'écris JAMAIS [prénom] ni aucun crochet : le message doit partir tel quel") + ".",
     "N'invente AUCUN fait précis sur le créateur (pas de stats, de vidéo ou de post inventés).",
   ].join("\n");
   const info = brandInfoFor(brand) || "";
