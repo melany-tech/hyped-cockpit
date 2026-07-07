@@ -988,17 +988,17 @@ app.post("/api/brand/:name", auth, (req, res) => {
     }
     delete rec.interlocuteur;
   };
+  const cleanIt = (it) => ({ at: Date.now(), by: req.user.name, nom: String(it.nom || "").slice(0, 120), email: String(it.email || "").slice(0, 200), tel: String(it.tel || "").slice(0, 40), role: String(it.role || "").slice(0, 120) });
   if (body.interlocuteur !== undefined) { // ancien format (compat) : on ajoute à la liste
-    const it = body.interlocuteur || {};
     migrateIts();
-    rec.interlocuteurs = rec.interlocuteurs.concat([{ at: Date.now(), by: req.user.name, nom: String(it.nom || "").slice(0, 120), email: String(it.email || "").slice(0, 200), role: String(it.role || "").slice(0, 120) }]).slice(-20);
+    rec.interlocuteurs = rec.interlocuteurs.concat([cleanIt(body.interlocuteur || {})]).slice(-20);
     changes.push("interlocuteur");
   }
   if (body.addInterlocuteur) { // interlocuteurs côté marque : toutes les CP, plusieurs possibles
     const it = body.addInterlocuteur || {};
     if (!String(it.nom || "").trim() && !String(it.email || "").trim()) return res.status(400).json({ error: "il faut au moins un nom ou un email" });
     migrateIts();
-    rec.interlocuteurs = rec.interlocuteurs.concat([{ at: Date.now(), by: req.user.name, nom: String(it.nom || "").slice(0, 120), email: String(it.email || "").slice(0, 200), role: String(it.role || "").slice(0, 120) }]).slice(-20);
+    rec.interlocuteurs = rec.interlocuteurs.concat([cleanIt(it)]).slice(-20);
     changes.push("interlocuteur");
   }
   if (body.deleteInterlocuteurAt) { // suppression d'un interlocuteur : responsable uniquement
