@@ -263,6 +263,12 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .todomsg{white-space:nowrap;margin-left:8px}
 .fitrow{padding:2px 0}
 .fdelit{color:#C2553B;font-size:12px;margin-left:6px}
+.cpthreadbox{max-height:340px;overflow:auto;margin:6px 0;border:1px solid #EFEBE0;border-radius:10px;padding:6px 8px;background:#fff}
+.thmsg{margin:6px 0;padding:8px 10px;border-radius:10px;font-size:12.5px}
+.thmsg.us{background:#EAF4F3}
+.thmsg.ext{background:#F7F5EE}
+.thwho{font-weight:700;font-size:11px;color:#56666D;margin-bottom:2px;text-transform:uppercase;letter-spacing:.04em}
+.thbody{white-space:pre-line;color:#2A3439}
 .cpq{font-size:13.5px;margin:8px 0;font-weight:600}
 .cplab{font-size:12px;color:#56666D;margin-bottom:6px}
 .cprep{white-space:pre-wrap;font-size:13px;background:var(--soft);border-radius:10px;padding:10px 12px;margin-bottom:8px}
@@ -1396,8 +1402,9 @@ async function loadCopilotBox(who){
         const mailTag=(p.to&&nlow(p.to)!==nlow(disp))?(' <span class="cpmail">'+esc(p.to)+'</span>'):'';
         const quiTag=(p.creator||p.fromLabel)?(' · <a class="cpqui" data-qui="'+esc(disp)+'">👤 Qui c\'est ?</a>'):'';
         const boxTag=p.cpName?(' · <span class="cptag">boîte '+esc(p.cpName)+'</span>'):'';
-        const head='<div class="cpwho"><b>'+who2+'</b>'+mailTag+br+boxTag+(p.categorie==='interne'?' · <span class="cptag">interne</span>':'')+quiTag+'</div>'
-          +(p.subject?('<div class="cpsubj">'+esc(p.subject)+'</div>'):'');
+        const head='<div class="cpwho"><b>'+who2+'</b>'+mailTag+br+boxTag+(p.categorie==='interne'?' · <span class="cptag">interne</span>':'')+quiTag+' · <a class="cpqui cpthread" data-id="'+esc(p.id)+'">📖 Voir le fil</a></div>'
+          +(p.subject?('<div class="cpsubj">'+esc(p.subject)+'</div>'):'')
+          +'<div class="cpthreadbox" style="display:none"></div>';
         if(p.categorie==='decision'&&p.status==='pending'){
           return '<div class="cpcard">'+head+'<div class="cpq">'+esc(p.question||p.resume||'')+'</div>'
             +'<div class="cpbtns"><button class="lk" data-id="'+p.id+'" data-cpact="accept">✅ Oui</button><button class="lk" data-id="'+p.id+'" data-cpact="refuse">❌ Non</button><button class="lk" data-id="'+p.id+'" data-cpact="directive">💬 Je te dis quoi répondre</button><button class="lk" data-id="'+p.id+'" data-cpact="self">✍️ Je gère moi-même</button><button class="lk" data-id="'+p.id+'" data-cpact="seen">👁️ Vu, rien à répondre</button></div></div>';
@@ -1408,7 +1415,18 @@ async function loadCopilotBox(who){
           +'<div class="cpbtns">'+(p.reply?('<button class="lk" data-id="'+p.id+'" data-cpact="send">📤 Envoyer</button>'):'')+'<button class="lk" data-id="'+p.id+'" data-cpact="self">✍️ Je gère moi-même</button><button class="lk" data-id="'+p.id+'" data-cpact="seen">👁️ Vu, rien à répondre</button></div></div>';
       }).join('');
     show(box,true);
-    box.querySelectorAll('a.cpqui').forEach(a=>a.onclick=()=>quiEstCe(a.dataset.qui));
+    box.querySelectorAll('a.cpqui:not(.cpthread)').forEach(a=>a.onclick=()=>quiEstCe(a.dataset.qui));
+    // 📖 Le fil complet de la conversation, sans repasser par Gmail
+    box.querySelectorAll('a.cpthread').forEach(a=>a.onclick=async()=>{
+      const card=a.closest('.cpcard'); const bx=card&&card.querySelector('.cpthreadbox'); if(!bx)return;
+      if(bx.style.display!=='none'){ bx.style.display='none'; a.textContent='📖 Voir le fil'; return; }
+      bx.style.display=''; bx.innerHTML='<div class="state2" style="padding:8px">Chargement du fil…</div>'; a.textContent='📖 Masquer le fil';
+      try{
+        const r=await api('/api/copilot/thread?id='+encodeURIComponent(a.dataset.id));
+        const d=await r.json().catch(()=>({}));
+        bx.innerHTML=(d&&d.ok&&d.transcript)?renderTranscript(d.transcript):'<div class="state2" style="padding:8px">Fil indisponible (boîte déconnectée ?).</div>';
+      }catch(e){ bx.innerHTML='<div class="state2" style="padding:8px">Fil indisponible.</div>'; }
+    });
     box.querySelectorAll('button[data-cpact]').forEach(b=>b.onclick=async()=>{
       let text;
       if(b.dataset.cpact==='directive'){ text=prompt('Écris ta réponse avec tes mots, j\'en fais un mail propre que tu reliras avant envoi.\nEx. « propose 500 € pour 1 Reel + 2 stories », « demande-lui sa tranche de prix » :'); if(!text||!text.trim())return; }
@@ -1420,6 +1438,17 @@ async function loadCopilotBox(who){
     });
     decorateMailRows(ps,who);
   }catch(e){show(box,false);}
+}
+// Rendu lisible du fil de conversation (agence à droite du ton, créateur en sable)
+function renderTranscript(t){
+  t=String(t||'').replace(/^\(…début du fil coupé…\)\s*/,'');
+  return t.split('\n\n---\n\n').map(seg=>{
+    seg=seg.trim(); if(!seg)return '';
+    let who='?',cls='ext',body=seg,last=false;
+    const m=seg.match(/^(DERNIER MESSAGE[^·]*·\s*)?(NOUS \(agence ·([^)]*)\)|CRÉATEUR)\s*:\s*([\s\S]*)$/);
+    if(m){ last=!!m[1]; if(m[2].indexOf('NOUS')===0){ who=(m[3]||'agence').trim()||'agence'; cls='us'; } else who='Créateur'; body=m[4]; }
+    return '<div class="thmsg '+cls+'"><div class="thwho">'+esc(who)+(last?' · dernier message':'')+'</div><div class="thbody">'+esc(body.slice(0,1500))+(body.length>1500?'…':'')+'</div></div>';
+  }).join('')||'<div class="state2" style="padding:8px">Fil vide.</div>';
 }
 // « Qui c'est ? » : ouvre la page Contacts avec la recherche préremplie sur l'expéditeur.
 // Si le nom complet ne matche rien, on retente avec le prénom seul (les calendriers n'ont

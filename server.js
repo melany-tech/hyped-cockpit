@@ -1555,6 +1555,20 @@ app.get("/api/copilot/box", auth, (req, res) => {
     .map((p) => ({ id: p.id, cpName: p.cpName, threadId: p.threadId, creator: p.creator, fromLabel: p.fromLabel || "", to: p.to || "", brand: p.brand, subject: p.subject, categorie: p.categorie, resume: p.resume, question: p.question, reply: p.reply, status: p.status, decision: p.decision, at: p.at }));
   res.json({ enabled: true, proposals: list });
 });
+// Le fil complet d'une proposition : Rozenn n'a plus à retourner dans Gmail pour
+// retrouver le contexte avant de décider.
+app.get("/api/copilot/thread", auth, async (req, res) => {
+  if (!COPILOT.enabled) return res.status(400).json({ error: "copilote désactivé" });
+  const store = loadCopilot();
+  const p = (store.proposals || []).find((x) => x.id === String(req.query.id || ""));
+  if (!p) return res.status(404).json({ error: "proposition introuvable" });
+  if (p.cpEmail !== req.user.email && req.user.role !== "supervisor") return res.status(403).json({ error: "pas ta boîte" });
+  try {
+    const full = await gm.fetchThreadText(p.cpEmail, p.threadId);
+    if (!full || !full.ok) return res.json({ ok: false });
+    res.json({ ok: true, transcript: full.transcript || full.text || "" });
+  } catch (e) { res.json({ ok: false }); }
+});
 app.post("/api/copilot/act", auth, async (req, res) => {
   if (!COPILOT.enabled) return res.status(400).json({ error: "copilote désactivé" });
   const { id, action, text } = req.body || {};
