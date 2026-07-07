@@ -2032,7 +2032,7 @@ function renderSourcing(profils){
   const opts=BRANDS.map(b=>`<option value="${b}">${b}</option>`).join('');
   const cpopts='<option value="">CP : à attribuer</option>'+(TEAM||[]).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
   const cpsel=isSup?('<select id="srccp" title="Chef de projet à allouer">'+cpopts+'</select>'):'';
-  const add='<div class="srcadd"><input id="srcprofil" placeholder="@profil ou lien"><select id="srcmarque">'+opts+'</select>'+cpsel+'<button class="lk" id="srcbtn">+ Ajouter</button><button class="lk" id="srcimport" title="Importer une shortlist de la marque (Excel ou CSV)">📥 Importer</button><input type="file" id="srcfile" accept=".xlsx,.xls,.csv" style="display:none"></div><div id="srcimppanel"></div>';
+  const add='<div class="srcadd"><input id="srcprofil" placeholder="@profil ou lien"><select id="srcmarque">'+opts+'</select>'+cpsel+'<button class="lk" id="srcbtn">+ Ajouter</button><button class="lk" id="srcimport" title="Importer une shortlist de la marque (Excel ou CSV)">📥 Importer</button><a class="lk" href="/modele-shortlist.xlsx" title="Le modèle Excel à envoyer aux marques : leurs shortlists rentreront parfaitement dans l\'import">📄 Modèle marque</a><input type="file" id="srcfile" accept=".xlsx,.xls,.csv" style="display:none"></div><div id="srcimppanel"></div>';
   let rows;
   if(!profils.length) rows='<div class="state" style="padding:14px">Aucun profil à contacter, ajoute-en un, ou ils arriveront via la veille. 🔎</div>';
   else rows=profils.map(p=>{
@@ -2080,6 +2080,7 @@ async function handleImportFile(){
   }
   if(!best){ panel.innerHTML='<div class="state2" style="padding:10px">Aucune colonne « Profil » trouvée dans ce fichier.</div>'; return; }
   const iMail=best.hdr.findIndex(h=>/mail|email/.test(h));
+  const iLien=best.hdr.findIndex(h=>/lien|url/.test(h));
   const iDecs=best.hdr.map((h,ix)=>/decision|statut|valid/.test(h)?ix:-1).filter(x=>x>=0);
   const iComs=best.hdr.map((h,ix)=>/comment|motif|note|remarq|package|budget/.test(h)?ix:-1).filter(x=>x>=0);
   const existing=new Set((SRC_PROFILS||[]).map(p=>nlow(infName(p.task))));
@@ -2091,7 +2092,8 @@ async function handleImportFile(){
     const mail=iMail>=0?String(row[iMail]||'').trim():'';
     const com=iComs.map(ix=>String(row[ix]||'').trim()).filter(Boolean).join(' · ');
     const commentaire=[com,mail?((mail.includes('@')?'Email : ':'Contact : ')+mail):''].filter(Boolean).join(' · ').slice(0,900);
-    items.push({prof,commentaire,valid,refused,dup:existing.has(nlow(prof))});
+    const lien=iLien>=0?String(row[iLien]||'').trim():'';
+    items.push({prof,commentaire,valid,refused,lien:(/^https?:\/\//i.test(lien)?lien:''),dup:existing.has(nlow(prof))});
   }
   if(!items.length){ panel.innerHTML='<div class="state2" style="padding:10px">Aucun profil lisible dans ce fichier.</div>'; return; }
   IMP_ITEMS=items;
@@ -2112,7 +2114,7 @@ async function handleImportFile(){
     const go=$('impgo'); go.disabled=true; let done=0;
     for(const it of sel){
       go.textContent='Import… '+(done+1)+'/'+sel.length;
-      try{ const r=await api('/api/sourcing',{method:'POST',body:JSON.stringify({profil:it.prof,marque,responsable:cp,commentaire:it.commentaire,noDraft:true})}); if(r.ok)done++; }catch(e){}
+      try{ const r=await api('/api/sourcing',{method:'POST',body:JSON.stringify({profil:it.prof,marque,responsable:cp,commentaire:it.commentaire,lien:it.lien||undefined,noDraft:true})}); if(r.ok)done++; }catch(e){}
     }
     panel.innerHTML='<div class="state2" style="padding:10px">✅ '+done+'/'+sel.length+' profils importés pour '+esc(marque)+', assignés à '+esc(cp)+'. Ils sont dans « Profils à contacter » avec les commentaires de la marque.</div>';
     fi.value=''; loadSourcing();

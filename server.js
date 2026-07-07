@@ -1994,5 +1994,7 @@ setInterval(ensureStatsTasks, 6 * 3600 * 1000);
 
 // Guide CP (PDF) accessible depuis le cockpit
 app.get(["/guide", "/guide.pdf"], (req, res) => res.sendFile(path.join(__dirname, "guide.pdf")));
+// Modèle de shortlist à envoyer aux marques : leurs fichiers rentrent alors parfaitement dans l'import
+app.get("/modele-shortlist.xlsx", (req, res) => res.download(path.join(__dirname, "modele_shortlist.xlsx"), "Shortlist profils - modele Hyped Agency.xlsx"));
 app.get("*", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.listen(PORT, () => console.log(`Cockpit ${DEMO ? "(DÉMO)" : "(Notion live, clients actifs)"} → http://localhost:${PORT}`));
