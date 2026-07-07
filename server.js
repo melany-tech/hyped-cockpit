@@ -1589,32 +1589,27 @@ app.post("/api/copilot/act", auth, async (req, res) => {
 // la variable d'env ONBOARDING_USERS (adresses séparées par des virgules).
 const ONBOARDING_STORE = path.join(DATA_DIR, "onboarding.json");
 const ONBOARDING_USERS = String(process.env.ONBOARDING_USERS || "prunelle@hyped-agency.fr").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+// Jour 2 de Prunelle : le parcours du jour 1 est terminé, on ne garde que l'essentiel.
 const ONBOARDING_STEPS = [
-  { id: "guide", group: "1 · Je m'installe ☕", label: "Lire le Guide CP : l'agence, ses valeurs, la voix Hyped", link: "/guide", hint: "20 minutes : comment on parle aux créatrices, le process de A à Z, les dix onglets du cockpit" },
-  { id: "slack", group: "1 · Je m'installe ☕", label: "Activer mon compte Slack et me présenter à l'équipe", hint: "c'est là qu'arrivent les notifications du copilote" },
-  { id: "gmail", group: "1 · Je m'installe ☕", label: "Connecter mon Gmail au cockpit", hint: "onglet Messages → « Connecter mon Gmail » (se coche tout seul une fois fait)" },
-  { id: "wabiz", group: "1 · Je m'installe ☕", label: "Installer WhatsApp Business", hint: "sur ton téléphone pro, avec ta nouvelle eSIM : c'est là que vivent les échanges clients" },
-  { id: "whatsapp", group: "1 · Je m'installe ☕", label: "Être ajoutée aux groupes WhatsApp clients", hint: "demande à Mélany ou Rozenn de t'ajouter, puis présente-toi en deux lignes" },
-  { id: "authent", group: "1 · Je m'installe ☕", label: "Télécharger Google Authenticator", hint: "sur ton téléphone : c'est l'appli de double authentification, indispensable pour se connecter à Kolsquare" },
-  { id: "outils", group: "1 · Je m'installe ☕", label: "Récupérer mes accès outils : Kolsquare (+ Authenticator), Yousign, Drive", hint: "c'est Mélany qui gère les accès. Kolsquare = veille et reporting, Yousign = contrats, Drive = contenus et contrats" },
-  { id: "plaquettes", group: "2 · Je comprends l'agence 📖", label: "Relire les plaquettes de l'agence", hint: "ce qu'on vend aux marques et comment on le présente, demande-les sur Slack si tu ne les as pas" },
-  { id: "process", group: "2 · Je comprends l'agence 📖", label: "Lire les Fiches de Process influence (la passation)", link: "/process", hint: "12 fiches étape par étape : veille Kolsquare, prise de contact, négo, gifting, contrats Yousign, reporting, facturation" },
-  { id: "story", group: "2 · Je comprends l'agence 📖", label: "Lire un storytelling de marque (GLASH Paris)", link: "/story", hint: "un vrai exemple récent, pour comprendre la méthode Hyped de A à Z" },
-  { id: "marques", group: "2 · Je comprends l'agence 📖", label: "Découvrir les fiches marques", hint: "onglet Marques : histoire de chaque marque, consignes pour l'IA, points de vigilance" },
-  { id: "camp", group: "2 · Je comprends l'agence 📖", label: "Regarder les campagnes en cours", hint: "onglet Campagnes : qui fait quoi en ce moment, marque par marque, et où en sont les calendriers" },
-  { id: "kolsquare", group: "3 · Je me lance 🚀", label: "Faire un tour sur Kolsquare", hint: "recherche, filtres, fiches créateurs : ton outil de veille, tu t'en sers direct pour tes 15 profils par marque" },
-  { id: "fils", group: "3 · Je me lance 🚀", label: "Lire quelques anciens échanges avec des créatrices", hint: "dans ta boîte ou l'onglet Messages : imprègne-toi du ton, des relances, des négociations" },
-  { id: "todo", group: "3 · Je me lance 🚀", label: "Parcourir ma to-do (mes créatrices à contacter)", hint: "onglet To-do, tes premières tâches t'y attendent" },
-  { id: "casting", group: "3 · Je me lance 🚀", label: "Faire valider ma première sélection de profils par Mélany", hint: "règle de départ : le casting se valide ensemble AVANT toute prise de contact. Ensuite tu voleras de tes propres ailes" },
-  { id: "contact", group: "3 · Je me lance 🚀", label: "Envoyer mon premier message à une créatrice", hint: "la voix Hyped est dans le guide. Règles d'or : ne propose jamais de budget en premier, et ne valide jamais un tarif seule 🫶" },
-  { id: "debrief", group: "3 · Je me lance 🚀", label: "Débrief de fin de journée avec Mélany et Rozenn", hint: "questions, impressions, ce qui reste flou : rien n'est bête ✨" },
+  { id: "casting", group: "Jour 2 🚀", label: "Faire valider ma première sélection de profils par Mélany", hint: "règle de départ : le casting se valide ensemble AVANT toute prise de contact. Ensuite tu voleras de tes propres ailes" },
+  { id: "debrief", group: "Jour 2 🚀", label: "Débrief de fin de journée avec Mélany", hint: "questions, impressions, ce qui reste flou : rien n'est bête ✨" },
 ];
 // Encart « Matériel » (QR eSIM, codes wifi…) : ajouté par une superviseure depuis le cockpit,
 // stocké sur le DISQUE PERSISTANT (jamais dans le dépôt public !), servi uniquement à la
 // personne concernée (ou aux superviseures) une fois connectée.
 const ONB_FILES = path.join(DATA_DIR, "onb_files");
 try { fs.mkdirSync(ONB_FILES, { recursive: true }); } catch (e) {}
-function loadOnb() { try { return JSON.parse(fs.readFileSync(ONBOARDING_STORE, "utf8")); } catch (e) { return {}; } }
+function loadOnb() {
+  let store; try { store = JSON.parse(fs.readFileSync(ONBOARDING_STORE, "utf8")); } catch (e) { return {}; }
+  // One-shot jour 2 (8 juillet) : l'eSIM est installée, on retire l'encart, et on décoche
+  // casting/debrief (cochés au jour 1) pour repartir sur le parcours réduit du jour 2.
+  if (!store._j2) {
+    try { delete (store._attach || {})["prunelle@hyped-agency.fr"]; } catch (e) {}
+    if (store["prunelle@hyped-agency.fr"]) { delete store["prunelle@hyped-agency.fr"].casting; delete store["prunelle@hyped-agency.fr"].debrief; }
+    store._j2 = 1; saveOnb(store);
+  }
+  return store;
+}
 function saveOnb(o) { try { fs.writeFileSync(ONBOARDING_STORE, JSON.stringify(o)); } catch (e) { try { console.error("[onboarding] écriture échouée :", e.message); } catch (e2) {} } }
 function onbFor(email) {
   const done = loadOnb()[email] || {};
