@@ -258,6 +258,9 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .onbattach input.onb-f{margin:8px 0;font-size:12px}
 .onbattach .onb-d{color:#C2553B;margin-left:8px}
 .cpqui{cursor:pointer;color:#2C9087;font-size:12px;font-weight:600;text-decoration:underline;white-space:nowrap}
+.mqadmin{display:flex;flex-direction:column;gap:8px;padding:12px 10px;border-top:1px solid #EFEBE0;margin-top:8px}
+.mqadmin .mqdel{color:#C2553B}
+.todomsg{white-space:nowrap;margin-left:8px}
 .cpq{font-size:13.5px;margin:8px 0;font-weight:600}
 .cplab{font-size:12px;color:#56666D;margin-bottom:6px}
 .cprep{white-space:pre-wrap;font-size:13px;background:var(--soft);border-radius:10px;padding:10px 12px;margin-bottom:8px}
@@ -736,6 +739,7 @@ function brandUnion(){
   (ROWS||[]).forEach(r=>r.brand&&set.add(r.brand));
   (ALERTS||[]).forEach(a=>a.brand&&set.add(a.brand));
   (SRC_PROFILS||[]).forEach(p=>p.projet&&set.add(p.projet));
+  if(FICHES&&FICHES.brands)Object.keys(FICHES.brands).forEach(b=>b&&set.add(b)); // marques créées à la main (fiche seule)
   return [...set].filter(Boolean).sort();
 }
 function renderCampagnes(){
@@ -764,8 +768,9 @@ function renderContacts(){
   const list=Object.values(map).sort((a,b)=>(a.brand+a.name).localeCompare(b.brand+b.name));
   if(!list.length){$('contactsbox').innerHTML='<div class="state">Aucun contact pour le moment.</div>';return;}
   const stcol={'À contacter':'#C77F2A','Le contenu est planifié':'#C77F2A','En production':'#7A5AA8','Contenu validé':'#C2553B'};
-  $('contactsbox').innerHTML='<div class="ctcount">'+list.length+' créateur'+(list.length>1?'s':'')+' suivis</div><div class="ctsearch"><input id="ctsearchinput" placeholder="🔍 Rechercher un créateur, une marque, une CP…"></div><div id="ctlist">'+list.map(c=>`<div class="row ctrow"><span class="rdot" style="background:${stcol[c.statut]||'#888'}"></span><div class="info"><div class="t">${esc(c.name)}</div><div class="s">${esc(c.statut)}</div></div><span class="brand">${esc(c.brand)}</span><span class="owner">${esc(c.cp)}</span></div>`).join('')+'</div>';
+  $('contactsbox').innerHTML='<div class="ctcount">'+list.length+' créateur'+(list.length>1?'s':'')+' suivis</div><div class="ctsearch"><input id="ctsearchinput" placeholder="🔍 Rechercher un créateur, une marque, une CP…"></div><div id="ctlist">'+list.map(c=>`<div class="row ctrow" data-inf="${esc(infOf(c.name))}" data-brand="${esc(c.brand==='-'?'':c.brand)}" data-cp="${esc(c.cp==='-'?'':c.cp)}"><span class="rdot" style="background:${stcol[c.statut]||'#888'}"></span><div class="info"><div class="t">${esc(c.name)}</div><div class="s">${esc(c.statut)}</div></div>${c.statut==='À contacter'?'<button class="lk ctmsg">✉️ Contacter</button>':''}<span class="brand">${esc(c.brand)}</span><span class="owner">${esc(c.cp)}</span></div>`).join('')+'</div>';
   const si=$('ctsearchinput'); if(si) si.oninput=()=>{const q=si.value.toLowerCase();document.querySelectorAll('#ctlist .ctrow').forEach(r=>{r.style.display=(!q||r.textContent.toLowerCase().includes(q))?'':'none';});};
+  document.querySelectorAll('#ctlist .ctmsg').forEach(b=>b.onclick=(ev)=>{ev.stopPropagation();const row=b.closest('.ctrow');openCompose(row,{inf:row.dataset.inf,brand:row.dataset.brand,cp:row.dataset.cp||(VIEWER&&VIEWER.name)||''});});
 }
 function renderRapports(){
   const brands=((OVERVIEW&&OVERVIEW.brands)||[]);
@@ -1204,6 +1209,7 @@ async function renderTodo(){
     ts.forEach(t=>{const k=t.projet||'Sans marque';(by[k]=by[k]||[]).push(t);});
     h+=Object.keys(by).sort().map(b=>'<div class="todobrand"><div class="todobt">🏷️ '+esc(b)+' <span class="todocount">'+by[b].length+'</span></div>'
       +by[b].map(t=>'<label class="todoitem"><input type="checkbox" data-tid="'+esc(t.id)+'"><span class="todotxt">'+esc(t.task)+'</span>'
+        +(/^contacter\s/i.test(t.task)?('<button class="lk todomsg" data-inf="'+esc(infOf(t.task))+'" data-brand="'+esc(t.projet||'')+'">✉️ Contacter</button>'):'')
         +(t.type?('<span class="todotag">'+esc(t.type)+'</span>'):'')
         +(t.echeance?('<span class="tododue">'+esc(t.echeance)+'</span>'):'')
         +(VIEWER&&VIEWER.role==='supervisor'&&t.responsable?('<span class="todowho">'+esc(t.responsable)+'</span>'):'')
@@ -1213,6 +1219,8 @@ async function renderTodo(){
 }
 function wireTodo(w){
   const sel=w.querySelector('#todoqui'); if(sel){sel.onchange=()=>{TODO_QUI=sel.value;try{localStorage.setItem('hc_todoqui',TODO_QUI);}catch(e){};renderTodo();};}
+  // « contacter X » : bouton ✉️ qui ouvre le compositeur IA (sans cocher la case)
+  w.querySelectorAll('.todomsg').forEach(b=>b.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();openCompose(b.closest('.todoitem'),{inf:b.dataset.inf,brand:b.dataset.brand,cp:(VIEWER&&VIEWER.name)||''});});
   w.querySelectorAll('input[data-tid]').forEach(cb=>{cb.onchange=async()=>{
     cb.disabled=true; const row=cb.closest('.todoitem'); if(row)row.classList.add('done');
     const r=await api('/api/todo/check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:cb.dataset.tid,done:cb.checked})});
@@ -1222,12 +1230,34 @@ function wireTodo(w){
 }
 function renderMarques(){
   const list=$('mqlist'), det=$('mqdetail'); if(!list||!det)return;
+  if(!FICHES) getFiches().then(()=>renderMarques()); // pour lister aussi les marques créées à la main
   const brands=brandUnion();
-  if(!brands.length){ list.innerHTML=''; det.innerHTML='<div class="state">Aucune marque pour le moment.</div>'; return; }
+  const isSup=VIEWER&&VIEWER.role==='supervisor';
+  const admin=isSup?('<div class="mqadmin"><button class="lk" id="mqadd">＋ Ajouter une marque</button>'+(brands.length?'<button class="lk mqdel" id="mqdel">🗑 Supprimer la fiche sélectionnée</button>':'')+'</div>'):'';
+  if(!brands.length){ list.innerHTML=admin; det.innerHTML='<div class="state">Aucune marque pour le moment.</div>'; wireMqAdmin(); return; }
   if(!MQ_SELECTED||!brands.includes(MQ_SELECTED)) MQ_SELECTED=brands[0];
-  list.innerHTML=brands.map(b=>`<button class="mqitem${b===MQ_SELECTED?' on':''}" data-b="${esc(b)}"><span class="bav">${esc(brandIni(b))}</span><span class="mqn">${esc(b)}</span></button>`).join('');
+  list.innerHTML=brands.map(b=>`<button class="mqitem${b===MQ_SELECTED?' on':''}" data-b="${esc(b)}"><span class="bav">${esc(brandIni(b))}</span><span class="mqn">${esc(b)}</span></button>`).join('')+admin;
   list.querySelectorAll('.mqitem').forEach(x=>x.onclick=()=>{ MQ_SELECTED=x.dataset.b; renderMarques(); });
+  wireMqAdmin();
   renderBrandDetail(MQ_SELECTED,det);
+}
+// Ajout / suppression de marque : réservé aux superviseures (le serveur vérifie aussi)
+function wireMqAdmin(){
+  const ab=$('mqadd'); if(ab)ab.onclick=async()=>{
+    const n=prompt('Nom de la nouvelle marque :'); if(!n||!n.trim())return;
+    const r=await api('/api/brand/'+encodeURIComponent(n.trim()),{method:'POST',body:JSON.stringify({create:true})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){alert(d.error||'Erreur');return;}
+    await getFiches(true); MQ_SELECTED=n.trim(); renderMarques();
+  };
+  const db=$('mqdel'); if(db)db.onclick=async()=>{
+    if(!MQ_SELECTED)return;
+    if(!confirm('Supprimer la fiche de « '+MQ_SELECTED+' » (histoire, consignes IA, notes, liens, documents) ?\n\nSi la marque a encore un calendrier Notion actif, elle restera listée, mais avec une fiche vide.'))return;
+    const r=await api('/api/brand/'+encodeURIComponent(MQ_SELECTED),{method:'POST',body:JSON.stringify({remove:true})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){alert(d.error||'Erreur');return;}
+    await getFiches(true); MQ_SELECTED=null; renderMarques();
+  };
 }
 async function loadDrafts(){
   try{
@@ -1748,14 +1778,16 @@ function renderTodo(tasks, showOwner, addFor){
     const prio=(t.priorite==='Haute'||isLate||due);
     const chip=prio?'<span class="tchip prioc">Priorité</span>':'<span class="tchip todoc">À faire</span>';
     const own=(showOwner&&t.responsable)?`<span class="owner">${esc(t.responsable)}</span>`:'';
+    const msg=/^contacter\s/i.test(t.task)?`<button class="lk todomsg" data-inf="${esc(infOf(t.task))}" data-brand="${esc(t.projet||'')}">✉️ Contacter</button>`:'';
     return `<div class="todo" data-id="${t.id}"><button class="tcheck" title="Cliquer = terminé ✓"></button>
-      <div class="info"><div class="t"><span class="ti-emoji">${taskIcon(t)}</span>${linkify(t.task)}</div><div class="s" style="${isLate?'color:#C2553B':''}">${meta.join(' · ')||'-'}</div></div>${own}${chip}</div>`;
+      <div class="info"><div class="t"><span class="ti-emoji">${taskIcon(t)}</span>${linkify(t.task)}</div><div class="s" style="${isLate?'color:#C2553B':''}">${meta.join(' · ')||'-'}</div></div>${msg}${own}${chip}</div>`;
   }).join('');
   $('todobox').innerHTML=add+rows;
   NOTIF.late=late; NOTIF.lateItems=lateItems; updateBell();
   $('todobtn').onclick=addTask;
   $('todoinput').onkeydown=(e)=>{if(e.key==='Enter')addTask();};
   document.querySelectorAll('#todobox .tcheck').forEach(b=>b.onclick=()=>doneTask(b));
+  document.querySelectorAll('#todobox .todomsg').forEach(b=>b.onclick=(ev)=>{ev.stopPropagation();openCompose(b.closest('.todo'),{inf:b.dataset.inf,brand:b.dataset.brand,cp:(VIEWER&&VIEWER.name)||''});});
 }
 async function addTask(){
   const v=$('todoinput').value.trim(); if(!v)return;
@@ -1802,27 +1834,43 @@ function genMessage(brand,inf,cp,disp,lang){
   if(lang==='en') return `Hi ${who} ✨\n\nI'm ${cp} from Hyped Agency, and we're currently working with ${brand}.\n\n${b.en}\n\nI'm reaching out because we really love your content, we find it so qualitative and a great fit with the brand's universe. ✨\n\nWe'd love to send you ${b.produits} and explore a partnership around ${disp}.\n\nWould you be open to discovering the products and featuring them on your socials with ${brand}? If so, feel free to send me your full name, postal address and phone number so I can add you to our shipment.\n\nLooking forward to hearing from you,\n${cp}`;
   return `Hello ${who} ✨\n\nJe suis ${cp}, cheffe de projet chez Hyped Agency, et je représente la marque ${brand}.\n\n${b.fr}\n\nJe te contacte car nous aimons beaucoup ton contenu, que nous trouvons très qualitatif et en parfaite adéquation avec l'univers de la marque. ✨\n\nL'idée serait de te faire découvrir ${b.produits} et de mettre en avant ${disp} dans le cadre d'un partenariat avec ${brand}.\n\nSerais-tu partante ? Je reste bien sûr disponible pour la moindre question et serais ravie d'échanger avec toi. 🤍\n\nAu plaisir de te lire,\n${cp}`;
 }
+// Extrait le prénom d'une tâche « contacter X » ou d'un nom de profil
+function infOf(raw){
+  raw=String(raw||'').replace(/^contacter\s+/i,'').trim();
+  if(!raw||/^https?:\/\//i.test(raw))return '[prénom]';
+  return raw.replace(/^@/,'').split(/[ \/(]/)[0]||'[prénom]';
+}
 function openMessage(btn){
-  const row=btn.closest('.row'); const id=row.dataset.id;
+  const row=btn.closest('.row');
+  const p=SRC_PROFILS.find(x=>x.id===row.dataset.id)||{};
+  openCompose(row,{inf:infOf(p.task),brand:p.projet||'',cp:p.responsable||(VIEWER&&VIEWER.name)||''});
+}
+// Panneau de composition partagé (veille, page Contacts, to-do) : le message de
+// premier contact est RÉDIGÉ PAR L'IA (fiche marque + trame du process), avec le
+// modèle statique en secours si l'IA est indisponible.
+function openCompose(row,o){
   const nx=row.nextElementSibling;
   if(nx&&nx.classList.contains('msgpanel')){nx.remove();return;}
-  const p=SRC_PROFILS.find(x=>x.id===id)||{};
-  let raw=String(p.task||'').replace(/^contacter\s+/i,'').trim();
-  let inf;
-  if(!raw || /^https?:\/\//i.test(raw)) inf='[prénom]';        // lien ou vide -> placeholder
-  else { inf=raw.replace(/^@/,'').split(/[ \/(]/)[0]; if(!inf) inf='[prénom]'; }
-  const cp=p.responsable||(VIEWER&&VIEWER.name)||'';
-  const brand=p.projet||'';
+  const inf=o.inf||'[prénom]', cp=o.cp||(VIEWER&&VIEWER.name)||'', brand=o.brand||'';
   const panel=document.createElement('div'); panel.className='msgpanel';
-  panel.innerHTML='<div class="msgbar"><span class="seg"><button data-l="fr" class="on">FR</button><button data-l="en">EN</button></span><input class="msgdisp" value="1 Reel + 1 set de stories"></div><input class="msgto" type="email" placeholder="Email du destinataire (requis pour envoyer)"><div class="cctoggle"><button type="button" class="lk cclink">＋ Ajouter Cc / Cci</button></div><input class="msgcc" type="text" placeholder="Cc : visible par tous, séparez par une virgule" style="display:none"><input class="msgbcc" type="text" placeholder="Cci : copie cachée, séparez par une virgule" style="display:none"><textarea class="msgtxt" rows="12"></textarea><div class="msgbtns"><button class="lk msgcopy">Copier</button> <button class="lk msgdraft">📧 Brouillon</button> <button class="lk msgsend">✉️ Envoyer</button></div>';
+  panel.innerHTML='<div class="msgbar"><span class="seg"><button data-l="fr" class="on">FR</button><button data-l="en">EN</button></span><input class="msgdisp" value="1 Reel + 1 set de stories"></div><input class="msgto" type="email" placeholder="Email du destinataire (requis pour envoyer)"><div class="cctoggle"><button type="button" class="lk cclink">＋ Ajouter Cc / Cci</button></div><input class="msgcc" type="text" placeholder="Cc : visible par tous, séparez par une virgule" style="display:none"><input class="msgbcc" type="text" placeholder="Cci : copie cachée, séparez par une virgule" style="display:none"><textarea class="msgtxt" rows="12"></textarea><div class="msgbtns"><button class="lk msgregen" title="L\'IA réécrit le message">↻ Regénérer</button> <button class="lk msgcopy">Copier</button> <button class="lk msgdraft">📧 Brouillon</button> <button class="lk msgsend">✉️ Envoyer</button></div>';
   row.after(panel);
   const ccInput=panel.querySelector('.msgcc'), bccInput=panel.querySelector('.msgbcc'); const ccOf=()=>(ccInput.value||'').trim(), bccOf=()=>(bccInput.value||'').trim();
   panel.querySelector('.cclink').onclick=()=>{ ccInput.style.display=''; bccInput.style.display=''; panel.querySelector('.cctoggle').style.display='none'; ccInput.focus(); };
   let lang='fr';
   const ta=panel.querySelector('.msgtxt'), disp=panel.querySelector('.msgdisp');
-  const regen=()=>{ta.value=genMessage(brand,inf,cp,disp.value,lang);};
+  const regen=async()=>{
+    ta.value='✨ L\'IA rédige le message'+(brand?(' ('+brand+')'):'')+'…'; ta.disabled=true;
+    try{
+      const r=await api('/api/contact/message',{method:'POST',body:JSON.stringify({creator:inf,brand,disp:disp.value,lang})});
+      const d=await r.json().catch(()=>({}));
+      ta.value=(d&&d.ok&&d.body)?d.body:genMessage(brand,inf,cp,disp.value,lang);
+    }catch(e){ta.value=genMessage(brand,inf,cp,disp.value,lang);}
+    ta.disabled=false;
+  };
   panel.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{lang=b.dataset.l;panel.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x===b));regen();});
-  disp.oninput=regen;
+  disp.onchange=regen; // à la sortie du champ, pas à chaque frappe (sinon rafale d'appels IA)
+  panel.querySelector('.msgregen').onclick=regen;
   const cpbtn=panel.querySelector('.msgcopy');
   cpbtn.onclick=()=>{ta.select();try{document.execCommand('copy');}catch(e){}cpbtn.textContent='Copié ✓';setTimeout(()=>cpbtn.textContent='Copier',1500);};
   const subjOf=()=>(lang==='en'?'Partnership with ':'Partenariat ')+brand+' - Hyped Agency';

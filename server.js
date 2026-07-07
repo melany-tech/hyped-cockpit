@@ -956,6 +956,21 @@ app.post("/api/brand/:name", auth, (req, res) => {
   const isSup = req.user.role === "supervisor";
   const body = req.body || {};
   const all = loadBrandFiches();
+  if (body.create) { // création d'une fiche de marque : responsable uniquement
+    if (!isSup) return res.status(403).json({ error: "Seule la responsable peut créer une marque" });
+    if (all[name]) return res.status(400).json({ error: "cette marque a déjà une fiche" });
+    all[name] = { createdAt: Date.now(), createdBy: req.user.name };
+    saveBrandFiches(all);
+    logActivity({ type: "fiche", creator: name, cp: req.user.name });
+    return res.json({ ok: true, created: true });
+  }
+  if (body.remove) { // suppression de la fiche : responsable uniquement
+    if (!isSup) return res.status(403).json({ error: "Seule la responsable peut supprimer une fiche" });
+    delete all[name];
+    saveBrandFiches(all);
+    logActivity({ type: "fiche", creator: name + " (fiche supprimée)", cp: req.user.name });
+    return res.json({ ok: true, removed: true });
+  }
   const rec = all[name] || {};
   const changes = [];
   if (body.base) { // socle de la fiche : responsable uniquement
@@ -1019,6 +1034,41 @@ app.post("/api/brand/:name", auth, (req, res) => {
   all[name] = rec; saveBrandFiches(all);
   logActivity({ type: "fiche", creator: name, cp: req.user.name });
   res.json({ ok: true, brand: rec, changes });
+});
+// --- Message de PREMIER contact (veille) rédigé par l'IA ---------------------
+// Fini le modèle à trous « Hello prénom » : l'IA écrit le message d'approche dans
+// la voix Hyped, nourri par la fiche marque (histoire + consignes IA), selon la
+// trame de la fiche 03 du process. Règle d'or : ne JAMAIS parler d'argent en premier.
+app.post("/api/contact/message", auth, async (req, res) => {
+  const creator = String((req.body || {}).creator || "").slice(0, 80);
+  const brand = String((req.body || {}).brand || "").slice(0, 80);
+  const disp = String((req.body || {}).disp || "").slice(0, 200);
+  const lang = String((req.body || {}).lang || "fr") === "en" ? "en" : "fr";
+  const hasOpenAI = !!process.env.OPENAI_API_KEY, hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
+  if (!hasOpenAI && !hasAnthropic) return res.json({ ok: false });
+  const cp = req.user.name || "la cheffe de projet";
+  const prenom = creator && !/^https?:/i.test(creator) && creator !== "[prénom]" ? creator.replace(/^@/, "").split(/[\s|·@\/(_-]+/)[0] : "";
+  const sys = [
+    "Tu es " + cp + ", cheffe de projet influence chez Hyped Agency. Tu écris le PREMIER message de contact à un créateur / une créatrice pour la marque " + (brand || "que nous représentons") + " (personne jamais contactée auparavant).",
+    "TRAME, dans cet ordre, fluide et naturel : salutation avec le prénom · qui tu es (ton prénom, cheffe de projet chez Hyped Agency) · présentation de la marque et de son univers en 2-3 phrases APPUYÉES SUR L'HISTOIRE FOURNIE (bénéfices produits concrets, où la trouver si l'info existe) · compliment sincère sur son contenu et son énergie, en lien avec les valeurs de la marque, SANS inventer de détail précis sur ses posts · proposition : lui envoyer les produits à découvrir et créer " + (disp || "du contenu") + " dans le cadre d'une collaboration · question ouverte pour savoir si ça lui plairait · clôture chaleureuse + ton prénom.",
+    "RÈGLE D'OR ABSOLUE : ne JAMAIS proposer de budget, tarif ou rémunération en premier. Ne parle pas d'argent du tout : c'est le créateur qui annonce ses tarifs s'il y a lieu.",
+    "TON (voix Hyped) : chaleureux, enthousiaste, tutoiement, emojis légers (✨ 🤍 🫶, 2-3 max).",
+    "STYLE : jamais de tiret quadratin « — ». 6 à 10 lignes. Réponds UNIQUEMENT par le corps du message, sans objet, sans guillemets, sans commentaire.",
+    lang === "en" ? ("LANGUE : écris le message ENTIÈREMENT en anglais (salutation « Hi " + (prenom || "[first name]") + ", »).") : "LANGUE : français.",
+    "PRÉNOM : " + (prenom ? ("adresse-toi à « " + prenom + " »") : "prénom inconnu : écris [prénom] à la place, la CP le remplacera") + ".",
+    "N'invente AUCUN fait précis sur le créateur (pas de stats, de vidéo ou de post inventés).",
+  ].join("\n");
+  const info = brandInfoFor(brand) || "";
+  const notes = brandNotesFor(brand) || "";
+  const ctx = "Marque : " + (brand || "?")
+    + (info ? ("\n\nHISTOIRE / IDENTITÉ DE LA MARQUE :\n" + info) : "")
+    + (notes ? ("\n\nCONSIGNES DE LA RESPONSABLE POUR CETTE MARQUE :\n" + notes) : "")
+    + "\n\nLivrables envisagés : " + (disp || "à définir ensemble")
+    + "\nCréateur : " + (creator || "inconnu");
+  try {
+    const out = hasOpenAI ? await callOpenAI(sys, ctx) : await callAnthropic(sys, ctx);
+    res.json({ ok: !!out.ok, body: out.ok ? String(out.body || "").trim() : "" });
+  } catch (e) { res.json({ ok: false }); }
 });
 app.get("/api/brand/:name/doc/:id", auth, (req, res) => {
   const name = String(req.params.name || "").trim();
