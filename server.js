@@ -1494,7 +1494,7 @@ const ONBOARDING_STEPS = [
   { id: "todo", group: "3 · Je me lance 🚀", label: "Parcourir ma to-do (mes créatrices à contacter)", hint: "onglet To-do, tes premières tâches t'y attendent" },
   { id: "casting", group: "3 · Je me lance 🚀", label: "Faire valider ma première sélection de profils par Mélany", hint: "règle de départ : le casting se valide ensemble AVANT toute prise de contact. Ensuite tu voleras de tes propres ailes" },
   { id: "contact", group: "3 · Je me lance 🚀", label: "Envoyer mon premier message à une créatrice", hint: "la voix Hyped est dans le guide. Règles d'or : ne propose jamais de budget en premier, et ne valide jamais un tarif seule 🫶" },
-  { id: "debrief", group: "3 · Je me lance 🚀", label: "Débrief de fin de journée avec Mélany ou Rozenn", hint: "questions, impressions, ce qui reste flou : rien n'est bête ✨" },
+  { id: "debrief", group: "3 · Je me lance 🚀", label: "Débrief de fin de journée avec Mélany et Rozenn", hint: "questions, impressions, ce qui reste flou : rien n'est bête ✨" },
 ];
 // Encart « Matériel » (QR eSIM, codes wifi…) : ajouté par une superviseure depuis le cockpit,
 // stocké sur le DISQUE PERSISTANT (jamais dans le dépôt public !), servi uniquement à la
