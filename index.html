@@ -271,6 +271,16 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .thbody{white-space:pre-line;color:#2A3439}
 .cplastlab{font-size:10.5px;font-weight:700;color:#8A948F;text-transform:uppercase;letter-spacing:.06em;margin-top:7px}
 .cplast{background:#F7F5EE;border-radius:10px;padding:8px 10px;font-size:12.5px;white-space:pre-line;color:#2A3439;margin:3px 0 2px}
+/* Import shortlist marque */
+.imppanel{border:1px solid #EFEBE0;border-radius:12px;margin:8px 0;background:#fff}
+.impbar{padding:10px 12px;font-size:13px;border-bottom:1px solid #EFEBE0}
+.impopts{margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.implist{max-height:320px;overflow:auto;padding:6px 10px}
+.improw{display:flex;gap:8px;align-items:baseline;padding:5px 2px;font-size:13px;cursor:pointer;flex-wrap:wrap}
+.improw.dup{opacity:.55}
+.impname{font-weight:600}
+.impcom{flex-basis:100%;font-size:11.5px;color:#8A948F;padding-left:24px}
+.impref{background:#F9E9E4;color:#C2553B;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:600}
 .cpq{font-size:13.5px;margin:8px 0;font-weight:600}
 .cplab{font-size:12px;color:#56666D;margin-bottom:6px}
 .cprep{white-space:pre-wrap;font-size:13px;background:var(--soft);border-radius:10px;padding:10px 12px;margin-bottom:8px}
@@ -2022,7 +2032,7 @@ function renderSourcing(profils){
   const opts=BRANDS.map(b=>`<option value="${b}">${b}</option>`).join('');
   const cpopts='<option value="">CP : à attribuer</option>'+(TEAM||[]).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
   const cpsel=isSup?('<select id="srccp" title="Chef de projet à allouer">'+cpopts+'</select>'):'';
-  const add='<div class="srcadd"><input id="srcprofil" placeholder="@profil ou lien"><select id="srcmarque">'+opts+'</select>'+cpsel+'<button class="lk" id="srcbtn">+ Ajouter</button></div>';
+  const add='<div class="srcadd"><input id="srcprofil" placeholder="@profil ou lien"><select id="srcmarque">'+opts+'</select>'+cpsel+'<button class="lk" id="srcbtn">+ Ajouter</button><button class="lk" id="srcimport" title="Importer une shortlist de la marque (Excel ou CSV)">📥 Importer</button><input type="file" id="srcfile" accept=".xlsx,.xls,.csv" style="display:none"></div><div id="srcimppanel"></div>';
   let rows;
   if(!profils.length) rows='<div class="state" style="padding:14px">Aucun profil à contacter, ajoute-en un, ou ils arriveront via la veille. 🔎</div>';
   else rows=profils.map(p=>{
@@ -2039,6 +2049,74 @@ function renderSourcing(profils){
   $('srcprofil').onkeydown=(e)=>{if(e.key==='Enter')addProfil();};
   document.querySelectorAll('#srcbox .srcdone').forEach(b=>b.onclick=()=>markContacted(b));
   document.querySelectorAll('#srcbox .srcmsg').forEach(b=>b.onclick=()=>openMessage(b));
+  const si2=$('srcimport'); if(si2)si2.onclick=()=>$('srcfile').click();
+  const sf=$('srcfile'); if(sf)sf.onchange=handleImportFile;
+}
+// --- Import d'une shortlist marque (Excel/CSV) --------------------------------
+// Les marques valident des profils dans leurs fichiers (avec commentaires type
+// « uniquement gifting », « en crosspost »…). On lit le fichier, on pré-coche les
+// profils VALIDÉS non déjà suivis, et on crée les tâches « à contacter » avec les
+// commentaires de la marque dans le champ Commentaire veille.
+let IMP_ITEMS=[];
+async function ensureXLSX(){
+  if(window.XLSX)return;
+  await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+}
+async function handleImportFile(){
+  const fi=$('srcfile'); const f=fi.files&&fi.files[0]; if(!f)return;
+  const panel=$('srcimppanel'); panel.innerHTML='<div class="state2" style="padding:10px">Lecture du fichier…</div>';
+  try{ await ensureXLSX(); }catch(e){ panel.innerHTML='<div class="state2" style="padding:10px">Impossible de charger le lecteur Excel (connexion ?).</div>'; return; }
+  let wb; try{ wb=XLSX.read(await f.arrayBuffer(),{type:'array'}); }catch(e){ panel.innerHTML='<div class="state2" style="padding:10px">Fichier illisible.</div>'; return; }
+  // on cherche la feuille et la ligne d'en-tête qui contiennent une colonne « Profil »
+  let best=null;
+  for(const name of wb.SheetNames){
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:''});
+    for(let hi=0;hi<Math.min(6,rows.length);hi++){
+      const hdr=(rows[hi]||[]).map(x=>nlow(x));
+      const ip=hdr.findIndex(h=>/^(profil|profils|createur|createurs|creatrice|nom \/ handle|handle|pseudo|compte)/.test(h));
+      if(ip>=0){ best={rows,hi,hdr,ip}; break; }
+    }
+    if(best)break;
+  }
+  if(!best){ panel.innerHTML='<div class="state2" style="padding:10px">Aucune colonne « Profil » trouvée dans ce fichier.</div>'; return; }
+  const iMail=best.hdr.findIndex(h=>/mail|email/.test(h));
+  const iDecs=best.hdr.map((h,ix)=>/decision|statut|valid/.test(h)?ix:-1).filter(x=>x>=0);
+  const iComs=best.hdr.map((h,ix)=>/comment|motif|note|remarq|package|budget/.test(h)?ix:-1).filter(x=>x>=0);
+  const existing=new Set((SRC_PROFILS||[]).map(p=>nlow(infName(p.task))));
+  const items=[];
+  for(let r=best.hi+1;r<best.rows.length;r++){
+    const row=best.rows[r]||[]; const prof=String(row[best.ip]||'').trim(); if(!prof)continue;
+    const decs=iDecs.map(ix=>String(row[ix]||'')).join(' ');
+    const valid=/valid|ok|oui/i.test(decs), refused=/refus|non retenu|no go/i.test(decs);
+    const mail=iMail>=0?String(row[iMail]||'').trim():'';
+    const com=iComs.map(ix=>String(row[ix]||'').trim()).filter(Boolean).join(' · ');
+    const commentaire=[com,mail?((mail.includes('@')?'Email : ':'Contact : ')+mail):''].filter(Boolean).join(' · ').slice(0,900);
+    items.push({prof,commentaire,valid,refused,dup:existing.has(nlow(prof))});
+  }
+  if(!items.length){ panel.innerHTML='<div class="state2" style="padding:10px">Aucun profil lisible dans ce fichier.</div>'; return; }
+  IMP_ITEMS=items;
+  const opts=BRANDS.map(b=>`<option value="${b}">${b}</option>`).join('');
+  const cpopts=(TEAM||[]).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  panel.innerHTML='<div class="imppanel"><div class="impbar"><b>📥 '+esc(f.name)+'</b> · '+items.length+' profils lus. Pré-cochés : validés par la marque, pas déjà suivis.'
+    +'<div class="impopts">Marque <select id="impmarque">'+opts+'</select> · CP <select id="impcp">'+cpopts+'</select> <button class="lk primary" id="impgo"></button> <button class="lk" id="impcancel">Annuler</button></div></div>'
+    +'<div class="implist">'+items.map((it,ix)=>'<label class="improw'+(it.dup?' dup':'')+'"><input type="checkbox" data-ix="'+ix+'"'+((it.valid&&!it.dup&&!it.refused)?' checked':'')+'><span class="impname">'+esc(it.prof)+'</span>'+(it.valid?' <span class="cptag">validé marque</span>':'')+(it.refused?' <span class="impref">refusé</span>':'')+(it.dup?' <span class="impref">déjà suivi</span>':'')+(it.commentaire?('<span class="impcom">'+esc(it.commentaire.slice(0,180))+'</span>'):'')+'</label>').join('')+'</div></div>';
+  const fb=BRANDS.find(b=>nlow(f.name).includes(nlow(b))); if(fb)$('impmarque').value=fb; // marque devinée depuis le nom du fichier
+  const updGo=()=>{const n=panel.querySelectorAll('.implist input:checked').length;$('impgo').textContent='Importer '+n+' profil'+(n>1?'s':'');};
+  panel.querySelectorAll('.implist input').forEach(c=>c.onchange=updGo); updGo();
+  $('impcancel').onclick=()=>{panel.innerHTML='';fi.value='';};
+  $('impgo').onclick=async()=>{
+    const sel=[...panel.querySelectorAll('.implist input:checked')].map(c=>IMP_ITEMS[Number(c.dataset.ix)]);
+    if(!sel.length)return;
+    const marque=$('impmarque').value, cp=$('impcp').value;
+    if(!confirm('Créer '+sel.length+' tâche(s) « à contacter » pour '+marque+', assignées à '+cp+' ?'))return;
+    const go=$('impgo'); go.disabled=true; let done=0;
+    for(const it of sel){
+      go.textContent='Import… '+(done+1)+'/'+sel.length;
+      try{ const r=await api('/api/sourcing',{method:'POST',body:JSON.stringify({profil:it.prof,marque,responsable:cp,commentaire:it.commentaire,noDraft:true})}); if(r.ok)done++; }catch(e){}
+    }
+    panel.innerHTML='<div class="state2" style="padding:10px">✅ '+done+'/'+sel.length+' profils importés pour '+esc(marque)+', assignés à '+esc(cp)+'. Ils sont dans « Profils à contacter » avec les commentaires de la marque.</div>';
+    fi.value=''; loadSourcing();
+  };
 }
 async function addProfil(){
   const profil=$('srcprofil').value.trim(); if(!profil)return;

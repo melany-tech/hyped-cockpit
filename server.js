@@ -1792,7 +1792,7 @@ app.post("/api/sourcing", auth, async (req, res) => {
     // Message auto-prêt : brouillon d'approche dans le Gmail de la CP assignée (si connectée)
     let draft = false;
     try {
-      if (resp && gm.ENABLED && typeof gm.createDraft === "function") {
+      if (!req.body?.noDraft && resp && gm.ENABLED && typeof gm.createDraft === "function") { // noDraft : import en masse, pas 30 brouillons d'un coup
         const cpEmail = emailOf(resp);
         if (cpEmail && gm.isConnected(cpEmail)) {
           const inf = infFromTitle(profil);
