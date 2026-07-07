@@ -1044,7 +1044,13 @@ app.post("/api/contact/message", auth, async (req, res) => {
   const brand = String((req.body || {}).brand || "").slice(0, 80);
   const disp = String((req.body || {}).disp || "").slice(0, 200);
   const langRaw = String((req.body || {}).lang || "auto");
-  const lang = langRaw === "en" ? "en" : langRaw === "fr" ? "fr" : "auto";
+  let lang = langRaw === "en" ? "en" : langRaw === "fr" ? "fr" : "auto";
+  // Langue par défaut de certaines marques quand la fiche est muette (mode Auto).
+  // La fiche marque reste prioritaire : une consigne « marque anglophone » dans les
+  // Consignes pour l'IA suffit à basculer n'importe quelle marque en anglais.
+  const CONTACT_LANG_DEFAULT = { "liva": "en" };
+  const hinted = CONTACT_LANG_DEFAULT[String((req.body || {}).brand || "").trim().toLowerCase()];
+  if (lang === "auto" && hinted) lang = hinted;
   const hasOpenAI = !!process.env.OPENAI_API_KEY, hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
   if (!hasOpenAI && !hasAnthropic) return res.json({ ok: false });
   const cp = req.user.name || "la cheffe de projet";
@@ -1070,7 +1076,12 @@ app.post("/api/contact/message", auth, async (req, res) => {
     + "\nCréateur : " + (creator || "inconnu");
   try {
     const out = hasOpenAI ? await callOpenAI(sys, ctx) : await callAnthropic(sys, ctx);
-    res.json({ ok: !!out.ok, body: out.ok ? String(out.body || "").trim() : "" });
+    let bodyOut = out.ok ? String(out.body || "").trim() : "";
+    // Ceinture et bretelles : prénom inconnu = AUCUN crochet dans le message (le modèle
+    // écrit parfois quand même « [prénom] » malgré la consigne) : on nettoie, le message
+    // doit pouvoir partir tel quel.
+    if (!prenom && bodyOut) bodyOut = bodyOut.replace(/\s*\[[^\]\n]{0,30}\]\s*/g, " ").replace(/ {2,}/g, " ").replace(/\s+([!,.?])/g, "$1");
+    res.json({ ok: !!out.ok, body: bodyOut });
   } catch (e) { res.json({ ok: false }); }
 });
 app.get("/api/brand/:name/doc/:id", auth, (req, res) => {
