@@ -979,10 +979,33 @@ app.post("/api/brand/:name", auth, (req, res) => {
       if (body.base[k] !== undefined) { rec[k] = String(body.base[k]).slice(0, 4000); changes.push(k); }
     }
   }
-  if (body.interlocuteur !== undefined) { // contact principal côté marque : toutes les CP
+  // Migration : l'ancien champ unique « interlocuteur » devient une LISTE (plusieurs
+  // contacts côté marque : responsable influence, assistante, fondateur…).
+  const migrateIts = () => {
+    rec.interlocuteurs = rec.interlocuteurs || [];
+    if (rec.interlocuteur && (rec.interlocuteur.nom || rec.interlocuteur.email)) {
+      rec.interlocuteurs.unshift({ at: (rec.updatedAt || Date.now()) - 1, by: "", ...rec.interlocuteur });
+    }
+    delete rec.interlocuteur;
+  };
+  if (body.interlocuteur !== undefined) { // ancien format (compat) : on ajoute à la liste
     const it = body.interlocuteur || {};
-    rec.interlocuteur = { nom: String(it.nom || "").slice(0, 120), email: String(it.email || "").slice(0, 200), role: String(it.role || "").slice(0, 120) };
+    migrateIts();
+    rec.interlocuteurs = rec.interlocuteurs.concat([{ at: Date.now(), by: req.user.name, nom: String(it.nom || "").slice(0, 120), email: String(it.email || "").slice(0, 200), role: String(it.role || "").slice(0, 120) }]).slice(-20);
     changes.push("interlocuteur");
+  }
+  if (body.addInterlocuteur) { // interlocuteurs côté marque : toutes les CP, plusieurs possibles
+    const it = body.addInterlocuteur || {};
+    if (!String(it.nom || "").trim() && !String(it.email || "").trim()) return res.status(400).json({ error: "il faut au moins un nom ou un email" });
+    migrateIts();
+    rec.interlocuteurs = rec.interlocuteurs.concat([{ at: Date.now(), by: req.user.name, nom: String(it.nom || "").slice(0, 120), email: String(it.email || "").slice(0, 200), role: String(it.role || "").slice(0, 120) }]).slice(-20);
+    changes.push("interlocuteur");
+  }
+  if (body.deleteInterlocuteurAt) { // suppression d'un interlocuteur : responsable uniquement
+    if (!isSup) return res.status(403).json({ error: "Seule la responsable peut supprimer un interlocuteur" });
+    migrateIts();
+    rec.interlocuteurs = rec.interlocuteurs.filter((x) => x.at !== Number(body.deleteInterlocuteurAt));
+    changes.push("suppression interlocuteur");
   }
   if (body.note) { // note de contexte : toutes les CP, horodatée et signée
     rec.notes = (rec.notes || []).concat([{ at: Date.now(), by: req.user.name, text: String(body.note).slice(0, 2000) }]).slice(-100);
