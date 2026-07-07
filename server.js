@@ -1469,7 +1469,6 @@ const ONBOARDING_STEPS = [
   { id: "pwd", group: "1 · Je m'installe ☕", label: "Changer mon mot de passe", hint: "menu avatar en haut à droite → 🔑 Mot de passe" },
   { id: "slack", group: "1 · Je m'installe ☕", label: "Activer mon compte Slack et me présenter à l'équipe", hint: "c'est là qu'arrivent les notifications du copilote" },
   { id: "gmail", group: "1 · Je m'installe ☕", label: "Connecter mon Gmail au cockpit", hint: "onglet Messages → « Connecter mon Gmail » (se coche tout seul une fois fait)" },
-  { id: "signature", group: "1 · Je m'installe ☕", label: "Créer ma signature Gmail", hint: "Gmail → Paramètres → Signature (le copilote l'ajoute automatiquement à chaque réponse envoyée)" },
   { id: "whatsapp", group: "1 · Je m'installe ☕", label: "Être ajoutée aux groupes WhatsApp clients", hint: "demande à Mélany ou Rozenn de t'ajouter, puis présente-toi en deux lignes" },
   { id: "outils", group: "1 · Je m'installe ☕", label: "Récupérer mes accès outils : Kolsquare (+ Authenticator), Yousign, Drive", hint: "c'est Mélany qui gère les accès. Kolsquare = veille et reporting, Yousign = contrats, Drive = contenus et contrats" },
   { id: "guide", group: "2 · Je comprends l'agence 📖", label: "Lire le Guide CP : l'agence, ses valeurs, la voix Hyped", link: "/guide", hint: "20 minutes : comment on parle aux créatrices, le process de A à Z, les dix onglets du cockpit" },
