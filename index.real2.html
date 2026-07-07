@@ -281,6 +281,7 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .impname{font-weight:600}
 .impcom{flex-basis:100%;font-size:11.5px;color:#8A948F;padding-left:24px}
 .impref{background:#F9E9E4;color:#C2553B;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:600}
+.quiback{display:inline-block;margin-bottom:10px;font-weight:600;color:#2C9087}
 .cpq{font-size:13.5px;margin:8px 0;font-weight:600}
 .cplab{font-size:12px;color:#56666D;margin-bottom:6px}
 .cprep{white-space:pre-wrap;font-size:13px;background:var(--soft);border-radius:10px;padding:10px 12px;margin-bottom:8px}
@@ -1487,12 +1488,21 @@ function renderTranscript(t){
 // « Qui c'est ? » : ouvre la page Contacts avec la recherche préremplie sur l'expéditeur.
 // Si le nom complet ne matche rien, on retente avec le prénom seul (les calendriers n'ont
 // souvent que le prénom). Si toujours rien : la personne n'est pas encore suivie chez nous.
+let QUI_BACK=null; // d'où on venait quand on a cliqué « Qui c'est ? », pour le bouton Retour
 function quiEstCe(name){
+  QUI_BACK=CURRENT_VIEW;
   navToView('contacts');
   setTimeout(()=>{
     const trySearch=q=>{ const si=$('ctsearchinput'); if(!si)return 0; si.value=q; si.dispatchEvent(new Event('input')); return [...document.querySelectorAll('#ctlist .ctrow')].filter(r=>r.style.display!=='none').length; };
     if(!trySearch(name)) trySearch(String(name).split(/\s+/)[0]||name);
     const si=$('ctsearchinput'); if(si)si.focus();
+    // Bouton retour : on revient là où on était, panneau copilote à l'écran
+    const cb=$('contactsbox');
+    if(cb&&!document.getElementById('quiback')){
+      const b=document.createElement('button'); b.id='quiback'; b.className='lk quiback'; b.textContent='← Retour à mes messages';
+      b.onclick=()=>{ b.remove(); navToView(QUI_BACK||'cockpit'); setTimeout(()=>{ const el=$('copilotbox'); if(el)el.scrollIntoView({behavior:'smooth',block:'start'}); },250); };
+      cb.prepend(b);
+    }
   },80);
 }
 // Boutons Oui/Non/Envoyer directement SUR la ligne du mail concerné (comme sur Slack)
