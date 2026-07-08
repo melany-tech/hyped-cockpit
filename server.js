@@ -52,6 +52,11 @@ function resolveDataDir() {
   return __dirname;
 }
 const DATA_DIR = resolveDataDir();
+// Filet de sécurité : par défaut, Node QUITTE sur une promesse rejetée non gérée, donc une
+// seule erreur dans une route async faisait redémarrer tout le cockpit (mails « server failure »
+// de Render). On loggue et on continue ; la vraie erreur reste visible dans les logs.
+process.on("unhandledRejection", (e) => { try { console.error("[unhandledRejection]", (e && e.stack) || e); } catch (e2) {} });
+process.on("uncaughtException", (e) => { try { console.error("[uncaughtException]", (e && e.stack) || e); } catch (e2) {} });
 try { console.log("[data] stockage persistant →", DATA_DIR); } catch (e) {}
 const ASSIGN_STORE = path.join(DATA_DIR, "assignments.json"); // disque persistant en prod
 let ASSIGN = {}; // { creatorNorm: "Prénom CP" }
@@ -1122,7 +1127,7 @@ app.post("/api/contact/message", auth, async (req, res) => {
   const ctx = "Marque : " + (brand || "?")
     + (info ? ("\n\nHISTOIRE / IDENTITÉ DE LA MARQUE :\n" + info) : "")
     + (notes ? ("\n\nCONSIGNES DE LA RESPONSABLE POUR CETTE MARQUE :\n" + notes) : "")
-    + (profNote ? ("\n\nCONSIGNE DE LA MARQUE SUR CE PROFIL (elle prime, ex. « uniquement gifting » = ne jamais évoquer de rémunération) :\n" + profNote) : "")
+    + (consignes ? ("\n\nCONSIGNE DE LA MARQUE SUR CE PROFIL (elle prime, ex. « uniquement gifting » = ne jamais évoquer de rémunération) :\n" + consignes) : "")
     + "\n\nLivrables envisagés : " + (disp || "à définir ensemble")
     + "\nCréateur : " + (creator || "inconnu");
   try {
