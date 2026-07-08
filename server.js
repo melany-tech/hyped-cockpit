@@ -1316,6 +1316,43 @@ async function copilotPipeline({ creator, brand, transcript }) {
     return JSON.parse(String(out.body).replace(/^[^{]*/, "").replace(/[^}]*$/, ""));
   } catch (e) { return null; }
 }
+// --- Notifications Slack groupées : fini le ping à chaque mail ---------------
+// Les nouveaux mails sont mis en file et partent en UN récap par heure et par CP
+// (un mail isolé après une accalmie part tout de suite ; les rafales sont groupées).
+// Les confirmations d'action (C'est fait, réponse à relire après une décision) restent immédiates.
+const DIGEST_EVERY_MS = 60 * 60 * 1000;
+function queueNotif(store, email, id) {
+  store.notifQueue = store.notifQueue || {};
+  (store.notifQueue[email] = store.notifQueue[email] || []).push(id);
+}
+function digestLine(p) {
+  const who = p.creator || p.fromLabel || p.to || "expéditeur inconnu";
+  const brand = p.brand ? (" · " + p.brand) : "";
+  if (p.categorie === "decision" && p.status === "pending")
+    return "• 🔔 *" + who + "*" + brand + " : " + String(p.question || p.resume || "").slice(0, 150)
+      + "\n    <" + copilotLink(p.id, "accept") + "|✅ Oui> · <" + copilotLink(p.id, "refuse") + "|❌ Non> · <" + copilotLink(p.id, "directive") + "|💬 Consigne> · <" + copilotLink(p.id, "self") + "|✍️ Je gère> · <" + copilotLink(p.id, "seen") + "|👁️ Vu>";
+  return "• ✉️ *" + who + "*" + brand + " : réponse prête à relire" + (p.resume ? (" — " + String(p.resume).slice(0, 110)) : "")
+    + "\n    " + (p.reply ? ("<" + copilotLink(p.id, "send") + "|📤 Envoyer> · ") : "") + "<" + copilotLink(p.id, "self") + "|✍️ Je gère> · <" + copilotLink(p.id, "seen") + "|👁️ Vu>";
+}
+async function flushNotifDigests(store) {
+  store.notifQueue = store.notifQueue || {}; store.lastDigest = store.lastDigest || {};
+  for (const email of Object.keys(store.notifQueue)) {
+    const ids = store.notifQueue[email] || [];
+    if (!ids.length) continue;
+    if (Date.now() - (store.lastDigest[email] || 0) < DIGEST_EVERY_MS) continue; // prochain récap à l'heure pleine
+    const slackUser = COPILOT.slackIds[email] || "";
+    if (!slackUser) { store.notifQueue[email] = []; continue; }
+    const ps = ids.map((id) => (store.proposals || []).find((x) => x.id === id)).filter((p) => p && (p.status === "pending" || p.status === "ready"));
+    store.notifQueue[email] = []; store.lastDigest[email] = Date.now();
+    if (!ps.length) continue;
+    if (ps.length === 1) { await copilotNotify({ slackUser, text: "<@" + slackUser + "> " + copilotSlackText(ps[0]) }); continue; }
+    const MAX = 12;
+    const text = "<@" + slackUser + "> 🤖 *Copilote · " + ps.length + " nouveaux mails*  _(récap groupé, 1 message par heure max ; tout est aussi dans le cockpit)_\n\n"
+      + ps.slice(0, MAX).map(digestLine).join("\n")
+      + (ps.length > MAX ? ("\n… et " + (ps.length - MAX) + " autres dans le cockpit (onglet Messages).") : "");
+    await copilotNotify({ slackUser, text });
+  }
+}
 let COPILOT_RUNNING = false;
 async function copilotTick() {
   if (!COPILOT.enabled || !gm.ENABLED || COPILOT_RUNNING) return;
@@ -1379,7 +1416,7 @@ async function copilotTick() {
         store.proposals.push(p);
         seen.add(email + "|" + p.msgId);
         const slackUser = COPILOT.slackIds[email] || "";
-        if (slackUser) await copilotNotify({ slackUser, text: "<@" + slackUser + "> " + copilotSlackText(p) }); // mention = vraie notification
+        queueNotif(store, email, p.id); // notification groupée (récap 1x/heure), plus de ping par mail
         // Pipeline : entrée au calendrier UNIQUEMENT quand une date de publication est actée dans le fil
         try {
           store.calAdded = store.calAdded || {};
@@ -1439,8 +1476,7 @@ async function copilotTick() {
             };
             store.proposals.push(p);
             seen.add(email + "|" + p.msgId);
-            const su2 = COPILOT.slackIds[email] || "";
-            if (su2) await copilotNotify({ slackUser: su2, text: "<@" + su2 + "> " + copilotSlackText(p) });
+            queueNotif(store, email, p.id);
             continue;
           }
           // Fil de COLLAB (marque détectée) écrit par une collègue : c'est ELLE qui gère le créateur,
@@ -1465,11 +1501,11 @@ async function copilotTick() {
           };
           store.proposals.push(p);
           seen.add(email + "|" + p.msgId);
-          const slackUser = COPILOT.slackIds[email] || "";
-          if (slackUser) await copilotNotify({ slackUser, text: "<@" + slackUser + "> " + copilotSlackText(p) });
+          queueNotif(store, email, p.id);
         }
       }
     }
+    try { await flushNotifDigests(store); } catch (e) { try { console.error("[copilot] digest :", e.message); } catch (e2) {} }
     // 1000 (et pas 300) : sinon, à l'échelle de toutes les CP, la mémoire des mails déjà proposés
     // déborde en quelques jours et les mêmes mails reviennent (double appel IA + double notif Slack)
     store.proposals = store.proposals.slice(-1000);
