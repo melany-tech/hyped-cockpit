@@ -1829,16 +1829,10 @@ app.post("/api/sourcing/:id/contacted", auth, async (req, res) => {
     // trace pour la relance auto (si pas de réponse sous 3 jours)
     recordContacted({ creator: t.task, cp: t.responsable || ASSIGN[normName(t.task)] || null, brand: t.projet || null, at: Date.now(), relance: false });
     logActivity({ type: "contacte", creator: String(t.task).replace(/^contacter\s+/i, "").trim(), brand: t.projet || null, cp: t.responsable || req.user.name });
-    // 2) bascule en collab "à lancer" dans le calendrier de la marque (In Haircare géré)
-    let moved = false;
-    if (t.projet === "In Haircare") {
-      const props = { "Nom": { title: [{ text: { content: t.task } }] }, "Statut": { select: { name: "Non posté" } } };
-      const uid = await userIdByName(t.responsable || req.user.name);
-      if (uid) props["Interlocuteur"] = { people: [{ id: uid }] };
-      try { await notion.pages.create({ parent: { database_id: INHAIRCARE_DB }, properties: props }); moved = true; CACHE.at = 0; }
-      catch (e) { console.warn("create collab", e.message); }
-    }
-    res.json({ ok: true, moved, brand: t.projet });
+    // NB : on ne crée PLUS de ligne dans le calendrier de la marque à ce stade. Process (fiche 08) :
+    // une collab n'entre au calendrier que quand le créateur a ACCEPTÉ, livrables validés et dates
+    // définies. Avant, un simple mail de première approche créait une fausse collab « planifiée ».
+    res.json({ ok: true, brand: t.projet });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
