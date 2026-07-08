@@ -1437,7 +1437,7 @@ async function copilotTick() {
                 if (uid) props["Interlocuteur"] = { people: [{ id: uid }] };
                 const pg = await notion.pages.create({ parent: { database_id: INHAIRCARE_DB }, properties: props });
                 store.calAdded[m.threadId] = pg.id; CACHE.at = 0;
-                if (slackUser) await copilotNotify({ slackUser, text: "📅 Collab ajoutée au calendrier In Haircare : *" + (creator || "créateur") + "* · publication le " + pl.date_publication + (pl.date_preview ? (" · preview le " + pl.date_preview) : "") + (pl.budget ? (" · " + pl.budget) : "") + (pl.livrables ? (" · " + pl.livrables) : "") + ". Jette un œil à la fiche pour compléter si besoin." });
+                if (slackUser) await copilotNotify({ slackUser, text: "📅 Collab ajoutée au calendrier In Haircare : *" + (creator || "créateur") + "* · publication le " + pl.date_publication + (pl.date_preview ? (" · preview le " + pl.date_preview) : "") + (pl.budget ? (" · " + pl.budget) : "") + (pl.livrables ? (" · " + pl.livrables) : "") + "\n<" + copilotLink(pg.id, "fixcal") + "|✏️ Corriger la fiche> (date, preview, budget, nom : écris ce qui change, j'applique)." });
               } else {
                 store.calAdded[m.threadId] = "manuel";
                 if (slackUser) await copilotNotify({ slackUser, text: "📅 Dates actées avec *" + (creator || "créateur") + "* (" + m.brand + ") : publication le " + pl.date_publication + (pl.budget ? (" · " + pl.budget) : "") + ". Ajoute la collab au calendrier " + m.brand + " dans Notion (je n'écris que dans le calendrier In Haircare pour l'instant)." });
@@ -1555,6 +1555,14 @@ function copilotActOk(req) {
 app.get("/copilot/act", (req, res) => {
   const { id, action, sig } = req.query || {};
   if (!copilotActOk(req)) return res.status(403).send(copilotPage("Lien invalide 🤔", "Ce lien n'est pas valide ou a été modifié. Repasse par le message Slack."));
+  // ✏️ Correction d'une fiche calendrier (id = page Notion, pas une proposition)
+  if (action === "fixcal") {
+    const qf = "id=" + encodeURIComponent(String(id)) + "&action=fixcal&sig=" + encodeURIComponent(String(sig));
+    const form = "<form method=\"POST\" action=\"/copilot/act/do?" + qf + "\" style=\"margin-top:14px;text-align:left\">"
+      + "<textarea name=\"text\" required rows=\"3\" placeholder=\"Ex. publication le 18 juillet, budget 250 €, preview le 12 juillet\" style=\"width:100%;box-sizing:border-box;font-family:inherit;font-size:14px;padding:10px 12px;border:1px solid #E4E0D5;border-radius:10px\"></textarea>"
+      + "<button type=\"submit\" style=\"margin-top:10px;font-family:inherit;font-size:14px;font-weight:600;padding:10px 18px;border-radius:10px;border:none;background:#2C9087;color:#fff;cursor:pointer\">Corriger la fiche ✏️</button></form>";
+    return res.send(copilotPage("Corriger la fiche 📅", "Écris ce qui change avec tes mots : date de publication, date de preview, budget, ou nom. J'applique directement sur la fiche du calendrier.").replace("</div></body>", form + "</div></body>"));
+  }
   const store = loadCopilot();
   const p = (store.proposals || []).find((x) => x.id === id);
   if (!p) return res.status(404).send(copilotPage("Introuvable", "Cette proposition n'existe plus (elle a peut-être expiré)."));
@@ -1575,7 +1583,38 @@ app.get("/copilot/act", (req, res) => {
 });
 // Exécution d'une action copilote. Partagée entre les liens Slack (/copilot/act/do)
 // et les boutons du cockpit (/api/copilot/act). Renvoie { code, title, msg }.
+// Convertit une correction en langage naturel (« publication le 18 juillet, 250€ »)
+// en champs de fiche calendrier. N'extrait QUE ce qui est explicitement demandé.
+async function calFixParse(texte) {
+  const hasOpenAI = !!process.env.OPENAI_API_KEY, hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
+  if (!hasOpenAI && !hasAnthropic) return null;
+  const sys = 'Tu convertis une correction de fiche de collab en JSON. Réponds UNIQUEMENT :\n{"date_publication":"YYYY-MM-DD ou null","date_preview":"YYYY-MM-DD ou null","budget":"montant ou chaîne vide","nom":"nouveau nom ou chaîne vide"}\nAnnée en cours : 2026. N\'extrais que ce qui est explicitement demandé dans la correction, null ou vide pour le reste. N\'invente rien.';
+  try {
+    const out = hasOpenAI ? await callOpenAI(sys, String(texte || "")) : await callAnthropic(sys, String(texte || ""));
+    if (!out.ok) return null;
+    return JSON.parse(String(out.body).replace(/^[^{]*/, "").replace(/[^}]*$/, ""));
+  } catch (e) { return null; }
+}
 async function copilotExecute(id, action, text) {
+  // ✏️ Correction d'une fiche calendrier depuis Slack (id = page Notion)
+  if (action === "fixcal") {
+    const consigne = String(text || "").trim().slice(0, 500);
+    if (!consigne) return { code: 400, title: "Correction vide ✍️", msg: "Écris ce qui change (ex. « publication le 18 juillet, budget 250 € »)." };
+    if (!notion || DEMO) return { code: 400, title: "Indisponible", msg: "Notion n'est pas connecté." };
+    const fix = await calFixParse(consigne);
+    const okDate = (d) => d && /^\d{4}-\d{2}-\d{2}$/.test(String(d));
+    const props = {};
+    if (fix && okDate(fix.date_publication)) props["Date"] = { date: { start: fix.date_publication } };
+    if (fix && okDate(fix.date_preview)) props["Date preview"] = { date: { start: fix.date_preview } };
+    const bnum = fix ? parseFloat(String(fix.budget || "").replace(/[^\d.,]/g, "").replace(",", ".")) : 0;
+    if (bnum) props["Budget"] = { number: bnum };
+    if (fix && String(fix.nom || "").trim()) props["Nom"] = { title: [{ text: { content: String(fix.nom).trim().slice(0, 120) } }] };
+    if (!Object.keys(props).length) return { code: 200, title: "Pas compris 🤔", msg: "Je n'ai pas su extraire de correction. Réessaie avec une formulation type « publication le 18 juillet, budget 250 € », ou corrige dans le cockpit (onglet Contenus) / Notion." };
+    try { await notion.pages.update({ page_id: String(id), properties: props }); CACHE.at = 0; }
+    catch (e) { return { code: 500, title: "Échec 😖", msg: "Notion n'a pas voulu : " + String((e && e.message) || e).slice(0, 120) + ". Corrige directement dans Notion." }; }
+    const applied = [props["Date"] ? ("publication " + fix.date_publication) : "", props["Date preview"] ? ("preview " + fix.date_preview) : "", bnum ? ("budget " + bnum + "€") : "", props["Nom"] ? ("nom « " + fix.nom + " »") : ""].filter(Boolean).join(" · ");
+    return { code: 200, title: "Fiche corrigée ✅", msg: "Appliqué sur la fiche du calendrier : " + applied + "." };
+  }
   const store = loadCopilot(); store.proposals = store.proposals || [];
   const p = store.proposals.find((x) => x.id === id);
   if (!p) return { code: 404, title: "Introuvable", msg: "Cette proposition n'existe plus (elle a peut-être expiré)." };
