@@ -1588,7 +1588,7 @@ app.get("/copilot/act", (req, res) => {
 async function calFixParse(texte) {
   const hasOpenAI = !!process.env.OPENAI_API_KEY, hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
   if (!hasOpenAI && !hasAnthropic) return null;
-  const sys = 'Tu convertis une correction de fiche de collab en JSON. Réponds UNIQUEMENT :\n{"date_publication":"YYYY-MM-DD ou null","date_preview":"YYYY-MM-DD ou null","budget":"montant ou chaîne vide","nom":"nouveau nom ou chaîne vide"}\nAnnée en cours : 2026. N\'extrais que ce qui est explicitement demandé dans la correction, null ou vide pour le reste. N\'invente rien.';
+  const sys = 'Tu convertis une correction de fiche de collab en JSON. Réponds UNIQUEMENT :\n{"date_publication":"YYYY-MM-DD ou null","date_preview":"YYYY-MM-DD ou null","budget":"montant ou chaîne vide","nom":"nouveau nom ou chaîne vide","supprimer":true|false}\nsupprimer = true UNIQUEMENT si la correction demande explicitement de supprimer / retirer / annuler la fiche ou la collab. Année en cours : 2026. N\'extrais que ce qui est explicitement demandé dans la correction, null ou vide pour le reste. N\'invente rien.';
   try {
     const out = hasOpenAI ? await callOpenAI(sys, String(texte || "")) : await callAnthropic(sys, String(texte || ""));
     if (!out.ok) return null;
@@ -1602,6 +1602,11 @@ async function copilotExecute(id, action, text) {
     if (!consigne) return { code: 400, title: "Correction vide ✍️", msg: "Écris ce qui change (ex. « publication le 18 juillet, budget 250 € »)." };
     if (!notion || DEMO) return { code: 400, title: "Indisponible", msg: "Notion n'est pas connecté." };
     const fix = await calFixParse(consigne);
+    if (fix && fix.supprimer === true) { // « supprime la fiche » : corbeille Notion (récupérable)
+      try { await notion.pages.update({ page_id: String(id), archived: true }); CACHE.at = 0; }
+      catch (e) { return { code: 500, title: "Échec 😖", msg: "Notion n'a pas voulu : " + String((e && e.message) || e).slice(0, 120) + ". Supprime directement dans Notion." }; }
+      return { code: 200, title: "Fiche supprimée 🗑", msg: "La fiche est dans la corbeille Notion (récupérable pendant 30 jours si besoin)." };
+    }
     const okDate = (d) => d && /^\d{4}-\d{2}-\d{2}$/.test(String(d));
     const props = {};
     if (fix && okDate(fix.date_publication)) props["Date"] = { date: { start: fix.date_publication } };
