@@ -284,6 +284,13 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .impcom{flex-basis:100%;font-size:11.5px;color:#8A948F;padding-left:24px}
 .impref{background:#F9E9E4;color:#C2553B;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:600}
 .ctback{display:inline-block;margin-bottom:10px;font-weight:600}
+/* Fiche créatrice (modale « Qui c'est ? ») */
+.creatorov{position:fixed;inset:0;background:rgba(28,58,68,.45);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
+.creatorcard{position:relative;background:#fff;border-radius:16px;padding:24px 28px;max-width:660px;width:100%;box-shadow:0 18px 60px rgba(0,0,0,.25);font-size:13.5px}
+.creatorcard h3{margin:0 0 10px;font-size:18px}
+.ccrow{margin:6px 0}
+.ccclose{position:absolute;top:12px;right:14px;font-size:15px}
+.creatorcard .fitrow{padding:3px 0}
 .quiback{display:inline-block;margin-bottom:10px;font-weight:600;color:#2C9087}
 .msgconsignes{background:#FBF4E4;border:1px solid #EFDDB4;border-radius:10px;padding:8px 12px;font-size:12.5px;color:#7A5C1E;margin-bottom:8px}
 .cpq{font-size:13.5px;margin:8px 0;font-weight:600}
@@ -1497,22 +1504,66 @@ function renderTranscript(t){
 // « Qui c'est ? » : ouvre la page Contacts avec la recherche préremplie sur l'expéditeur.
 // Si le nom complet ne matche rien, on retente avec le prénom seul (les calendriers n'ont
 // souvent que le prénom). Si toujours rien : la personne n'est pas encore suivie chez nous.
-let QUI_BACK=null; // d'où on venait quand on a cliqué « Qui c'est ? », pour le bouton Retour
-function quiEstCe(name){
-  QUI_BACK=CURRENT_VIEW;
-  navToView('contacts');
-  setTimeout(()=>{
-    const trySearch=q=>{ const si=$('ctsearchinput'); if(!si)return 0; si.value=q; si.dispatchEvent(new Event('input')); return [...document.querySelectorAll('#ctlist .ctrow')].filter(r=>r.style.display!=='none').length; };
-    if(!trySearch(name)) trySearch(String(name).split(/\s+/)[0]||name);
-    const si=$('ctsearchinput'); if(si)si.focus();
-    // Bouton retour : on revient là où on était, panneau copilote à l'écran
-    const cb=$('contactsbox');
-    if(cb&&!document.getElementById('quiback')){
-      const b=document.createElement('button'); b.id='quiback'; b.className='lk quiback'; b.textContent='← Retour à mes messages';
-      b.onclick=()=>{ b.remove(); navToView(QUI_BACK||'cockpit'); setTimeout(()=>{ const el=$('copilotbox'); if(el)el.scrollIntoView({behavior:'smooth',block:'start'}); },250); };
-      cb.prepend(b);
-    }
-  },80);
+let QUI_BACK=null; // conservé pour la page Contacts (bouton retour éventuel)
+// « Qui c'est ? » : ouvre la FICHE CRÉATRICE en surimpression, comme une fiche marque :
+// identité, réseaux, emails connus, collabs avec l'agence, historique des échanges, notes.
+async function quiEstCe(name){
+  let ov=document.getElementById('creatorov');
+  if(!ov){ ov=document.createElement('div'); ov.id='creatorov'; ov.className='creatorov'; ov.onclick=(e)=>{ if(e.target===ov) ov.remove(); }; document.body.appendChild(ov); }
+  ov.innerHTML='<div class="creatorcard"><div class="state" style="padding:20px">Chargement de la fiche…</div></div>';
+  try{
+    const r=await api('/api/creator?name='+encodeURIComponent(name));
+    if(!r.ok)throw 0;
+    const d=await r.json();
+    ov.innerHTML=creatorCardHTML(d);
+    wireCreatorCard(ov,name);
+  }catch(e){ ov.innerHTML='<div class="creatorcard"><button class="lk ccclose">✕</button><div class="state" style="padding:16px">Fiche indisponible.</div></div>'; const x=ov.querySelector('.ccclose'); if(x)x.onclick=()=>ov.remove(); }
+}
+function creatorCardHTML(d){
+  const f=d.fiche||{}, rx=f.reseaux||{};
+  const chip=(l,u)=>u?`<a class="lk" href="${esc(/^https?:/i.test(u)?u:('https://'+u))}" target="_blank" rel="noopener">${l} ↗</a>`:'';
+  const rlinks=[chip('Instagram',rx.instagram),chip('TikTok',rx.tiktok),chip('YouTube',rx.youtube),chip('Autre',rx.autre)].filter(Boolean).join(' · ');
+  const gmailLink='https://mail.google.com/mail/u/0/#search/'+encodeURIComponent(d.name);
+  const collabs=(d.collabs||[]).map(c=>`<div class="fitrow">🏷️ ${esc(c.brand||'')} · ${esc(c.statut||'')}${c.date?(' · '+esc(String(c.date).slice(0,10))):''}</div>`).join('');
+  const veille=(d.veille||[]).map(v=>`<div class="fitrow">🔎 ${esc(v.brand||'')} · veille ${esc(v.statut||'')}${v.commentaire?(' · <span class="fs">'+esc(v.commentaire.slice(0,120))+'</span>'):''}</div>`).join('');
+  const mails=(d.mails||[]).map(m=>`<div class="fitrow">✉️ ${esc(mailDate(m.at)||'')} · ${esc(m.subject||'(sans objet)')}${m.brand?(' · '+esc(m.brand)):''} · <span class="fs">boîte ${esc(m.cp||'')}</span></div>`).join('');
+  const hist=(d.history||[]).map(h=>`<div class="fitrow">📜 ${esc(histDate(h.at))} · ${esc(h.detail||h.action||'')}${h.by?(' · <span class="fs">'+esc(h.by)+'</span>'):''}</div>`).join('');
+  const notes=(f.notes||[]).slice().reverse().map(n2=>`<div class="fnote"><div class="fm">${esc(n2.text)}</div><div class="fs">${esc(n2.by||'')} · ${fnoteDate(n2.at)}</div></div>`).join('');
+  const emails=(f.emails||[]).map(e2=>`<a class="todolink" href="mailto:${esc(e2)}">${esc(e2)}</a>`).join(' · ')||'<span class="empty">inconnu</span>';
+  return `<div class="creatorcard">
+    <button class="lk ccclose" title="Fermer">✕</button>
+    <h3>👤 ${esc(d.name)}</h3>
+    <div class="ccrow"><b>Email :</b> ${emails}</div>
+    <div class="ccrow"><b>Réseaux :</b> ${rlinks||'<span class="empty">à compléter</span>'} <button class="lk" id="ccedit">✎ compléter</button></div>
+    <div id="ccform" style="display:none" class="ficheform">
+      <label>Instagram</label><input id="ccig" value="${esc(rx.instagram||'')}" placeholder="https://instagram.com/…">
+      <label>TikTok</label><input id="cctk" value="${esc(rx.tiktok||'')}" placeholder="https://tiktok.com/@…">
+      <label>YouTube / autre</label><input id="ccyt" value="${esc(rx.youtube||rx.autre||'')}">
+      <label>Ajouter un email</label><input id="ccmail" value="">
+      <div class="fichebtns"><button class="lk primary" id="ccsave">Enregistrer</button></div>
+    </div>
+    <div class="bcsub">🤝 Collabs avec l'agence</div>${collabs||''}${veille||''}${(!collabs&&!veille)?'<span class="empty">aucune collab connue, profil nouveau</span>':''}
+    <div class="bcsub">✉️ Historique des échanges</div>${mails||'<span class="empty">aucun échange vu par le copilote</span>'}
+    <div class="ccrow"><a class="lk" href="${gmailLink}" target="_blank" rel="noopener">Chercher tous ses mails dans Gmail ↗</a></div>
+    ${hist?('<div class="bcsub">📜 Traçabilité</div>'+hist):''}
+    <div class="bcsub">📝 Notes de l'équipe</div>${notes||'<span class="empty">aucune note</span>'}
+    <div class="ficheform"><textarea id="ccnote" rows="2" placeholder="ex. préfère être contactée en DM Instagram, très réactive…"></textarea>
+      <div class="fichebtns"><button class="lk primary" id="ccnoteadd">＋ Ajouter une note</button></div></div>
+  </div>`;
+}
+function wireCreatorCard(ov,name){
+  const q=id=>ov.querySelector('#'+id);
+  ov.querySelector('.ccclose').onclick=()=>ov.remove();
+  const ed=q('ccedit'); if(ed)ed.onclick=()=>{q('ccform').style.display='block';ed.style.display='none';};
+  const sv=q('ccsave'); if(sv)sv.onclick=async()=>{
+    const body={name,reseaux:{instagram:q('ccig').value.trim(),tiktok:q('cctk').value.trim(),youtube:q('ccyt').value.trim()}};
+    const em=q('ccmail').value.trim(); if(em)body.email=em;
+    await api('/api/creator',{method:'POST',body:JSON.stringify(body)}); quiEstCe(name);
+  };
+  const na=q('ccnoteadd'); if(na)na.onclick=async()=>{
+    const t=q('ccnote').value.trim(); if(!t)return;
+    await api('/api/creator',{method:'POST',body:JSON.stringify({name,note:t})}); quiEstCe(name);
+  };
 }
 // Boutons Oui/Non/Envoyer directement SUR la ligne du mail concerné (comme sur Slack)
 function decorateMailRows(ps,who){

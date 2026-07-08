@@ -1730,6 +1730,41 @@ app.post("/api/copilot/act", auth, async (req, res) => {
   const out = await copilotExecute(String(id), String(action), text);
   res.status(out.code === 200 ? 200 : out.code).json({ ok: out.code === 200, title: out.title, msg: out.msg });
 });
+// --- Fiches créatrices : l'identité d'un créateur, agrégée automatiquement -----
+// (collabs au calendrier, veille, échanges vus par le copilote, traçabilité) et
+// enrichissable par l'équipe (réseaux sociaux, emails, notes). Ouvre via « Qui c'est ? ».
+const CREATORS_STORE = path.join(DATA_DIR, "creators.json");
+function loadCreators() { try { return JSON.parse(fs.readFileSync(CREATORS_STORE, "utf8")); } catch (e) { return {}; } }
+function saveCreators(o) { try { fs.writeFileSync(CREATORS_STORE, JSON.stringify(o)); } catch (e) {} }
+app.get("/api/creator", auth, async (req, res) => {
+  const name = String(req.query.name || "").trim();
+  if (!name) return res.status(400).json({ error: "nom manquant" });
+  const n = normName(name.replace(/^@/, ""));
+  const fiche = loadCreators()[n] || {};
+  let collabs = [];
+  try { collabs = (await fetchRows()).filter((r) => normName(r.name || "") === n || (n.length > 3 && normName(r.name || "").includes(n))).map((r) => ({ brand: r.brand, statut: r.statut || r.grp || "", date: r.date || null })); } catch (e) {}
+  let history = [];
+  try { const h = loadHistory(); history = Object.values(h).filter((rec) => normName(rec.name || "") === n).flatMap((rec) => (rec.events || []).map((ev) => ({ ...ev, brand: rec.brand }))).sort((a, b) => b.at - a.at).slice(0, 20); } catch (e) {}
+  let mails = [];
+  try { mails = (loadCopilot().proposals || []).filter((p) => normName(String(p.creator || "").replace(/^@/, "")) === n).map((p) => ({ at: p.at, subject: p.subject, brand: p.brand, status: p.status, cp: p.cpName, to: p.to })).sort((a, b) => b.at - a.at).slice(0, 15); } catch (e) {}
+  const emails = [...new Set([...(fiche.emails || []), ...mails.map((m) => m.to).filter(Boolean)])];
+  let veille = [];
+  try { veille = (await fetchAllTasks()).filter((t) => t.type === "Prise de contact" && normName(String(t.task).replace(/^contacter\s+/i, "").replace(/^@/, "")) === n).map((t) => ({ brand: t.projet, statut: t.statut, commentaire: t.commentaire || "", lien: t.lien || null })); } catch (e) {}
+  res.json({ name, fiche: { reseaux: fiche.reseaux || {}, notes: fiche.notes || [], emails }, collabs, history, mails, veille });
+});
+app.post("/api/creator", auth, (req, res) => {
+  const name = String(req.body?.name || "").trim();
+  if (!name) return res.status(400).json({ error: "nom manquant" });
+  const n = normName(name.replace(/^@/, ""));
+  const all = loadCreators(); const rec = all[n] || {};
+  const b = req.body || {};
+  if (b.reseaux) { rec.reseaux = { ...(rec.reseaux || {}) }; for (const k of ["instagram", "tiktok", "youtube", "autre"]) if (b.reseaux[k] !== undefined) rec.reseaux[k] = String(b.reseaux[k]).slice(0, 300); }
+  if (b.email) rec.emails = [...new Set([...(rec.emails || []), String(b.email).slice(0, 200)])];
+  if (b.note) rec.notes = (rec.notes || []).concat([{ at: Date.now(), by: req.user.name, text: String(b.note).slice(0, 1000) }]).slice(-50);
+  rec.name = name;
+  all[n] = rec; saveCreators(all);
+  res.json({ ok: true });
+});
 // --- Onboarding des nouvelles arrivantes -------------------------------------
 // Checklist de bienvenue dans le cockpit de la personne (cases persistées sur disque),
 // progression visible des superviseures. Nouvelle arrivante = ajouter son adresse dans
