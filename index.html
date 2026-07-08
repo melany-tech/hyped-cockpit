@@ -1627,13 +1627,19 @@ function renderMail(d, who){
   Object.values(d.byBrand||{}).forEach(a=>(a||[]).forEach(m=>flat.push(m)));
   (d.teamMails||[]).forEach(m=>flat.push(m));
   (d.autres||[]).forEach(m=>flat.push(m));
-  const autres=[]; const dd=new Set();
-  flat.forEach(m=>{const k=m.id||m.threadId; if(!k||seenIds.has(k)||dd.has(k))return; dd.add(k); autres.push(m);});
+  const autresTous=[]; const dd=new Set();
+  flat.forEach(m=>{const k=m.id||m.threadId; if(!k||seenIds.has(k)||dd.has(k))return; dd.add(k); autresTous.push(m);});
+  // Fil de MARQUE dont le dernier message vient de l'agence = on a répondu, on attend le créateur.
+  // Ce n'est ni « interne » ni « hors collab » : section dédiée, plus claire.
+  const isHA=m=>/@hyped-agency\.fr/i.test(String(m.from||''));
+  const attente=autresTous.filter(m=>m.brand&&isHA(m));
+  const autres=autresTous.filter(m=>!(m.brand&&isHA(m)));
   const aRow=m=>{const link=m.url?`<a class="lk" href="${esc(m.url)}" target="_blank" rel="noopener">Ouvrir</a>`:'';
     const snip=deent(m.snippet||''); const dt=mailDate(m.date);
     return `<div class="row"><span class="rdot" style="background:#9AA7AA"></span><div class="info"><div class="t">${esc(m.subject)||'(sans objet)'}</div><div class="s">${esc(m.from||'')}${m.interne?' · <span class="cptag">interne</span>':''}${dt?` · <span class="maildate">${esc(dt)}</span>`:''}</div>${snip?`<div class="msgsnip">${esc(snip.slice(0,130))}${snip.length>130?'…':''}</div>`:''}</div>${m.brand?`<span class="brand">${esc(m.brand)}</span>`:''}${link}</div>`;};
-  const autresHtml=autres.length?`<details class="othermails"><summary>📥 Autres mails reçus (${autres.length}) · internes, en copie, hors collabs</summary>${autres.slice(0,50).map(aRow).join('')}</details>`:'';
-  const sum=`<div class="mailsum">${d.relevant||0} mail(s) liés aux collabs · <b>${reps.length} réponse(s) créateur</b> · ${autres.length} autre(s) · ${d.noise||0} ignoré(s) (pubs, newsletters)</div>`;
+  const attenteHtml=attente.length?`<details class="othermails"><summary>⏳ En attente de réponse créateur (${attente.length}) · tu as répondu, la balle est chez eux</summary>${attente.slice(0,50).map(aRow).join('')}</details>`:'';
+  const autresHtml=(autres.length?`<details class="othermails"><summary>📥 Autres mails reçus (${autres.length}) · internes, en copie, hors collabs</summary>${autres.slice(0,50).map(aRow).join('')}</details>`:'')+attenteHtml;
+  const sum=`<div class="mailsum">${d.relevant||0} mail(s) liés aux collabs · <b>${reps.length} réponse(s) créateur</b> · ${attente.length} en attente créateur · ${autres.length} autre(s) · ${d.noise||0} ignoré(s) (pubs, newsletters)</div>`;
   if(!reps.length){$('mailbox').innerHTML=sum+'<div class="state">Aucune réponse créateur récente. 👌</div>'+autresHtml;return;}
   const CC={facturation:'#C77F2A',preview:'#7A5AA8',logistique:'#2C9087','réponse':'#1C3A44'};
   $('mailbox').innerHTML=sum+reps.map(m=>{
