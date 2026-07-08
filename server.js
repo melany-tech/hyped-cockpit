@@ -1295,6 +1295,27 @@ function copilotSlackText(p) {
   return "✉️ *" + who + "*" + brand + " : " + (p.resume || p.subject || "nouveau message") + "\n\n_Réponse prête (voix Hyped) :_\n>>> " + String(p.reply || "(IA indisponible, ouvre le cockpit)").slice(0, 900)
     + "\n\n<" + copilotLink(p.id, "send") + "|📤 Envoyer>  ·  <" + copilotLink(p.id, "self") + "|✍️ Je gère dans le cockpit>  ·  <" + copilotLink(p.id, "seen") + "|👁️ Vu, rien à répondre>";
 }
+// Suivi de pipeline dans les fils : le copilote capte si le créateur a dit oui, si un budget
+// est acté, et n'ajoute la collab au calendrier QUE quand une date de publication est clairement
+// actée par les deux parties. Jamais de date devinée, une seule entrée par fil.
+async function copilotPipeline({ creator, brand, transcript }) {
+  const hasOpenAI = !!process.env.OPENAI_API_KEY, hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
+  if (!hasOpenAI && !hasAnthropic) return null;
+  const sys = [
+    "Tu suis l'avancement d'une négociation entre une agence d'influence et un créateur. Réponds UNIQUEMENT un JSON valide :",
+    '{"accord":"oui"|"non"|"en_cours","budget":"...","date_publication":"YYYY-MM-DD ou null","date_preview":"YYYY-MM-DD ou null","livrables":"..."}',
+    "accord = \"oui\" seulement si le CRÉATEUR a clairement accepté la collaboration dans le fil.",
+    "budget = le montant ACTÉ par les DEUX parties (ex. « 300€ »), « gifting » si envoi produits sans rémunération acté, chaîne vide si rien d'acté. N'invente JAMAIS un montant.",
+    "date_publication / date_preview = UNIQUEMENT si une date précise a été proposée ET acceptée dans le fil. Sinon null. Une date seulement évoquée ou proposée sans réponse = null. Année en cours : 2026.",
+    "livrables = ce qui est convenu (ex. « 1 Reel + 2 stories »), chaîne vide sinon.",
+  ].join("\n");
+  const ctx = "Marque : " + (brand || "?") + "\nCréateur : " + (creator || "?") + "\n\nFil :\n" + String(transcript || "").slice(0, 6000);
+  try {
+    const out = hasOpenAI ? await callOpenAI(sys, ctx) : await callAnthropic(sys, ctx);
+    if (!out.ok) return null;
+    return JSON.parse(String(out.body).replace(/^[^{]*/, "").replace(/[^}]*$/, ""));
+  } catch (e) { return null; }
+}
 let COPILOT_RUNNING = false;
 async function copilotTick() {
   if (!COPILOT.enabled || !gm.ENABLED || COPILOT_RUNNING) return;
@@ -1359,6 +1380,29 @@ async function copilotTick() {
         seen.add(email + "|" + p.msgId);
         const slackUser = COPILOT.slackIds[email] || "";
         if (slackUser) await copilotNotify({ slackUser, text: "<@" + slackUser + "> " + copilotSlackText(p) }); // mention = vraie notification
+        // Pipeline : entrée au calendrier UNIQUEMENT quand une date de publication est actée dans le fil
+        try {
+          store.calAdded = store.calAdded || {};
+          if (m.brand && !store.calAdded[m.threadId] && notion && !DEMO) {
+            const pl = await copilotPipeline({ creator, brand: m.brand, transcript });
+            if (pl && pl.accord === "oui" && pl.date_publication && /^\d{4}-\d{2}-\d{2}$/.test(String(pl.date_publication))) {
+              if (m.brand === "In Haircare") {
+                const props = { "Nom": { title: [{ text: { content: creator || fromLabelOf(m.from) } }] }, "Statut": { select: { name: "Non posté" } }, "Date": { date: { start: pl.date_publication } } };
+                if (pl.date_preview && /^\d{4}-\d{2}-\d{2}$/.test(String(pl.date_preview))) props["Date preview"] = { date: { start: pl.date_preview } };
+                const bnum = parseFloat(String(pl.budget || "").replace(/[^\d.,]/g, "").replace(",", "."));
+                if (bnum) props["Budget"] = { number: bnum };
+                const uid = await userIdByName(copilotCpName(email));
+                if (uid) props["Interlocuteur"] = { people: [{ id: uid }] };
+                const pg = await notion.pages.create({ parent: { database_id: INHAIRCARE_DB }, properties: props });
+                store.calAdded[m.threadId] = pg.id; CACHE.at = 0;
+                if (slackUser) await copilotNotify({ slackUser, text: "📅 Collab ajoutée au calendrier In Haircare : *" + (creator || "créateur") + "* · publication le " + pl.date_publication + (pl.date_preview ? (" · preview le " + pl.date_preview) : "") + (pl.budget ? (" · " + pl.budget) : "") + (pl.livrables ? (" · " + pl.livrables) : "") + ". Jette un œil à la fiche pour compléter si besoin." });
+              } else {
+                store.calAdded[m.threadId] = "manuel";
+                if (slackUser) await copilotNotify({ slackUser, text: "📅 Dates actées avec *" + (creator || "créateur") + "* (" + m.brand + ") : publication le " + pl.date_publication + (pl.budget ? (" · " + pl.budget) : "") + ". Ajoute la collab au calendrier " + m.brand + " dans Notion (je n'écris que dans le calendrier In Haircare pour l'instant)." });
+              }
+            }
+          }
+        } catch (e) { try { console.error("[copilot] pipeline :", e.message); } catch (e2) {} }
       }
       // Mails internes (si COPILOT_INCLUDE_TEAM=1) : on voit tout, on peut répondre en un clic
       if (COPILOT.includeTeam) {
