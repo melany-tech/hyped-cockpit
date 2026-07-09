@@ -765,9 +765,12 @@ async function renderProcess(){
       $('pdmsg').textContent='Envoi en cours…';
       const rd=new FileReader();
       rd.onload=async()=>{
-        const rr=await api('/api/process/doc',{method:'POST',body:JSON.stringify({label:$('pdlabel').value.trim(),filename:f.name,data:rd.result})});
-        const dd=await rr.json().catch(()=>({}));
-        if(rr.ok)renderProcess(); else $('pdmsg').textContent=dd.error||'Erreur';
+        try{
+          const rr=await api('/api/process/doc',{method:'POST',body:JSON.stringify({label:$('pdlabel').value.trim(),filename:f.name,data:rd.result})});
+          const dd=await rr.json().catch(()=>({}));
+          if(rr.ok)renderProcess();
+          else $('pdmsg').textContent=dd.error||(rr.status===413?'Fichier trop lourd pour le serveur (15 Mo max)':'Erreur '+rr.status+', réessaie');
+        }catch(e){$('pdmsg').textContent='Erreur réseau, réessaie';}
       };
       rd.readAsDataURL(f);
     };

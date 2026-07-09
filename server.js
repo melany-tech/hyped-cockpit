@@ -227,7 +227,7 @@ async function fetchRows() {
 
 // === App ================================================================
 const app = express();
-app.use(express.json({ limit: "12mb" })); // 12 Mo : permet l'upload des documents de fiche marque (base64)
+app.use(express.json({ limit: "25mb" })); // 25 Mo : un fichier de 15 Mo pèse ~20 Mo une fois encodé en base64 (docs process, fiches marques)
 app.use(express.urlencoded({ extended: false })); // formulaires simples (consigne copilote depuis Slack)
 app.use(cookieParser());
 function setAuthCookie(res, payload) {
