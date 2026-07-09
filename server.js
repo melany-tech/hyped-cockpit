@@ -1427,20 +1427,24 @@ async function copilotTick() {
           store.calAdded = store.calAdded || {};
           if (m.brand && !store.calAdded[m.threadId] && notion && !DEMO) {
             const pl = await copilotPipeline({ creator, brand: m.brand, transcript });
-            if (pl && pl.accord === "oui" && pl.date_publication && /^\d{4}-\d{2}-\d{2}$/.test(String(pl.date_publication))) {
+            // Garde-fous : un NOM identifiable, et des dates dans le FUTUR (une « date actée »
+            // extraite dans le passé = mauvaise lecture du fil, on n'écrit rien).
+            const nomCal = String(creator || fromLabelOf(m.from) || "").trim();
+            const today0 = new Date().toISOString().slice(0, 10);
+            if (pl && pl.accord === "oui" && nomCal && pl.date_publication && /^\d{4}-\d{2}-\d{2}$/.test(String(pl.date_publication)) && String(pl.date_publication) >= today0) {
               if (m.brand === "In Haircare") {
-                const props = { "Nom": { title: [{ text: { content: creator || fromLabelOf(m.from) } }] }, "Statut": { select: { name: "Non posté" } }, "Date": { date: { start: pl.date_publication } } };
-                if (pl.date_preview && /^\d{4}-\d{2}-\d{2}$/.test(String(pl.date_preview))) props["Date preview"] = { date: { start: pl.date_preview } };
+                const props = { "Nom": { title: [{ text: { content: nomCal } }] }, "Statut": { select: { name: "Non posté" } }, "Date": { date: { start: pl.date_publication } } };
+                if (pl.date_preview && /^\d{4}-\d{2}-\d{2}$/.test(String(pl.date_preview)) && String(pl.date_preview) >= today0) props["Date preview"] = { date: { start: pl.date_preview } };
                 const bnum = parseFloat(String(pl.budget || "").replace(/[^\d.,]/g, "").replace(",", "."));
                 if (bnum) props["Budget"] = { number: bnum };
                 const uid = await userIdByName(copilotCpName(email));
                 if (uid) props["Interlocuteur"] = { people: [{ id: uid }] };
                 const pg = await notion.pages.create({ parent: { database_id: INHAIRCARE_DB }, properties: props });
                 store.calAdded[m.threadId] = pg.id; CACHE.at = 0;
-                if (slackUser) await copilotNotify({ slackUser, text: "📅 Collab ajoutée au calendrier In Haircare : *" + (creator || "créateur") + "* · publication le " + pl.date_publication + (pl.date_preview ? (" · preview le " + pl.date_preview) : "") + (pl.budget ? (" · " + pl.budget) : "") + (pl.livrables ? (" · " + pl.livrables) : "") + "\n<" + copilotLink(pg.id, "fixcal") + "|✏️ Corriger la fiche> (date, preview, budget, nom : écris ce qui change, j'applique)." });
+                if (slackUser) await copilotNotify({ slackUser, text: "📅 Collab ajoutée au calendrier In Haircare : *" + nomCal + "* · publication le " + pl.date_publication + (props["Date preview"] ? (" · preview le " + pl.date_preview) : "") + (pl.budget ? (" · " + pl.budget) : "") + (pl.livrables ? (" · " + pl.livrables) : "") + "\n<" + copilotLink(pg.id, "fixcal") + "|✏️ Corriger la fiche> (date, preview, budget, nom : écris ce qui change, j'applique · « supprime la fiche » pour la retirer)." });
               } else {
                 store.calAdded[m.threadId] = "manuel";
-                if (slackUser) await copilotNotify({ slackUser, text: "📅 Dates actées avec *" + (creator || "créateur") + "* (" + m.brand + ") : publication le " + pl.date_publication + (pl.budget ? (" · " + pl.budget) : "") + ". Ajoute la collab au calendrier " + m.brand + " dans Notion (je n'écris que dans le calendrier In Haircare pour l'instant)." });
+                if (slackUser) await copilotNotify({ slackUser, text: "📅 Dates actées avec *" + nomCal + "* (" + m.brand + ") : publication le " + pl.date_publication + (pl.budget ? (" · " + pl.budget) : "") + ". Ajoute la collab au calendrier " + m.brand + " dans Notion (je n'écris que dans le calendrier In Haircare pour l'instant)." });
               }
             }
           }
