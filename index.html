@@ -580,6 +580,7 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
       <a class="nav" data-go="marques"><span class="ni">🏷️</span> Marques</a>
       <a class="nav" data-go="todo"><span class="ni">✅</span> To-do</a>
       <a class="nav" data-go="contacts"><span class="ni">👥</span> Contacts</a>
+      <a class="nav" data-go="processus"><span class="ni">📚</span> Process</a>
       <a class="nav" data-go="calendrier"><span class="ni">📅</span> Calendrier</a>
       <a class="nav" data-go="messages"><span class="ni">💬</span> Messages</a>
       <a class="nav" data-go="rapports"><span class="ni">📊</span> Rapports</a>
@@ -676,6 +677,7 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
     <section class="panel block" id="soonview" style="display:none"><div class="state" style="padding:46px 12px"><div class="sv-t">Bientôt 🚧</div><div class="sv-s"></div></div></section>
     <section id="campagnesview" style="display:none"><p class="pt"><span class="pi">📣</span> Campagnes par marque</p><div id="campagnesbox"><div class="state">Chargement…</div></div></section>
     <section id="contactsview" style="display:none"><p class="pt"><span class="pi">👥</span> Contacts créateurs</p><div id="contactsbox"><div class="state">Chargement…</div></div></section>
+    <section id="processview" style="display:none"><p class="pt"><span class="pi">📚</span> Process &amp; documents de référence</p><div class="panelhint">Tout ce qu'il faut lire ou renvoyer : guides, fiches de process, modèles. Ajoute un document, il est visible par toute l'équipe.</div><div id="processbox"><div class="state">Chargement…</div></div></section>
     <section id="rapportsview" style="display:none"><p class="pt"><span class="pi">📊</span> Rapports</p><div id="rapportsbox"><div class="state">Chargement…</div></div></section>
     <section id="calendrierview" style="display:none"><p class="pt"><span class="pi">📅</span> Calendrier</p><div id="calendrierbox"><div class="state">Chargement…</div></div></section>
     <section id="todoview" style="display:none"><p class="pt"><span class="pi">✅</span> To-do</p><div class="panelhint">Tes tâches à faire, marque par marque. Une case cochée = statut « Fait » dans Notion, tout est synchronisé.</div><div id="todowrap"><div class="state">Chargement…</div></div></section>
@@ -733,8 +735,8 @@ function statCardGo(act){
   else { navToView('cockpit'); setTimeout(()=>{const el=$('todopanel'); if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},220); } // à traiter / relances → priorités
 }
 let CURRENT_VIEW='cockpit';
-const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview',historique:'historiqueview',marques:'marquesview',todo:'todoview'};
-function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','historiqueview','marquesview','todoview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
+const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview',historique:'historiqueview',marques:'marquesview',todo:'todoview',processus:'processview'};
+function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','historiqueview','marquesview','todoview','processview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
 function refreshCustomView(){
   if(CURRENT_VIEW==='campagnes')renderCampagnes();
   else if(CURRENT_VIEW==='contacts')renderContacts();
@@ -743,6 +745,38 @@ function refreshCustomView(){
   else if(CURRENT_VIEW==='historique')renderHistorique();
   else if(CURRENT_VIEW==='marques')renderMarques();
   else if(CURRENT_VIEW==='todo')renderTodoTab();
+  else if(CURRENT_VIEW==='processus')renderProcess();
+}
+// --- Onglet Process : la bibliothèque des documents de référence ------------
+async function renderProcess(){
+  const box=$('processbox'); if(!box)return;
+  try{
+    const r=await api('/api/process/list'); if(!r.ok){box.innerHTML='<div class="state">Indisponible.</div>';return;}
+    const d=await r.json();
+    const fsz=n=>n>1048576?(n/1048576).toFixed(1)+' Mo':Math.max(1,Math.round((n||0)/1024))+' Ko';
+    const bi=(d.builtins||[]).map(b=>`<div class="row"><span class="rdot" style="background:#2C9087"></span><div class="info"><div class="t">📌 ${esc(b.label)}</div><div class="s">document du cockpit, toujours à jour</div></div><a class="lk" href="${esc(b.url)}" target="_blank" rel="noopener">Ouvrir ↗</a></div>`).join('');
+    const docs=(d.docs||[]).map(x=>`<div class="row"><span class="rdot" style="background:#C77F2A"></span><div class="info"><div class="t">📄 ${esc(x.label)}</div><div class="s">${esc(x.filename)} · ${fsz(x.size)} · ajouté par ${esc(x.by||'?')} · ${esc(fnoteDate(x.at))}</div></div><a class="lk" href="${esc(x.url)}" target="_blank" rel="noopener">Télécharger</a>${d.canDelete?`<button class="lk pdel" data-id="${esc(x.id)}" style="color:#C2553B">✕</button>`:''}</div>`).join('');
+    box.innerHTML=bi+(docs||'')+((!d.docs||!d.docs.length)?'<div class="state2" style="padding:10px">Aucun document ajouté par l\'équipe pour l\'instant. Plaquettes, briefs types, trames de négo… tout ce qui sert de référence a sa place ici. 📚</div>':'')
+      +'<div class="ficheform" style="margin-top:14px"><div class="fdlrow"><input id="pdlabel" placeholder="Nom du document (ex. Plaquette agence 2026)"><input id="pdfile" type="file"><button class="lk primary" id="pdadd">📄 Ajouter le document</button></div><span class="fichemsg" id="pdmsg"></span></div>';
+    const pa=$('pdadd'); if(pa)pa.onclick=()=>{
+      const fi=$('pdfile'); const f=fi&&fi.files&&fi.files[0];
+      if(!f){$('pdmsg').textContent='Choisis d\'abord un fichier 🙂';return;}
+      if(f.size>15*1024*1024){$('pdmsg').textContent='Fichier trop lourd (15 Mo max)';return;}
+      $('pdmsg').textContent='Envoi en cours…';
+      const rd=new FileReader();
+      rd.onload=async()=>{
+        const rr=await api('/api/process/doc',{method:'POST',body:JSON.stringify({label:$('pdlabel').value.trim(),filename:f.name,data:rd.result})});
+        const dd=await rr.json().catch(()=>({}));
+        if(rr.ok)renderProcess(); else $('pdmsg').textContent=dd.error||'Erreur';
+      };
+      rd.readAsDataURL(f);
+    };
+    box.querySelectorAll('.pdel').forEach(b=>b.onclick=async()=>{
+      if(!confirm('Supprimer ce document de la bibliothèque ?'))return;
+      await api('/api/process/doc/'+encodeURIComponent(b.dataset.id)+'/delete',{method:'POST',body:'{}'});
+      renderProcess();
+    });
+  }catch(e){box.innerHTML='<div class="state">Erreur de chargement.</div>';}
 }
 function showView(v){
   if(v!=='contacts')QUI_BACK=null; // on quitte Contacts par la barre latérale : plus besoin du bouton Retour

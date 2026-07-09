@@ -1734,6 +1734,52 @@ app.post("/api/copilot/act", auth, async (req, res) => {
   const out = await copilotExecute(String(id), String(action), text);
   res.status(out.code === 200 ? 200 : out.code).json({ ok: out.code === 200, title: out.title, msg: out.msg });
 });
+// --- Bibliothèque de process : tous les documents de référence dans le cockpit ---
+// Documents intégrés (guide, fiches de passation, storytelling, modèle shortlist)
+// + documents déposés par l'équipe, stockés sur le DISQUE PERSISTANT (jamais sur GitHub).
+const PROCESS_DIR = path.join(DATA_DIR, "process_docs");
+try { fs.mkdirSync(PROCESS_DIR, { recursive: true }); } catch (e) {}
+const PROCESS_STORE = path.join(DATA_DIR, "process_docs.json");
+function loadProcDocs() { try { return JSON.parse(fs.readFileSync(PROCESS_STORE, "utf8")); } catch (e) { return []; } }
+function saveProcDocs(a) { try { fs.writeFileSync(PROCESS_STORE, JSON.stringify(a)); } catch (e) {} }
+app.get("/api/process/list", auth, (req, res) => {
+  const builtins = [
+    { id: "guide", label: "Guide CP · le cockpit, la voix Hyped, le process de A à Z", url: "/guide" },
+    { id: "fiches", label: "Fiches de Process influence · la passation (12 fiches)", url: "/process" },
+    { id: "story", label: "Storytelling de marque · l'exemple GLASH Paris", url: "/story" },
+    { id: "modele", label: "Modèle de shortlist à envoyer aux marques (Excel)", url: "/modele-shortlist.xlsx" },
+  ];
+  const docs = loadProcDocs().map((d) => ({ id: d.id, label: d.label, url: "/api/process/doc/" + d.id, by: d.by, at: d.at, size: d.size, filename: d.filename }));
+  res.json({ builtins, docs, canDelete: req.user.role === "supervisor" });
+});
+app.post("/api/process/doc", auth, (req, res) => {
+  const { label, filename, data } = req.body || {};
+  const raw = String(data || "").replace(/^data:[^;]*;base64,/, "");
+  const buf = Buffer.from(raw, "base64");
+  if (!buf.length) return res.status(400).json({ error: "fichier vide" });
+  if (buf.length > 15 * 1024 * 1024) return res.status(400).json({ error: "fichier trop lourd (15 Mo max)" });
+  const safe = String(filename || "document").replace(/[^\w.\-()À-ſ ]+/g, "_").slice(0, 120);
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  try { fs.writeFileSync(path.join(PROCESS_DIR, id + "_" + safe), buf); } catch (e) { return res.status(500).json({ error: "écriture impossible" }); }
+  const a = loadProcDocs(); a.push({ id, label: String(label || "").slice(0, 160) || safe, filename: safe, by: req.user.name, at: Date.now(), size: buf.length });
+  saveProcDocs(a);
+  logActivity({ type: "process_doc", creator: safe, cp: req.user.name });
+  res.json({ ok: true, id });
+});
+app.get("/api/process/doc/:id", auth, (req, res) => {
+  const d = loadProcDocs().find((x) => x.id === String(req.params.id));
+  if (!d) return res.status(404).json({ error: "document introuvable" });
+  const fp = path.join(PROCESS_DIR, d.id + "_" + d.filename);
+  if (!fs.existsSync(fp)) return res.status(404).json({ error: "fichier disparu du disque" });
+  res.download(fp, d.filename);
+});
+app.post("/api/process/doc/:id/delete", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  const a = loadProcDocs(); const d = a.find((x) => x.id === String(req.params.id));
+  if (d) { try { fs.unlinkSync(path.join(PROCESS_DIR, d.id + "_" + d.filename)); } catch (e) {} }
+  saveProcDocs(a.filter((x) => x.id !== String(req.params.id)));
+  res.json({ ok: true });
+});
 // --- Fiches créatrices : l'identité d'un créateur, agrégée automatiquement -----
 // (collabs au calendrier, veille, échanges vus par le copilote, traçabilité) et
 // enrichissable par l'équipe (réseaux sociaux, emails, notes). Ouvre via « Qui c'est ? ».
