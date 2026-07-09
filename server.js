@@ -612,6 +612,15 @@ function brandNotesFor(brand) {
     return (rec && String(rec.iaNotes || "").trim().slice(0, 2000)) || "";
   } catch (e) { return ""; }
 }
+// Informations de facturation OFFICIELLES de la marque (fiche) : à qui facturer (agence
+// ou marque), coordonnées exactes. L'IA les recopie telles quelles, jamais de mémoire.
+function brandFacturationFor(brand) {
+  try {
+    if (!brand) return "";
+    const rec = loadBrandFiches()[brand];
+    return (rec && String(rec.facturation || "").trim().slice(0, 1200)) || "";
+  } catch (e) { return ""; }
+}
 // Histoire/valeurs de la marque (fiche marque) : l'IA s'en sert pour répondre
 // aux créateurs qui veulent en savoir plus sur la marque, avec des faits fiables.
 function brandInfoFor(brand) {
@@ -674,6 +683,7 @@ async function claudeReply({ cp, creator, brand, category, received, subject, tr
     "  - INTERDICTION ABSOLUE de VALIDER un tarif/budget proposé par le créateur ('c'est ok pour nous', 'on accepte ton tarif', 'ça marche pour ce montant') sans une DIRECTIVE explicite de la CP qui accepte CE tarif. Si le tarif est en suspens : 'pour tes tarifs, je valide en interne et je reviens vers toi très vite ✨'.",
     "PÉRIMÈTRE DE LA DIRECTIVE : quand une directive de la CP existe, elle ne vaut QUE pour la question tranchée. Tu n'acceptes, ne valides et ne promets RIEN d'autre (tarif, budget, date, contrat, exclusivité) : pour ces autres sujets, accuse réception avec chaleur et indique que tu reviens vite.",
     profileNote ? ("CONSIGNE DE LA MARQUE SUR CE PROFIL, valable pendant TOUTE la collab, elle prime sur le reste : « " + String(profileNote).slice(0, 400) + " ». Ex. « uniquement gifting » = tu n'évoques JAMAIS de rémunération pour ce profil, même s'il en demande : tu réorientes gentiment vers l'envoi de produits.") : "",
+    (() => { const f = brandFacturationFor(brand); return f ? ("INFORMATIONS DE FACTURATION OFFICIELLES pour " + brand + " : si le créateur demande à qui adresser sa facture ou les coordonnées de facturation, recopie EXACTEMENT ces informations, n'improvise JAMAIS d'autres coordonnées : « " + f + " ». Si ces informations ne répondent pas à sa question, dis que tu vérifies et reviens vers lui.") : ""; })(),
     "À l'inverse, si le fil parle clairement de factures/paiements déjà actés, tu es sur une collab rémunérée : agis en conséquence (accuser réception de facture, remboursement de produit acheté, etc.).",
     "N'invente JAMAIS un fait précis (montant, date exacte, condition) absent du fil. Si tu ne sais pas, demande.",
     "Reste concis : 3 à 10 lignes. Réponds UNIQUEMENT par le corps du mail, sans objet, sans guillemets, sans commentaire.",
@@ -961,7 +971,7 @@ app.get("/api/history", auth, (req, res) => {
 //   modifiable par la responsable (supervisor) uniquement.
 // Interlocuteur principal + notes de contexte : modifiables par toutes les CP (signé, horodaté).
 const BRANDS_STORE = path.join(DATA_DIR, "brands.json");
-const BRAND_BASE_FIELDS = ["histoire", "clientDepuis", "clientJusqua", "objectifs", "reunions", "kpis", "pole", "interlocuteurHA", "contactsOu", "instagram", "tiktok", "siteweb", "iaNotes"];
+const BRAND_BASE_FIELDS = ["histoire", "clientDepuis", "clientJusqua", "objectifs", "reunions", "kpis", "pole", "interlocuteurHA", "contactsOu", "instagram", "tiktok", "siteweb", "iaNotes", "facturation"];
 const BRAND_FILES_DIR = path.join(DATA_DIR, "brandfiles");
 try { fs.mkdirSync(BRAND_FILES_DIR, { recursive: true }); } catch (e) {}
 function loadBrandFiches() { try { return JSON.parse(fs.readFileSync(BRANDS_STORE, "utf8")); } catch (e) { return {}; } }
@@ -1771,6 +1781,13 @@ app.get("/api/process/doc/:id", auth, (req, res) => {
   if (!d) return res.status(404).json({ error: "document introuvable" });
   const fp = path.join(PROCESS_DIR, d.id + "_" + d.filename);
   if (!fs.existsSync(fp)) return res.status(404).json({ error: "fichier disparu du disque" });
+  if (req.query.view === "1") { // ?view=1 : lecture dans le navigateur au lieu du téléchargement
+    const ext = (d.filename.split(".").pop() || "").toLowerCase();
+    const mimes = { pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", txt: "text/plain; charset=utf-8", html: "text/html; charset=utf-8" };
+    res.setHeader("Content-Type", mimes[ext] || "application/octet-stream");
+    res.setHeader("Content-Disposition", "inline; filename*=UTF-8''" + encodeURIComponent(d.filename));
+    return res.send(fs.readFileSync(fp));
+  }
   res.download(fp, d.filename);
 });
 app.post("/api/process/doc/:id/delete", auth, (req, res) => {

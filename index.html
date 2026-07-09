@@ -754,8 +754,8 @@ async function renderProcess(){
     const r=await api('/api/process/list'); if(!r.ok){box.innerHTML='<div class="state">Indisponible.</div>';return;}
     const d=await r.json();
     const fsz=n=>n>1048576?(n/1048576).toFixed(1)+' Mo':Math.max(1,Math.round((n||0)/1024))+' Ko';
-    const bi=(d.builtins||[]).map(b=>`<div class="row"><span class="rdot" style="background:#2C9087"></span><div class="info"><div class="t">📌 ${esc(b.label)}</div><div class="s">document du cockpit, toujours à jour</div></div><a class="lk" href="${esc(b.url)}" target="_blank" rel="noopener">Ouvrir ↗</a></div>`).join('');
-    const docs=(d.docs||[]).map(x=>`<div class="row"><span class="rdot" style="background:#C77F2A"></span><div class="info"><div class="t">📄 ${esc(x.label)}</div><div class="s">${esc(x.filename)} · ${fsz(x.size)} · ajouté par ${esc(x.by||'?')} · ${esc(fnoteDate(x.at))}</div></div><a class="lk" href="${esc(x.url)}" target="_blank" rel="noopener">Télécharger</a>${d.canDelete?`<button class="lk pdel" data-id="${esc(x.id)}" style="color:#C2553B">✕</button>`:''}</div>`).join('');
+    const bi=(d.builtins||[]).map(b=>`<div class="row"><span class="rdot" style="background:#2C9087"></span><div class="info"><div class="t">📌 ${esc(b.label)}</div><div class="s">document du cockpit, toujours à jour</div></div><a class="lk" href="${esc(b.url)}" target="_blank" rel="noopener">Ouvrir ↗</a><a class="lk" href="${esc(b.url)}" download>Télécharger</a></div>`).join('');
+    const docs=(d.docs||[]).map(x=>`<div class="row"><span class="rdot" style="background:#C77F2A"></span><div class="info"><div class="t">📄 ${esc(x.label)}</div><div class="s">${esc(x.filename)} · ${fsz(x.size)} · ajouté par ${esc(x.by||'?')} · ${esc(fnoteDate(x.at))}</div></div><a class="lk" href="${esc(x.url)}?view=1" target="_blank" rel="noopener">Ouvrir ↗</a><a class="lk" href="${esc(x.url)}">Télécharger</a>${d.canDelete?`<button class="lk pdel" data-id="${esc(x.id)}" style="color:#C2553B">✕</button>`:''}</div>`).join('');
     box.innerHTML=bi+(docs||'')+((!d.docs||!d.docs.length)?'<div class="state2" style="padding:10px">Aucun document ajouté par l\'équipe pour l\'instant. Plaquettes, briefs types, trames de négo… tout ce qui sert de référence a sa place ici. 📚</div>':'')
       +'<div class="ficheform" style="margin-top:14px"><div class="fdlrow"><input id="pdlabel" placeholder="Nom du document (ex. Plaquette agence 2026)"><input id="pdfile" type="file"><button class="lk primary" id="pdadd">📄 Ajouter le document</button></div><span class="fichemsg" id="pdmsg"></span></div>';
     const pa=$('pdadd'); if(pa)pa.onclick=()=>{
@@ -1158,6 +1158,7 @@ const FICHE_FIELDS=[
   ['histoire','📖 Histoire de la marque','Quand elle s\'est lancée, ce qu\'elle vend, son univers…',1],
   ['objectifs','🎯 Objectifs en cours','Les objectifs de la collaboration en ce moment',1],
   ['iaNotes','🤖 Consignes pour l\'IA','Détails que l\'IA doit respecter dans ses réponses pour cette marque : ton, choses à ne jamais dire, spécificités produits, règles de dates, code promo à mentionner…',1],
+  ['facturation','💶 Informations de facturation','ex. « Facture à adresser à Hyped Agency SAS, 12 rue…, TVA FR12… » ou « Facturer directement à la marque : compta@marque.com, Marque SAS, adresse… ». L\'IA recopie EXACTEMENT ces infos quand un créateur demande.',1],
   ['clientDepuis','🤝 Client depuis','ex. mars 2025',0],
   ['clientJusqua','⏳ Collaboration jusqu\'à','ex. déc. 2026, renouvellement à discuter',0],
   ['reunions','📅 Réunions régulières','ex. weekly jeudi 15h',0],
