@@ -227,7 +227,7 @@ async function fetchRows() {
 
 // === App ================================================================
 const app = express();
-app.use(express.json({ limit: "25mb" })); // 25 Mo : un fichier de 15 Mo pèse ~20 Mo une fois encodé en base64 (docs process, fiches marques)
+app.use(express.json({ limit: "25mb", verify: (req, res, buf) => { req.rawBody = buf.toString("utf8"); } })); // 25 Mo (docs) + rawBody pour la signature Slack
 app.use(express.urlencoded({ extended: false })); // formulaires simples (consigne copilote depuis Slack)
 app.use(cookieParser());
 function setAuthCookie(res, payload) {
@@ -2248,6 +2248,95 @@ setInterval(ensureStatsTasks, 6 * 3600 * 1000);
 app.get(["/guide", "/guide.pdf"], (req, res) => res.sendFile(path.join(__dirname, "guide.pdf")));
 // Modèle de shortlist à envoyer aux marques : leurs fichiers rentrent alors parfaitement dans l'import
 app.get("/modele-shortlist.xlsx", (req, res) => res.download(path.join(__dirname, "modele_shortlist.xlsx"), "Shortlist profils - modele Hyped Agency.xlsx"));
+// --- Hypedbot en direct : envoie un lien en DM Slack, la tâche est créée -------
+// Remplace le chatbot Make. Analyse DÉTERMINISTE (lien + nom de marque + prénom de CP
+// tels quels, aucune devinette IA) et confirmation explicite. S'il manque une info,
+// il la demande et attend la réponse. Zéro crédit Make.
+const SLACK_SEEN = new Set(); // anti-doublons (Slack renvoie les événements non acquittés)
+const SLACK_PENDING = {};     // userId -> { link, brand, cp, at } en attente de complément
+function slackVerify(req) {
+  // Vérification de signature si SLACK_SIGNING_SECRET est configuré (recommandé).
+  // Sans secret : on n'accepte que les utilisateurs connus de COPILOT_SLACK_IDS (garde-fou).
+  const sec = process.env.SLACK_SIGNING_SECRET || "";
+  if (!sec) return true;
+  try {
+    const ts = req.headers["x-slack-request-timestamp"];
+    if (!ts || Math.abs(Date.now() / 1000 - Number(ts)) > 300) return false;
+    const base = "v0:" + ts + ":" + (req.rawBody || JSON.stringify(req.body));
+    const sig = "v0=" + crypto.createHmac("sha256", sec).update(base).digest("hex");
+    const given = String(req.headers["x-slack-signature"] || "");
+    return given.length === sig.length && crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(given));
+  } catch (e) { return false; }
+}
+function slackWho(userId) { // Slack userId -> { email, name } via COPILOT_SLACK_IDS
+  const email = Object.keys(COPILOT.slackIds || {}).find((e) => COPILOT.slackIds[e] === userId);
+  if (!email) return null;
+  const u = USERS.find((x) => String(x.email).toLowerCase() === String(email).toLowerCase());
+  return { email, name: u ? u.name : email.split("@")[0], role: u ? u.role : "cp" };
+}
+function quickBrandsList() { return [...new Set(["In Haircare", "Curls Matter", "Doucéa", "LIVA", "Toki Bona", "FND'HER", "Hyped Agency", ...Object.keys(loadBrandFiches())])]; }
+async function hypedbotHandle(ev) {
+  const channel = ev.channel;
+  const say = (text) => copilotNotify({ slackUser: channel, text });
+  const who = slackWho(ev.user);
+  if (!who) { await say("Je ne reconnais pas encore ton compte Slack 🙈 Demande à Mélany de m'ajouter ton identifiant (COPILOT_SLACK_IDS), et on pourra bosser ensemble."); return; }
+  const raw = String(ev.text || "");
+  // liens : Slack les enveloppe en <url> ou <url|libellé>
+  const links = [...raw.matchAll(/<(https?:\/\/[^>|]+)(?:\|[^>]*)?>/g)].map((m) => m[1]);
+  const plain = raw.replace(/<[^>]*>/g, " ");
+  const low = nlow(plain);
+  const brand = quickBrandsList().find((b) => low.includes(nlow(b))) || "";
+  const cpUser = USERS.map((u) => u.name).find((n) => new RegExp("(^|[^a-zà-ÿ])" + nlow(n).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "([^a-zà-ÿ]|$)").test(low)) || "";
+  const pend = SLACK_PENDING[ev.user] && (Date.now() - SLACK_PENDING[ev.user].at < 10 * 60 * 1000) ? SLACK_PENDING[ev.user] : null;
+  const state = { link: links[0] || (pend && pend.link) || "", brand: brand || (pend && pend.brand) || "", cp: cpUser || (pend && pend.cp) || "", at: Date.now() };
+  // plusieurs liens d'un coup : on traite tous avec la même marque/CP
+  const allLinks = links.length ? links : (state.link ? [state.link] : []);
+  if (!allLinks.length) { SLACK_PENDING[ev.user] = state; await say("Envoie-moi le lien du profil (TikTok / Instagram), avec la marque et la CP. Ex. : `https://tiktok.com/@fille in haircare prunelle`"); return; }
+  if (!state.brand) { SLACK_PENDING[ev.user] = { ...state, link: allLinks[0] }; await say("Pour quelle *marque* ? (" + quickBrandsList().slice(0, 6).join(", ") + "…)"); return; }
+  if (!state.cp) {
+    if (who.role !== "supervisor") state.cp = who.name; // une CP qui s'ajoute un profil = pour elle
+    else { SLACK_PENDING[ev.user] = { ...state, link: allLinks[0] }; await say("Pour quelle *CP* ? (" + USERS.filter((u) => u.role !== "supervisor").map((u) => u.name).join(", ") + "… ou toi)"); return; }
+  }
+  delete SLACK_PENDING[ev.user];
+  const done = [];
+  for (const lk of allLinks.slice(0, 10)) {
+    try {
+      const props = {
+        "Tâche": { title: [{ text: { content: "Contacter " + lk } }] },
+        "Type": { select: { name: "Prise de contact" } },
+        "Statut": { select: { name: "À faire" } },
+        "Projet": { select: { name: state.brand } },
+        "Responsable": { select: { name: state.cp } },
+        "Lien profil": { url: lk },
+      };
+      await notion.pages.create({ parent: { database_id: TASKS_DB }, properties: props });
+      invalidateTasksCache();
+      done.push(lk);
+      logActivity({ type: "profil_ajoute", creator: lk, brand: state.brand, cp: state.cp });
+    } catch (e) { await say("⚠️ Échec sur " + lk + " : " + String((e && e.message) || e).slice(0, 100)); }
+  }
+  if (done.length) {
+    await say("✅ Ajouté : " + done.length + " profil" + (done.length > 1 ? "s" : "") + " → *" + state.brand + "* → *" + state.cp + "* (À faire dans Notion, visible dans son onglet Profils).");
+    try {
+      const cpEmail3 = emailOf(state.cp);
+      const su3 = cpEmail3 ? (COPILOT.slackIds[cpEmail3] || "") : "";
+      if (su3 && su3 !== ev.user) await copilotNotify({ slackUser: su3, text: "🔎 " + done.length + " nouveau(x) profil(s) à contacter pour *" + state.brand + "* (ajouté par " + who.name + ") :\n" + done.join("\n") + "\nIls sont dans ton onglet Profils, messages d'approche prêts." });
+    } catch (e) {}
+  }
+}
+app.post("/slack/events", (req, res) => {
+  const body = req.body || {};
+  if (body.type === "url_verification") return res.send(body.challenge || ""); // poignée de main Slack
+  if (!slackVerify(req)) return res.sendStatus(401);
+  res.sendStatus(200); // acquitter sous 3 s, traiter ensuite
+  try {
+    const ev = body.event || {};
+    if (body.event_id) { if (SLACK_SEEN.has(body.event_id)) return; SLACK_SEEN.add(body.event_id); if (SLACK_SEEN.size > 2000) SLACK_SEEN.clear(); }
+    if (ev.type !== "message" || ev.channel_type !== "im") return;   // uniquement les DM
+    if (ev.bot_id || ev.subtype) return;                             // jamais nos propres messages
+    setImmediate(() => { hypedbotHandle(ev).catch((e) => { try { console.error("[hypedbot]", e.message); } catch (e2) {} }); });
+  } catch (e) { try { console.error("[hypedbot] event :", e.message); } catch (e2) {} }
+});
 // --- Ajout express (mobile) : remplace le chatbot Make ------------------------
 // Tu vois un profil sur les réseaux -> Partager -> cette page (lien prérempli via ?lien=),
 // deux tapes (marque + CP) -> tâche Notion créée, CP notifiée sur Slack, message IA prêt.
