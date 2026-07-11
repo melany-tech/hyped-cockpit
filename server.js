@@ -2016,6 +2016,12 @@ app.get("/api/sourcing", auth, async (req, res) => {
     res.json({ enabled: true, profils });
   } catch (e) { res.json({ enabled: false, error: e.message, profils: [] }); }
 });
+// Marques + équipe pour l'ajout express (page /ajout)
+app.get("/api/quickmeta", auth, (req, res) => {
+  const brands = [...new Set(["In Haircare", "Curls Matter", "Doucéa", "LIVA", "Toki Bona", "FND'HER", "Hyped Agency", "Autres", ...Object.keys(loadBrandFiches())])];
+  const cps = USERS.map((u) => u.name);
+  res.json({ brands, cps, me: req.user.name });
+});
 app.post("/api/sourcing", auth, async (req, res) => {
   if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
   const profil = String(req.body?.profil || "").trim();
@@ -2047,6 +2053,14 @@ app.post("/api/sourcing", auth, async (req, res) => {
       }
     } catch (e) { console.warn("auto-draft", e.message); }
     logActivity({ type: "profil_ajoute", creator: String(profil).replace(/^contacter\s+/i, "").trim(), brand: req.body?.marque || null, cp: resp || null });
+    // notify=true (ajout express) : on prévient la CP assignée sur Slack, en direct (0 crédit Make)
+    try {
+      if (req.body?.notify && resp) {
+        const cpEmail2 = emailOf(resp);
+        const su = cpEmail2 ? (COPILOT.slackIds[cpEmail2] || "") : "";
+        if (su) await copilotNotify({ slackUser: su, text: "🔎 Nouveau profil à contacter pour *" + (req.body?.marque || "?") + "* : " + profil + " (ajouté par " + req.user.name + "). Il est dans ton onglet Profils, message d'approche prêt." });
+      }
+    } catch (e) {}
     res.json({ ok: true, id: pg.id, draft });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -2234,5 +2248,63 @@ setInterval(ensureStatsTasks, 6 * 3600 * 1000);
 app.get(["/guide", "/guide.pdf"], (req, res) => res.sendFile(path.join(__dirname, "guide.pdf")));
 // Modèle de shortlist à envoyer aux marques : leurs fichiers rentrent alors parfaitement dans l'import
 app.get("/modele-shortlist.xlsx", (req, res) => res.download(path.join(__dirname, "modele_shortlist.xlsx"), "Shortlist profils - modele Hyped Agency.xlsx"));
+// --- Ajout express (mobile) : remplace le chatbot Make ------------------------
+// Tu vois un profil sur les réseaux -> Partager -> cette page (lien prérempli via ?lien=),
+// deux tapes (marque + CP) -> tâche Notion créée, CP notifiée sur Slack, message IA prêt.
+app.get("/ajout", (req, res) => {
+  res.send(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ajout express · Cockpit</title>
+<style>
+body{font-family:Montserrat,system-ui,sans-serif;background:#F5F3EE;color:#1C3A44;margin:0;padding:18px;display:flex;justify-content:center}
+.card{background:#fff;border:1px solid #E4E0D5;border-radius:16px;padding:22px;max-width:430px;width:100%}
+h1{font-size:17px;margin:0 0 4px}.sub{font-size:12px;color:#8A948F;margin:0 0 14px}
+input{width:100%;box-sizing:border-box;font-family:inherit;font-size:15px;padding:12px;border:1px solid #E4E0D5;border-radius:10px;margin-bottom:12px}
+.lbl{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#8A948F;margin:8px 0 6px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px}
+.chip{border:1px solid #E4E0D5;border-radius:999px;padding:8px 14px;font-size:13.5px;cursor:pointer;background:#fff}
+.chip.on{background:#1C3A44;color:#fff;border-color:#1C3A44}
+button.go{width:100%;margin-top:14px;font-family:inherit;font-size:15px;font-weight:700;padding:14px;border-radius:12px;border:none;background:#2C9087;color:#fff;cursor:pointer}
+.msg{margin-top:10px;font-size:13px;text-align:center;min-height:18px}
+a{color:#2C9087}
+</style></head><body><div class="card">
+<h1>🔎 Ajout express</h1><p class="sub">Colle le lien du profil, choisis la marque et la CP : tâche créée dans Notion, CP prévenue sur Slack.</p>
+<input id="lien" placeholder="Lien TikTok / Instagram ou @profil" autocomplete="off">
+<div class="lbl">Marque</div><div class="chips" id="brands"></div>
+<div class="lbl">Cheffe de projet</div><div class="chips" id="cps"></div>
+<button class="go" id="go">＋ Ajouter le profil</button>
+<div class="msg" id="msg"></div>
+</div><script>
+const $=id=>document.getElementById(id);
+const p=new URLSearchParams(location.search);
+$('lien').value=p.get('lien')||p.get('u')||p.get('url')||'';
+let marque='',cp='';
+function chips(el,list,cur,set){el.innerHTML='';list.forEach(v=>{const c=document.createElement('span');c.className='chip'+(v===cur?' on':'');c.textContent=v;c.onclick=()=>set(v);el.appendChild(c);});}
+async function boot(){
+  try{
+    const r=await fetch('/api/quickmeta',{credentials:'include'});
+    if(r.status===401){$('msg').innerHTML='Connecte-toi d\\'abord au <a href="/">cockpit</a> (une fois), puis reviens ici.';$('go').disabled=true;return;}
+    const d=await r.json();
+    window.__meta=d;
+    marque=localStorage.getItem('aj_marque')||d.brands[0];cp=localStorage.getItem('aj_cp')||d.me;
+    if(d.brands.indexOf(marque)<0)marque=d.brands[0];
+    if(d.cps.indexOf(cp)<0)cp=d.me;
+    boot2();
+  }catch(e){$('msg').textContent='Réseau indisponible, réessaie.';}
+}
+function boot2(){const d=window.__meta;chips($('brands'),d.brands,marque,v=>{marque=v;localStorage.setItem('aj_marque',v);boot2();});chips($('cps'),d.cps,cp,v=>{cp=v;localStorage.setItem('aj_cp',v);boot2();});}
+$('go').onclick=async()=>{
+  const lien=$('lien').value.trim();
+  if(!lien){$('msg').textContent='Colle d\\'abord le lien du profil 🙂';return;}
+  $('go').disabled=true;$('go').textContent='Ajout…';
+  try{
+    const r=await fetch('/api/sourcing',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({profil:lien,marque,responsable:cp,notify:true})});
+    const d=await r.json().catch(()=>({}));
+    if(r.ok){$('msg').textContent='✅ Ajouté pour '+marque+', assigné à '+cp+' (prévenue sur Slack).';$('lien').value='';}
+    else $('msg').textContent=d.error||('Erreur '+r.status);
+  }catch(e){$('msg').textContent='Erreur réseau, réessaie.';}
+  $('go').disabled=false;$('go').textContent='＋ Ajouter le profil';
+};
+boot();
+</script></body></html>`);
+});
 app.get("*", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.listen(PORT, () => console.log(`Cockpit ${DEMO ? "(DÉMO)" : "(Notion live, clients actifs)"} → http://localhost:${PORT}`));
