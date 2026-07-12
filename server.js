@@ -302,7 +302,11 @@ app.get("/api/collabs", auth, async (req, res) => {
     rows = rows.map((r) => (r.cp ? r : { ...r, cp: ASSIGN[normName(r.name)] || null }));
     const teamReq = String(req.query.team || "") === "1" && req.user.role !== "supervisor"; // CP en vue équipe (congés)
     if (req.user.role !== "supervisor" && !teamReq) rows = rows.filter((r) => r.cp === req.user.name);
-    const team = USERS.filter((u) => u.role === "cp").map((u) => u.name);
+    // Toute l'équipe sauf la personne connectée : CP, rôle « team » (Najem) et autres
+    // superviseures (Rozenn chez Mélany, et inversement). Les départs restent exclus.
+    const team = USERS
+      .filter((u) => normName(u.name) !== normName(req.user.name) && normName(u.name) !== "kendia" && !COPILOT.departed.includes(String(u.email).toLowerCase()))
+      .map((u) => u.name);
     res.json({ rows, demo: DEMO, viewer: { name: req.user.name, role: req.user.role }, team });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -425,6 +429,15 @@ app.post("/api/weekly/:id/done", auth, (req, res) => {
   const w = loadWeekly(); const n = (w.notes || []).find((x) => x.id === req.params.id);
   if (!n) return res.status(404).json({ error: "note introuvable" });
   n.done = !n.done; saveWeekly(w); res.json({ ok: true, done: n.done });
+});
+app.post("/api/weekly/:id/edit", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  const w = loadWeekly(); const n = (w.notes || []).find((x) => x.id === req.params.id);
+  if (!n) return res.status(404).json({ error: "note introuvable" });
+  const text = String(req.body?.text || "").trim().slice(0, 500);
+  if (text) n.text = text;
+  if (req.body?.who !== undefined) n.who = String(req.body.who || "").trim().slice(0, 40);
+  saveWeekly(w); res.json({ ok: true });
 });
 app.post("/api/weekly/:id/del", auth, (req, res) => {
   if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
