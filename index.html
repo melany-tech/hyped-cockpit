@@ -1160,9 +1160,13 @@ async function loadWeeklyPanel(){
     const items=(d.notes||[]).map(n=>'<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 2px;border-bottom:1px solid #EEF2F2">'
       +'<input type="checkbox" class="wkdone" data-id="'+esc(n.id)+'" '+(n.done?'checked':'')+' style="width:16px;height:16px;flex:0 0 16px;margin-top:2px">'
       +'<div style="flex:1;min-width:0'+(n.done?';text-decoration:line-through;color:#9AAAAA':'')+'">'+(n.who?'<b>'+esc(n.who)+'</b> · ':'')+esc(n.text)+' <span style="font-size:11px;color:#9AAAAA">'+esc(fnoteDate(n.at))+'</span>'
-      +(n.files&&n.files.length?('<div style="margin-top:3px">'+n.files.map(f=>'<a class="lk" style="text-decoration:none" target="_blank" rel="noopener" href="/api/weekly/file/'+esc(f.id)+'" title="Ouvrir pour projeter pendant la weekly">📎 '+esc(f.filename)+' ↗</a>').join(' ')+'</div>'):'')
+      +((n.files&&n.files.length)||(n.links&&n.links.length)?('<div style="margin-top:3px">'
+        +(n.files||[]).map(f=>'<a class="lk" style="text-decoration:none" target="_blank" rel="noopener" href="/api/weekly/file/'+esc(f.id)+'" title="Ouvrir pour projeter pendant la weekly">📎 '+esc(f.filename)+' ↗</a>').join(' ')+' '
+        +(n.links||[]).map(l=>'<a class="lk" style="text-decoration:none" target="_blank" rel="noopener" href="'+esc(l.url)+'" title="'+esc(l.url)+'">🔗 '+esc(l.label||l.url.replace(/^https?:\/\/(www\.)?/,'').slice(0,40))+' ↗</a>').join(' ')
+        +'</div>'):'')
       +'</div>'
       +'<button class="lk wkatt" data-id="'+esc(n.id)+'" title="Joindre un fichier (visuel, export…) à projeter pendant la weekly">📎</button>'
+      +'<button class="lk wklink" data-id="'+esc(n.id)+'" title="Attacher un lien (drive, Notion, TikTok…)">🔗</button>'
       +'<button class="lk wkedit" data-id="'+esc(n.id)+'" title="Modifier (texte ou destinataire)">✎</button>'
       +'<button class="lk wkdel" data-id="'+esc(n.id)+'" title="Supprimer" style="color:#C2553B">✕</button></div>').join('');
     p.querySelector('#weeklybox').innerHTML=(items||'<div class="state2" style="padding:8px">Un truc à dire lundi ? Note-le ici dès que ça te passe par la tête, et coche pendant la réunion. 🧠</div>')
@@ -1191,6 +1195,13 @@ async function loadWeeklyPanel(){
         rd.readAsDataURL(f);
       };
       fi.click();
+    });
+    // 🔗 : attacher un lien à une note (aussi projetable que la pièce jointe)
+    p.querySelectorAll('.wklink').forEach(b=>b.onclick=async()=>{
+      const url=prompt('Le lien à attacher (drive, Notion, TikTok…) :'); if(!url||!url.trim())return;
+      const label=prompt('Un petit nom pour ce lien ? (optionnel)')||'';
+      const r=await api('/api/weekly/'+encodeURIComponent(b.dataset.id)+'/link',{method:'POST',body:JSON.stringify({url:url.trim(),label:label.trim()})});
+      if(r.ok)loadWeeklyPanel(); else{const dd=await r.json().catch(()=>({}));alert(dd.error||'Lien invalide, réessaie');}
     });
     // ✎ : recharge la note dans les champs pour la corriger (ajouter le « pour qui » après coup, etc.)
     p.querySelectorAll('.wkedit').forEach(b=>b.onclick=()=>{

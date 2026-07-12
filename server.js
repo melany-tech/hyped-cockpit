@@ -492,6 +492,18 @@ app.post("/api/weekly/:id/file", auth, (req, res) => {
   n.files.push({ id: fid, filename: String(req.body?.filename || "fichier").slice(0, 100), mime: m[1], size: buf.length });
   saveWeekly(w); res.json({ ok: true });
 });
+// Lien attaché à une note weekly (drive, Notion, TikTok… tout ce qui se projette)
+app.post("/api/weekly/:id/link", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  const w = loadWeekly(); const n = (w.notes || []).find((x) => x.id === req.params.id);
+  if (!n) return res.status(404).json({ error: "note introuvable" });
+  let url = String(req.body?.url || "").trim();
+  if (url && !/^https?:\/\//i.test(url)) url = "https://" + url;
+  if (!/^https?:\/\/[^\s]+\.[^\s]+/.test(url)) return res.status(400).json({ error: "lien invalide" });
+  n.links = n.links || [];
+  n.links.push({ id: crypto.randomBytes(6).toString("hex"), url: url.slice(0, 800), label: String(req.body?.label || "").trim().slice(0, 80) });
+  saveWeekly(w); res.json({ ok: true });
+});
 app.get("/api/weekly/file/:fid", auth, (req, res) => {
   if (req.user.role !== "supervisor") return res.status(403).send("réservé aux superviseures");
   const w = loadWeekly(); let f = null;
