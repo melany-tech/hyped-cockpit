@@ -963,6 +963,12 @@ async function load(){
     renderCpChips();
     show($('filterbar'),true);
   }else show($('filterbar'),false);
+  // Rôle « team » (ex. social media manager) : espace allégé, centré sur la to-do.
+  // On masque les outils créateurs (profils, mails, campagnes, marques, contacts, rapports).
+  if(VIEWER.role==='team'){
+    ['profils','campagnes','contenus','marques','contacts','messages','rapports'].forEach(g=>{const a=document.querySelector('.sb-nav .nav[data-go="'+g+'"]');if(a)a.style.display='none';});
+    ['srcpanel','mailpanel','pipelinepanel','brandpanel','fillpanel','listpanel','statcards'].forEach(id=>{const e=$(id);if(e){e.classList.add('hidden');e.style.display='none';}});
+  }
   loadAlerts();          // remplissage des calendriers : visible par toutes les CP
   render();
   renderCalbar();

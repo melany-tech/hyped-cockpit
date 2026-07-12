@@ -270,6 +270,24 @@ app.post("/api/account/password", auth, (req, res) => {
   catch (e) { return res.status(500).json({ error: "impossible d'enregistrer sur le disque" }); }
   res.json({ ok: true });
 });
+// Création d'un compte par une superviseure (ex. social media manager, rôle « team » :
+// espace allégé avec to-do, process et calendrier, sans les outils créateurs des CP).
+app.post("/api/account/add", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const name = String(req.body?.name || "").trim();
+  const role = ["cp", "supervisor", "team"].includes(String(req.body?.role)) ? String(req.body.role) : "team";
+  const pass = String(req.body?.password || "");
+  if (!/@hyped-agency\.fr$/.test(email)) return res.status(400).json({ error: "email @hyped-agency.fr requis" });
+  if (!name) return res.status(400).json({ error: "prénom requis" });
+  if (pass.length < 8) return res.status(400).json({ error: "mot de passe d'au moins 8 caractères" });
+  if (USERS.find((u) => String(u.email).toLowerCase() === email)) return res.status(400).json({ error: "ce compte existe déjà" });
+  USERS.push({ email, name, role, passwordHash: bcrypt.hashSync(pass, 10) });
+  try { fs.writeFileSync(path.join(DATA_DIR, "users.json"), JSON.stringify(USERS, null, 2)); }
+  catch (e) { return res.status(500).json({ error: "impossible d'enregistrer sur le disque" }); }
+  logActivity({ type: "compte", creator: name + " (" + role + ")", cp: req.user.name });
+  res.json({ ok: true, email, name, role });
+});
 app.post("/api/logout", (req, res) => { res.clearCookie("hc_token"); res.json({ ok: true }); });
 app.get("/api/me", auth, (req, res) => res.json({ name: req.user.name, role: req.user.role, demo: DEMO }));
 app.get("/api/collabs", auth, async (req, res) => {
