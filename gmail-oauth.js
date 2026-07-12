@@ -306,24 +306,38 @@ async function calendarToday(email) {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-  const r = await cal.events.list({
-    calendarId: "primary", timeMin: start.toISOString(), timeMax: end.toISOString(),
-    singleEvents: true, orderBy: "startTime", maxResults: 25,
-  });
-  const events = (r.data.items || [])
-    .filter((e) => e.status !== "cancelled")
-    .map((e) => {
-      const video = (e.conferenceData?.entryPoints || []).find((p) => p.entryPointType === "video");
-      return {
-        id: e.id, title: e.summary || "(sans titre)",
-        start: e.start?.dateTime || e.start?.date || null,
-        end: e.end?.dateTime || e.end?.date || null,
-        allDay: !e.start?.dateTime,
-        meet: e.hangoutLink || video?.uri || null,
-        location: e.location || null,
-        htmlLink: e.htmlLink || null,
-      };
-    });
+  // TOUS les agendas de la personne (principal, perso, partagés…), pas seulement
+  // le principal : les rendez-vous vivent souvent sur un agenda secondaire.
+  let cals = [{ id: "primary" }];
+  try {
+    const cl = await cal.calendarList.list({ maxResults: 20 });
+    const sel = (cl.data.items || []).filter((x) => x.selected !== false && !x.deleted);
+    if (sel.length) cals = sel;
+  } catch (e) {}
+  const seen = new Set(); const events = [];
+  for (const k of cals.slice(0, 10)) {
+    try {
+      const r = await cal.events.list({
+        calendarId: k.id, timeMin: start.toISOString(), timeMax: end.toISOString(),
+        singleEvents: true, orderBy: "startTime", maxResults: 25,
+      });
+      (r.data.items || []).filter((e) => e.status !== "cancelled").forEach((e) => {
+        const key = e.iCalUID || e.id; if (seen.has(key)) return; seen.add(key); // même invitation présente sur 2 agendas
+        const video = (e.conferenceData?.entryPoints || []).find((p) => p.entryPointType === "video");
+        events.push({
+          id: e.id, title: e.summary || "(sans titre)",
+          start: e.start?.dateTime || e.start?.date || null,
+          end: e.end?.dateTime || e.end?.date || null,
+          allDay: !e.start?.dateTime,
+          meet: e.hangoutLink || video?.uri || null,
+          location: e.location || null,
+          htmlLink: e.htmlLink || null,
+          cal: k.summaryOverride || k.summary || null,
+        });
+      });
+    } catch (e) {}
+  }
+  events.sort((a, b) => String(a.start || "").localeCompare(String(b.start || "")));
   return { connected: true, events };
 }
 

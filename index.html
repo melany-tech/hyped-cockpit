@@ -1128,7 +1128,9 @@ async function loadDirigeant(){
     const r=await api('/api/dirigeant'); if(!r.ok)return;
     const d=await r.json();
     const ini=n=>String(n||'?').slice(0,2).toUpperCase();
-    const actLbl={contacte:'a contacté',relance:'a relancé',sourcing:'a ajouté',mail:'a écrit à',compte:'compte créé :'};
+    const actLbl={contacte:'a contacté',relance:'a relancé',sourcing:'a ajouté',compte:'compte créé :',
+      email:'a envoyé un mail à',brouillon:'a préparé un brouillon pour',programme:'a programmé un mail à',
+      brief:'a envoyé le brief à',etape:'a fait avancer',fiche:'a mis à jour la fiche de'};
     const bg=(v,ic,t,warn)=>'<span title="'+esc(t)+'" style="font-size:12px;font-weight:700;padding:3px 8px;border-radius:12px;white-space:nowrap;background:'+((warn&&v>0)?'#F8E3DC':'#EFF4F4')+';color:'+((warn&&v>0)?'#C2553B':'#33475C')+'">'+ic+' '+v+'</span>';
     $('dirbox').innerHTML=(d.members||[]).map(m=>{
       const la=m.lastAct?((actLbl[m.lastAct.type]||m.lastAct.type)+' '+(m.lastAct.creator||'')+' · '+fnoteDate(m.lastAct.at)):'pas d\'action récente';
