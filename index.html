@@ -1159,7 +1159,10 @@ async function loadWeeklyPanel(){
     const d=await r.json();
     const items=(d.notes||[]).map(n=>'<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 2px;border-bottom:1px solid #EEF2F2">'
       +'<input type="checkbox" class="wkdone" data-id="'+esc(n.id)+'" '+(n.done?'checked':'')+' style="width:16px;height:16px;flex:0 0 16px;margin-top:2px">'
-      +'<div style="flex:1;min-width:0'+(n.done?';text-decoration:line-through;color:#9AAAAA':'')+'">'+(n.who?'<b>'+esc(n.who)+'</b> · ':'')+esc(n.text)+' <span style="font-size:11px;color:#9AAAAA">'+esc(fnoteDate(n.at))+'</span></div>'
+      +'<div style="flex:1;min-width:0'+(n.done?';text-decoration:line-through;color:#9AAAAA':'')+'">'+(n.who?'<b>'+esc(n.who)+'</b> · ':'')+esc(n.text)+' <span style="font-size:11px;color:#9AAAAA">'+esc(fnoteDate(n.at))+'</span>'
+      +(n.files&&n.files.length?('<div style="margin-top:3px">'+n.files.map(f=>'<a class="lk" style="text-decoration:none" target="_blank" rel="noopener" href="/api/weekly/file/'+esc(f.id)+'" title="Ouvrir pour projeter pendant la weekly">📎 '+esc(f.filename)+' ↗</a>').join(' ')+'</div>'):'')
+      +'</div>'
+      +'<button class="lk wkatt" data-id="'+esc(n.id)+'" title="Joindre un fichier (visuel, export…) à projeter pendant la weekly">📎</button>'
       +'<button class="lk wkedit" data-id="'+esc(n.id)+'" title="Modifier (texte ou destinataire)">✎</button>'
       +'<button class="lk wkdel" data-id="'+esc(n.id)+'" title="Supprimer" style="color:#C2553B">✕</button></div>').join('');
     p.querySelector('#weeklybox').innerHTML=(items||'<div class="state2" style="padding:8px">Un truc à dire lundi ? Note-le ici dès que ça te passe par la tête, et coche pendant la réunion. 🧠</div>')
@@ -1173,6 +1176,22 @@ async function loadWeeklyPanel(){
     };
     $('wkadd').onclick=add;
     $('wktext').onkeydown=e=>{if(e.key==='Enter')add();};
+    // 📎 : joindre un fichier à une note (projeté en un clic pendant la weekly)
+    p.querySelectorAll('.wkatt').forEach(b=>b.onclick=()=>{
+      const fi=document.createElement('input'); fi.type='file';
+      fi.onchange=()=>{
+        const f=fi.files&&fi.files[0]; if(!f)return;
+        if(f.size>15*1024*1024){alert('Fichier trop lourd (15 Mo max)');return;}
+        b.textContent='⏳';
+        const rd=new FileReader();
+        rd.onload=async()=>{
+          const r=await api('/api/weekly/'+encodeURIComponent(b.dataset.id)+'/file',{method:'POST',body:JSON.stringify({filename:f.name,data:rd.result})});
+          if(r.ok)loadWeeklyPanel(); else{const dd=await r.json().catch(()=>({}));alert(dd.error||'Envoi impossible, réessaie');b.textContent='📎';}
+        };
+        rd.readAsDataURL(f);
+      };
+      fi.click();
+    });
     // ✎ : recharge la note dans les champs pour la corriger (ajouter le « pour qui » après coup, etc.)
     p.querySelectorAll('.wkedit').forEach(b=>b.onclick=()=>{
       const n=(d.notes||[]).find(x=>x.id===b.dataset.id); if(!n)return;

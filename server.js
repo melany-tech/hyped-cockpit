@@ -473,6 +473,35 @@ app.post("/api/weekly/:id/del", auth, (req, res) => {
   const w = loadWeekly(); w.notes = (w.notes || []).filter((x) => x.id !== req.params.id);
   saveWeekly(w); res.json({ ok: true });
 });
+// Pièces jointes des notes weekly : un visuel, un export, un tableau… stocké sur le
+// disque privé, ouvrable en un clic pendant la réunion pour être projeté.
+const WEEKLY_FILES_DIR = path.join(DATA_DIR, "weekly_files");
+try { fs.mkdirSync(WEEKLY_FILES_DIR, { recursive: true }); } catch (e) {}
+app.post("/api/weekly/:id/file", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  const w = loadWeekly(); const n = (w.notes || []).find((x) => x.id === req.params.id);
+  if (!n) return res.status(404).json({ error: "note introuvable" });
+  const m = /^data:([^;]+);base64,(.+)$/.exec(String(req.body?.data || ""));
+  if (!m) return res.status(400).json({ error: "fichier illisible" });
+  const buf = Buffer.from(m[2], "base64");
+  if (buf.length > 15 * 1024 * 1024) return res.status(400).json({ error: "fichier trop lourd (15 Mo max)" });
+  const fid = crypto.randomBytes(8).toString("hex");
+  try { fs.writeFileSync(path.join(WEEKLY_FILES_DIR, fid), buf); }
+  catch (e) { return res.status(500).json({ error: "impossible d'enregistrer sur le disque" }); }
+  n.files = n.files || [];
+  n.files.push({ id: fid, filename: String(req.body?.filename || "fichier").slice(0, 100), mime: m[1], size: buf.length });
+  saveWeekly(w); res.json({ ok: true });
+});
+app.get("/api/weekly/file/:fid", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).send("réservé aux superviseures");
+  const w = loadWeekly(); let f = null;
+  (w.notes || []).forEach((n) => (n.files || []).forEach((x) => { if (x.id === req.params.fid) f = x; }));
+  const p = path.join(WEEKLY_FILES_DIR, String(req.params.fid).replace(/[^a-f0-9]/g, ""));
+  if (!f || !fs.existsSync(p)) return res.status(404).send("fichier introuvable");
+  res.setHeader("Content-Type", f.mime || "application/octet-stream");
+  res.setHeader("Content-Disposition", (req.query.dl ? "attachment" : "inline") + "; filename=\"" + encodeURIComponent(f.filename) + "\"");
+  res.send(fs.readFileSync(p));
+});
 app.get("/api/alerts", auth, async (req, res) => {
   // Remplissage des calendriers : visible par TOUTES les CP (plus seulement le pilote).
   if (DEMO) return res.json({ monthLabel: "juillet 2026", minDays: MIN_DAYS, fill: [
