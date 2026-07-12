@@ -1086,13 +1086,50 @@ app.get("/api/history", auth, (req, res) => {
 //   modifiable par la responsable (supervisor) uniquement.
 // Interlocuteur principal + notes de contexte : modifiables par toutes les CP (signé, horodaté).
 const BRANDS_STORE = path.join(DATA_DIR, "brands.json");
-const BRAND_BASE_FIELDS = ["histoire", "clientDepuis", "clientJusqua", "objectifs", "reunions", "kpis", "pole", "interlocuteurHA", "contactsOu", "instagram", "tiktok", "siteweb", "iaNotes", "facturation"];
+const BRAND_BASE_FIELDS = ["histoire", "clientDepuis", "clientJusqua", "objectifs", "reunions", "kpis", "pole", "interlocuteurHA", "contactsOu", "instagram", "tiktok", "siteweb", "iaNotes", "facturation", "budgetMensuel"];
 const BRAND_FILES_DIR = path.join(DATA_DIR, "brandfiles");
 try { fs.mkdirSync(BRAND_FILES_DIR, { recursive: true }); } catch (e) {}
 function loadBrandFiches() { try { return JSON.parse(fs.readFileSync(BRANDS_STORE, "utf8")); } catch (e) { return {}; } }
 function saveBrandFiches(o) { try { fs.writeFileSync(BRANDS_STORE, JSON.stringify(o)); } catch (e) {} }
 app.get("/api/brands", auth, (req, res) => {
   res.json({ brands: loadBrandFiches(), canEditBase: req.user.role === "supervisor" });
+});
+// --- Suivi budget mensuel par marque -------------------------------------------
+// Budget engagé = somme des « Budget » du calendrier Notion de la marque sur le mois.
+// Le copilote y inscrit déjà les montants validés par mail (pipeline) ; les ajouts
+// à la main dans le calendrier comptent pareil. Budget mensuel = champ de la fiche.
+const BUDGET_CALS = {
+  "in haircare": { dbId: "380f8ac3-c3ae-80ce-ba4c-e8e82490edc6", dateProp: "Date" },
+  "doucea": { dbId: "37bf8ac3-c3ae-81d6-9dbd-d7f4a64165a8", dateProp: "Date" },
+};
+app.get("/api/budget/:brand", auth, async (req, res) => {
+  try {
+    const brand = String(req.params.brand || "").trim();
+    const fiche = (loadBrandFiches() || {})[brand] || {};
+    const budgetMensuel = parseFloat(String(fiche.budgetMensuel || "").replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
+    const month = /^\d{4}-\d{2}$/.test(String(req.query.month || "")) ? String(req.query.month) : new Date().toISOString().slice(0, 7);
+    const cfg = BUDGET_CALS[nrmName(brand)];
+    if (!notion || DEMO || !cfg) return res.json({ enabled: true, noCal: !cfg, month, budgetMensuel, total: 0, entries: [] });
+    const lastDay = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
+    const entries = []; let cursor;
+    do {
+      const r = await notion.databases.query({ database_id: cfg.dbId, start_cursor: cursor, page_size: 100,
+        filter: { property: cfg.dateProp, date: { on_or_after: month + "-01", on_or_before: month + "-" + String(lastDay).padStart(2, "0") } } });
+      r.results.forEach((pg) => {
+        const p = pg.properties || {};
+        entries.push({
+          nom: (p["Nom"]?.title || []).map((t) => t.plain_text).join("") || "(sans nom)",
+          date: p[cfg.dateProp]?.date?.start?.slice(0, 10) || null,
+          statut: p["Statut"]?.select?.name || "",
+          budget: Number(p["Budget"]?.number || 0),
+        });
+      });
+      cursor = r.has_more ? r.next_cursor : null;
+    } while (cursor);
+    entries.sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+    const total = entries.reduce((s, e) => s + (Number(e.budget) || 0), 0);
+    res.json({ enabled: true, month, budgetMensuel, total, restant: budgetMensuel ? (budgetMensuel - total) : null, entries });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.post("/api/brand/:name", auth, (req, res) => {
   const name = String(req.params.name || "").trim();

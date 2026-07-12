@@ -1260,6 +1260,7 @@ const FICHE_FIELDS=[
   ['objectifs','🎯 Objectifs en cours','Les objectifs de la collaboration en ce moment',1],
   ['iaNotes','🤖 Consignes pour l\'IA','Détails que l\'IA doit respecter dans ses réponses pour cette marque : ton, choses à ne jamais dire, spécificités produits, règles de dates, code promo à mentionner…',1],
   ['facturation','💶 Informations de facturation','ex. « Facture à adresser à Hyped Agency SAS, 12 rue…, TVA FR12… » ou « Facturer directement à la marque : compta@marque.com, Marque SAS, adresse… ». L\'IA recopie EXACTEMENT ces infos quand un créateur demande.',1],
+  ['budgetMensuel','📊 Budget mensuel (€)','ex. 3000 : alimente le suivi budget affiché sous la fiche',0],
   ['clientDepuis','🤝 Client depuis','ex. mars 2025',0],
   ['clientJusqua','⏳ Collaboration jusqu\'à','ex. déc. 2026, renouvellement à discuter',0],
   ['reunions','📅 Réunions régulières','ex. weekly jeudi 15h',0],
@@ -1390,8 +1391,47 @@ async function renderBrandDetail(brand,target){
   const fi=await getFiches();
   const f=(fi.brands||{})[brand]||{};
   det.innerHTML=ficheHTML(brand,f,fi.canEditBase)
+    +'<div id="budgetbox"></div>'
     +`<h4>🏷️ ${esc(brand)} · progression du pôle</h4><div class="bcgrid2"><div><div class="bcsub">À contacter (${profs.length})</div>${colA}</div><div><div class="bcsub">Contenus (${cols.length})</div>${colB}</div></div>`;
   wireFiche(det,brand,()=>renderBrandDetail(brand,target));
+  loadBudgetBox(brand,det);
+}
+// --- Suivi budget mensuel : camembert engagé/restant + export Excel client -----
+async function loadBudgetBox(brand,det,month){
+  const box=det.querySelector('#budgetbox'); if(!box)return;
+  box.innerHTML='<div class="state2" style="padding:8px">Chargement du suivi budget…</div>';
+  try{
+    const r=await api('/api/budget/'+encodeURIComponent(brand)+(month?('?month='+month):'')); const d=await r.json();
+    if(!r.ok){box.innerHTML='';return;}
+    const eur=(n)=>Number(n||0).toLocaleString('fr-FR')+' €';
+    const bm=d.budgetMensuel||0, tot=d.total||0, rest=bm-tot;
+    const pct=bm>0?Math.min(1,tot/bm):0;
+    const C=2*Math.PI*44;
+    const col=(bm>0&&tot>bm)?'#C2553B':'#2C9087';
+    const donut=bm>0?`<svg viewBox="0 0 110 110" style="width:118px;height:118px;flex:0 0 118px"><circle cx="55" cy="55" r="44" fill="none" stroke="#E8EEEE" stroke-width="14"/><circle cx="55" cy="55" r="44" fill="none" stroke="${col}" stroke-width="14" stroke-dasharray="${(C*pct).toFixed(1)} ${C.toFixed(1)}" stroke-linecap="round" transform="rotate(-90 55 55)"/><text x="55" y="52" text-anchor="middle" style="font-size:15px;font-weight:800;fill:#1C3A44">${Math.round(100*tot/bm)}%</text><text x="55" y="68" text-anchor="middle" style="font-size:9px;fill:#6A7A7A">engagé</text></svg>`:'';
+    box.innerHTML=`<div class="bcsub">📊 Suivi budget · <input type="month" id="bgmonth" value="${esc(d.month)}" style="width:auto;display:inline-block;font-size:12px;padding:2px 6px"> <button class="lk" id="bgexport" style="float:right">⬇️ Exporter en Excel (reporting client)</button></div>
+      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;padding:6px 0 12px">${donut}
+      <div style="flex:1;min-width:220px">
+        ${bm>0?`<div><b>${eur(tot)}</b> engagés sur <b>${eur(bm)}</b> de budget mensuel</div>
+        <div style="color:${rest<0?'#C2553B':'#2C9087'};font-weight:700;margin-top:2px">${rest<0?('⚠️ Dépassement de '+eur(-rest)):('Il reste '+eur(rest))}</div>`
+        :`<div><b>${eur(tot)}</b> engagés ce mois-ci.</div><div class="fs">Renseigne « 📊 Budget mensuel » dans la fiche (✏️ Modifier la fiche) pour voir le camembert et le restant.</div>`}
+        <div class="fs" style="margin-top:5px">${(d.entries||[]).length} collab(s) au calendrier ce mois-ci${d.noCal?' · <b>calendrier non branché pour cette marque</b>':''}. Les montants validés par mail sont inscrits automatiquement au calendrier par le copilote ; les ajouts à la main comptent pareil.</div>
+      </div></div>`;
+    const mi=box.querySelector('#bgmonth'); if(mi)mi.onchange=()=>loadBudgetBox(brand,det,mi.value);
+    const ex=box.querySelector('#bgexport'); if(ex)ex.onclick=async()=>{
+      ex.textContent='⏳ Préparation…';
+      try{
+        await ensureXLSX();
+        const rows=[['Créatrice / contenu','Date','Statut','Budget (€)']].concat((d.entries||[]).map(e=>[e.nom,e.date||'',e.statut||'',Number(e.budget)||0]));
+        rows.push([]);rows.push(['Total engagé','','',tot]);
+        if(bm>0){rows.push(['Budget mensuel','','',bm]);rows.push(['Restant','','',rest]);}
+        const ws=XLSX.utils.aoa_to_sheet(rows); ws['!cols']=[{wch:36},{wch:12},{wch:20},{wch:12}];
+        const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,('Budget '+d.month).slice(0,31));
+        XLSX.writeFile(wb,'Budget '+brand+' '+d.month+'.xlsx');
+      }catch(e){alert('Export impossible, réessaie.');}
+      ex.textContent='⬇️ Exporter en Excel (reporting client)';
+    };
+  }catch(e){box.innerHTML='';}
 }
 // ===== Vue Marques (menu latéral) : liste à gauche, fiche à droite =====
 let MQ_SELECTED=null;
