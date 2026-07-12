@@ -1177,7 +1177,20 @@ async function loadWeeklyPanel(){
       WK_EDIT=n.id; $('wkwho').value=n.who||''; $('wktext').value=n.text||'';
       $('wkadd').textContent='✔ Enregistrer'; $('wktext').focus();
     });
-    p.querySelectorAll('.wkdone').forEach(c=>c.onchange=async()=>{await api('/api/weekly/'+encodeURIComponent(c.dataset.id)+'/done',{method:'POST',body:'{}'});loadWeeklyPanel();});
+    // Cocher = fait. Si la note a un « Pour qui ? », on propose de l'envoyer direct
+    // dans la to-do de la ou des personnes (« Rozenn et Najem » = une tâche chacun).
+    p.querySelectorAll('.wkdone').forEach(c=>c.onchange=async()=>{
+      const n=(d.notes||[]).find(x=>x.id===c.dataset.id);
+      if(c.checked&&n&&!n.tasked&&(n.who||'').trim()){
+        if(confirm('Envoyer « '+n.text.slice(0,90)+(n.text.length>90?'…':'')+' » dans la to-do de '+n.who+' ?')){
+          const r=await api('/api/weekly/'+encodeURIComponent(n.id)+'/totask',{method:'POST',body:'{}'});
+          const dd=await r.json().catch(()=>({}));
+          if(r.ok){alert('📌 Ajouté à la to-do de : '+(dd.made||[]).join(', ')+'. Le kickoff du lundi ne la recréera pas.');loadWeeklyPanel();loadDirigeant();return;}
+          alert(dd.error||'Impossible de créer la tâche, réessaie.');
+        }
+      }
+      await api('/api/weekly/'+encodeURIComponent(c.dataset.id)+'/done',{method:'POST',body:'{}'});loadWeeklyPanel();
+    });
     p.querySelectorAll('.wkdel').forEach(b=>b.onclick=async()=>{await api('/api/weekly/'+encodeURIComponent(b.dataset.id)+'/del',{method:'POST',body:'{}'});loadWeeklyPanel();});
     show(p,true);
   }catch(e){}

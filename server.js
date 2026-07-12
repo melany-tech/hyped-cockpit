@@ -439,6 +439,35 @@ app.post("/api/weekly/:id/edit", auth, (req, res) => {
   if (req.body?.who !== undefined) n.who = String(req.body.who || "").trim().slice(0, 40);
   saveWeekly(w); res.json({ ok: true });
 });
+// Case cochée → la note part dans la to-do : crée la tâche Notion chez la ou les
+// personnes du « Pour qui ? » (« Rozenn et Najem » = une tâche chacun), puis marque
+// la note comme faite + « tasked » (le kickoff du lundi saura ne pas la recréer).
+app.post("/api/weekly/:id/totask", auth, async (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  if (!notion || DEMO) return res.status(400).json({ error: "Notion non branché" });
+  const w = loadWeekly(); const n = (w.notes || []).find((x) => x.id === req.params.id);
+  if (!n) return res.status(404).json({ error: "note introuvable" });
+  const teamNames = USERS.map((u) => u.name);
+  const whos = String(n.who || "").split(/,|\+|&| et | and /i).map((s) => s.trim()).filter(Boolean)
+    .map((s) => teamNames.find((t) => nrmName(t) === nrmName(s))).filter(Boolean);
+  if (!whos.length) return res.status(400).json({ error: "aucun prénom de l'équipe reconnu dans « Pour qui ? »" });
+  const brand = quickBrandsList().find((b) => nrmName(n.text).includes(nrmName(b))) || "";
+  const made = [];
+  for (const resp of [...new Set(whos)]) {
+    const props = {
+      "Tâche": { title: [{ text: { content: String(n.text).slice(0, 200) } }] },
+      "Type": { select: { name: "Autre" } },
+      "Statut": { select: { name: "À faire" } },
+      "Responsable": { select: { name: resp } },
+    };
+    if (brand) props["Projet"] = { select: { name: brand } };
+    try { await notion.pages.create({ parent: { database_id: TASKS_DB }, properties: props }); made.push(resp); } catch (e) {}
+  }
+  if (!made.length) return res.status(500).json({ error: "échec de création dans Notion" });
+  n.done = true; n.tasked = true; saveWeekly(w); invalidateTasksCache();
+  logActivity({ type: "todo", creator: String(n.text).slice(0, 60), cp: req.user.name });
+  res.json({ ok: true, made });
+});
 app.post("/api/weekly/:id/del", auth, (req, res) => {
   if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
   const w = loadWeekly(); w.notes = (w.notes || []).filter((x) => x.id !== req.params.id);
@@ -2343,12 +2372,12 @@ const KICKOFF_STORE = path.join(DATA_DIR, "kickoff.json");
 const KICKOFF_BOX = (process.env.KICKOFF_BOX || "melany@hyped-agency.fr").toLowerCase();
 function loadKickoff() { try { return JSON.parse(fs.readFileSync(KICKOFF_STORE, "utf8")); } catch (e) { return { done: [] }; } }
 function saveKickoff(o) { try { fs.writeFileSync(KICKOFF_STORE, JSON.stringify(o)); } catch (e) {} }
-async function kickoffExtract(transcript) {
+async function kickoffExtract(transcript, deja) {
   const hasOpenAI = !!process.env.OPENAI_API_KEY, hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
   if (!hasOpenAI && !hasAnthropic) return null;
   const team = USERS.map((u) => u.name).join(", ");
   const brands = quickBrandsList().join(", ");
-  const sys = [
+  const lines = [
     "Tu lis la transcription d'une réunion d'équipe d'une agence d'influence et tu en extrais UNIQUEMENT les tâches décidées (les « qui fait quoi »). Réponds UNIQUEMENT un JSON valide :",
     '{"taches":[{"tache":"...","responsable":"...","marque":"...","echeance":"YYYY-MM-DD ou null"}]}',
     "RÈGLES STRICTES :",
@@ -2357,7 +2386,10 @@ async function kickoffExtract(transcript) {
     "- marque = EXACTEMENT une de : " + brands + ". Sinon \"\".",
     "- echeance = SEULEMENT si une date précise a été dite, sinon null. Année 2026.",
     "- Maximum 25 tâches, les plus importantes. N'invente RIEN : chaque tâche doit être traçable à un passage de la réunion.",
-  ].join("\n");
+  ];
+  // Anti-doublons : ce qui est DÉJÀ dans les to-do (dont les notes weekly déjà poussées)
+  if (deja && deja.length) lines.push("- DÉJÀ dans la to-do (ne PAS les recréer, même reformulées différemment) :\n" + deja.slice(0, 90).map((s) => "• " + String(s).slice(0, 120)).join("\n"));
+  const sys = lines.join("\n");
   try {
     const out = hasOpenAI ? await callOpenAI(sys, String(transcript || "").slice(0, 90000)) : await callAnthropic(sys, String(transcript || "").slice(0, 90000));
     if (!out.ok) return null;
@@ -2385,16 +2417,26 @@ async function kickoffTick() {
         }
       }
       if (!text || text.length < 200) continue;
-      const taches = await kickoffExtract(text);
+      // Anti-doublons : tâches ouvertes existantes + notes weekly (poussées ou pas)
+      let existing = []; try { existing = (await fetchAllTasks()).filter((x) => x.statut !== "Fait"); } catch (e) {}
+      const wkNotes = (loadWeekly().notes || []).map((x) => (x.who ? x.who + " : " : "") + x.text);
+      const deja = existing.slice(-80).map((x) => (x.responsable ? x.responsable + " : " : "") + x.task).concat(wkNotes.slice(-30));
+      const taches = await kickoffExtract(text, deja);
       const su = COPILOT.slackIds[KICKOFF_BOX] || "";
       if (!taches || !taches.length) { if (su) await copilotNotify({ slackUser: su, text: "📋 J'ai lu le compte-rendu de ta weekly (« " + (m.subject || "réunion") + " ») mais je n'ai extrait aucune tâche claire. Tu peux les ajouter à la main dans la to-do." }); continue; }
       const teamNames = USERS.map((u) => u.name);
-      const created = [], orphans = [];
+      const created = [], orphans = [], skipped = [];
+      const nrmT = (s) => nrmName(s).replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
       for (const t of taches.slice(0, 25)) {
         const resp = teamNames.find((n) => nrmName(n) === nrmName(t.responsable || "")) || "";
         const brand = quickBrandsList().find((b) => nrmName(b) === nrmName(t.marque || "")) || "";
         if (!String(t.tache || "").trim()) continue;
         if (!resp) { orphans.push(t.tache); continue; }
+        // Filet de sécurité anti-doublons : si une tâche ouverte très proche existe déjà
+        // pour la même personne, on ne la recrée pas (même si l'IA l'a laissée passer).
+        const a = nrmT(t.tache);
+        const dup = existing.some((e) => nrmName(e.responsable) === nrmName(resp) && (() => { const b = nrmT(e.task); return (a.length > 14 && b.includes(a.slice(0, 35))) || (b.length > 14 && a.includes(b.slice(0, 35))); })());
+        if (dup) { skipped.push(t.tache + " → " + resp); continue; }
         const props = {
           "Tâche": { title: [{ text: { content: String(t.tache).slice(0, 200) } }] },
           "Type": { select: { name: "Autre" } },
@@ -2407,7 +2449,7 @@ async function kickoffTick() {
         catch (e) { orphans.push(t.tache + " (échec Notion)"); }
       }
       invalidateTasksCache();
-      if (su) await copilotNotify({ slackUser: su, text: "📋 *Kickoff traité* (« " + (m.subject || "réunion") + " ») : " + created.length + " tâche(s) créée(s) dans les to-do :\n" + created.join("\n") + (orphans.length ? ("\n\n🤷 Sans responsable clair (à attribuer à la main) :\n• " + orphans.join("\n• ")) : "") + "\n\n_Une tâche en trop ? Supprime-la dans Notion ou décoche-la, rien d'autre à faire._" });
+      if (su) await copilotNotify({ slackUser: su, text: "📋 *Kickoff traité* (« " + (m.subject || "réunion") + " ») : " + created.length + " tâche(s) créée(s) dans les to-do :\n" + created.join("\n") + (skipped.length ? ("\n\n♻️ Déjà dans la to-do, pas recréées :\n• " + skipped.join("\n• ")) : "") + (orphans.length ? ("\n\n🤷 Sans responsable clair (à attribuer à la main) :\n• " + orphans.join("\n• ")) : "") + "\n\n_Une tâche en trop ? Supprime-la dans Notion ou décoche-la, rien d'autre à faire._" });
       try { console.log("[kickoff]", m.subject, ":", created.length, "tâches créées,", orphans.length, "orphelines"); } catch (e) {}
     }
   } catch (e) { try { console.error("[kickoff] tick :", e.message); } catch (e2) {} }
