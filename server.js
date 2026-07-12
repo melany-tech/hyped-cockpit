@@ -387,7 +387,8 @@ app.get("/api/dirigeant", auth, async (req, res) => {
     const store = loadCopilot();
     const acts = loadActivity();
     const members = USERS
-      .filter((u) => u.role !== "supervisor" && !COPILOT.departed.includes(String(u.email).toLowerCase()) && normName(u.name) !== "kendia")
+      // tout le monde sauf la personne qui regarde (Rozenn superviseure incluse) et les départs
+      .filter((u) => normName(u.name) !== normName(req.user.name) && !COPILOT.departed.includes(String(u.email).toLowerCase()) && normName(u.name) !== "kendia")
       .map((u) => {
         const mine = tasks.filter((t) => t.statut !== "Fait" && normName(t.responsable) === normName(u.name));
         const late = mine.filter((t) => t.echeance && t.echeance < today).length;
