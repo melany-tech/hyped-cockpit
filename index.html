@@ -2135,15 +2135,38 @@ function renderTodo(tasks, showOwner, addFor){
     const chip=prio?'<span class="tchip prioc">Priorité</span>':'<span class="tchip todoc">À faire</span>';
     const own=(showOwner&&t.responsable)?`<span class="owner">${esc(t.responsable)}</span>`:'';
     const msg=/^contacter\s/i.test(t.task)?`<button class="lk todomsg" data-inf="${esc(infOf(t.task))}" data-brand="${esc(t.projet||'')}">✉️ Contacter</button>`:'';
+    const hasDet=(t.commentaire||'').trim();
     return `<div class="todo" data-id="${t.id}"><button class="tcheck" title="Cliquer = terminé ✓"></button>
-      <div class="info"><div class="t"><span class="ti-emoji">${taskIcon(t)}</span>${linkify(t.task)}</div><div class="s" style="${isLate?'color:#C2553B':''}">${meta.join(' · ')||'-'}</div></div>${msg}${own}${chip}</div>`;
+      <div class="info" title="Cliquer pour ajouter détails et échéance" style="cursor:pointer"><div class="t"><span class="ti-emoji">${taskIcon(t)}</span>${linkify(t.task)}${hasDet?' <span title="Cette tâche a des détails, clique pour les voir">📝</span>':''}</div><div class="s" style="${isLate?'color:#C2553B':''}">${meta.join(' · ')||'-'}</div></div>${msg}${own}${chip}</div>`;
   }).join('');
   $('todobox').innerHTML=add+rows;
+  window.TODO_BYID={}; tasks.forEach(t=>{TODO_BYID[t.id]=t;});
   NOTIF.late=late; NOTIF.lateItems=lateItems; updateBell();
   $('todobtn').onclick=addTask;
   $('todoinput').onkeydown=(e)=>{if(e.key==='Enter')addTask();};
   document.querySelectorAll('#todobox .tcheck').forEach(b=>b.onclick=()=>doneTask(b));
+  document.querySelectorAll('#todobox .todo .info').forEach(el=>el.onclick=()=>openTaskEdit(el.closest('.todo')));
   document.querySelectorAll('#todobox .todomsg').forEach(b=>b.onclick=(ev)=>{ev.stopPropagation();openCompose(b.closest('.todo'),{inf:b.dataset.inf,brand:b.dataset.brand,cp:(VIEWER&&VIEWER.name)||''});});
+}
+// Clic sur une tâche : petit éditeur inline pour les détails et la deadline
+function openTaskEdit(row){
+  const t=(window.TODO_BYID||{})[row.dataset.id]; if(!t)return;
+  const old=row.querySelector('.tedit'); if(old){old.remove();return;} // re-clic = referme
+  row.style.flexWrap='wrap';
+  const div=document.createElement('div'); div.className='tedit'; div.style.cssText='flex-basis:100%;width:100%;padding:8px 0 2px';
+  div.innerHTML='<textarea class="ted" placeholder="Détails, contexte, liens utiles…" style="min-height:56px;width:100%">'+esc(t.commentaire||'')+'</textarea>'
+    +'<div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap"><label style="font-size:12px;font-weight:600">📅 Échéance</label><input type="date" class="tdd" value="'+esc(t.echeance||'')+'" style="width:auto">'
+    +'<button class="lk primary tsave">✔ Enregistrer</button><button class="lk tcancel">Annuler</button>'
+    +(t.url?'<a class="lk" href="'+esc(t.url)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">Ouvrir dans Notion ↗</a>':'')+'</div>';
+  row.appendChild(div);
+  div.onclick=(e)=>e.stopPropagation();
+  div.querySelector('.tcancel').onclick=(e)=>{e.stopPropagation();div.remove();};
+  div.querySelector('.tsave').onclick=async(e)=>{
+    e.stopPropagation();
+    const b=div.querySelector('.tsave'); b.textContent='⏳ …';
+    const r=await api('/api/todos/'+encodeURIComponent(row.dataset.id)+'/edit',{method:'POST',body:JSON.stringify({details:div.querySelector('.ted').value,echeance:div.querySelector('.tdd').value})});
+    if(r.ok)loadTodo(); else b.textContent='Erreur, réessaie';
+  };
 }
 async function addTask(){
   const v=$('todoinput').value.trim(); if(!v)return;

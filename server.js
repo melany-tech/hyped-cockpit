@@ -1000,6 +1000,25 @@ app.post("/api/todos/:id/done", auth, async (req, res) => {
   try { await notion.pages.update({ page_id: req.params.id, properties: { "Statut": { select: { name: "Fait" } } } }); invalidateTasksCache(); res.json({ ok: true }); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
+// Cliquer une tâche → ajouter des détails (Commentaire veille) et une échéance
+app.post("/api/todos/:id/edit", auth, async (req, res) => {
+  if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
+  try {
+    const props = {};
+    if (req.body?.echeance !== undefined) {
+      const e = String(req.body.echeance || "");
+      props["Échéance"] = (e && /^\d{4}-\d{2}-\d{2}$/.test(e)) ? { date: { start: e } } : { date: null };
+    }
+    if (req.body?.details !== undefined) {
+      const t = String(req.body.details || "").trim();
+      props["Commentaire veille"] = { rich_text: t ? [{ text: { content: t.slice(0, 1900) } }] : [] };
+    }
+    if (!Object.keys(props).length) return res.status(400).json({ error: "rien à modifier" });
+    await notion.pages.update({ page_id: req.params.id, properties: props });
+    invalidateTasksCache();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // --- Message d'approche auto (brouillon prêt dès l'ajout d'un profil) ----
 const BRAND_INFO = {
