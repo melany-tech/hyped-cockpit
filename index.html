@@ -793,7 +793,7 @@ function showView(v){
     refreshCustomView();
     window.scrollTo({top:0,behavior:'smooth'}); return;
   }
-  if(isCockpit){ ALL_BLOCKS.forEach(id=>{const e=$(id);if(e)e.style.display='';}); }
+  if(isCockpit){ const lite=(typeof dirigeantMode==='function'&&dirigeantMode())?DIRIGEANT_HIDE:[]; ALL_BLOCKS.forEach(id=>{const e=$(id);if(e)e.style.display=lite.includes(id)?'none':'';}); }
   else { const keep=VIEW_MAP[v]||[]; ALL_BLOCKS.forEach(id=>{const e=$(id);if(e)e.style.display=keep.includes(id)?'':'none';});
     const anyVisible=keep.some(id=>{const e=$(id);return e&&!e.classList.contains('hidden');});
     if(sv){ if(!anyVisible){ sv.style.display=''; sv.querySelector('.sv-t').textContent=(v==='calendrier')?'Agenda non connecté 📅':'Rien à afficher pour le moment.'; sv.querySelector('.sv-s').textContent=(v==='calendrier')?'Connecte ton Google Agenda (bouton « Connecter mon Gmail » dans Messages) pour voir tes visios ici.':''; } else sv.style.display='none'; } }
@@ -962,6 +962,7 @@ async function load(){
     }
     renderCpChips();
     show($('filterbar'),true);
+    if(CURRENT_VIEW==='cockpit')showView('cockpit'); // premier chargement : applique la vue dirigeante épurée si pastille « Moi »
   }else show($('filterbar'),false);
   // Rôle « team » (ex. social media manager) : espace allégé, centré sur la to-do.
   // On masque les outils créateurs (profils, mails, campagnes, marques, contacts, rapports).
@@ -1078,6 +1079,11 @@ let CPFILTER_INIT=false, CP_OTHERS=[];
 function nlow(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();}
 function cpSelParts(){ const v=($('cpfilter')&&$('cpfilter').value)||''; return (!v||v==='ALL')?[]:v.split('||').filter(Boolean); }
 function cpSingle(){ const p=cpSelParts(); return p.length===1?p[0]:null; }
+// Vue dirigeante : quand une superviseure regarde SA vue (pastille « Moi »), le cockpit
+// s'épure : stats, priorités et agenda seulement. Les blocs de travail CP (profils à
+// contacter, mails créateurs, pipeline…) réapparaissent dès qu'elle choisit une CP ou l'équipe.
+function dirigeantMode(){ if(!VIEWER||VIEWER.role!=='supervisor')return false; const p=cpSelParts(); return p.length===1&&nlow(p[0])===nlow(VIEWER.name); }
+const DIRIGEANT_HIDE=['srcpanel','mailpanel','pipelinepanel','brandpanel','fillpanel','listpanel'];
 function renderCpChips(){
   const box=$('cpchips'); if(!box)return;
   const me=VIEWER.name, parts=cpSelParts();
@@ -1098,6 +1104,7 @@ function renderCpChips(){
     $('cpfilter').value=parts.length?parts.join('||'):'ALL';
     try{localStorage.setItem('hc_cpsel',$('cpfilter').value);}catch(e){}
     renderCpChips();
+    if(CURRENT_VIEW==='cockpit')showView('cockpit'); // ré-applique la vue épurée ou complète selon la pastille
     render();loadTodo();loadOverview();loadMail();loadVisios();
   });
 }
