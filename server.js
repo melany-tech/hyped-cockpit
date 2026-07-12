@@ -376,6 +376,60 @@ app.get("/api/activity", auth, (req, res) => {
   for (const e of evs) { const k = e.type + "|" + (e.creator || "") + "|" + Math.round((e.at || 0) / 60000); if (seen.has(k)) continue; seen.add(k); out.push(e); if (out.length >= 12) break; }
   res.json({ activity: out });
 });
+// --- Vue dirigeante : l'état de l'équipe en un coup d'œil ---------------------
+// Une ligne par membre : tâches ouvertes, retards, mails créateurs en attente,
+// dernière action. Réservé aux superviseures (leur page d'accueil « Moi »).
+app.get("/api/dirigeant", auth, async (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  try {
+    const tasks = DEMO ? [] : await fetchAllTasks();
+    const today = new Date().toISOString().slice(0, 10);
+    const store = loadCopilot();
+    const acts = loadActivity();
+    const members = USERS
+      .filter((u) => u.role !== "supervisor" && !COPILOT.departed.includes(String(u.email).toLowerCase()) && normName(u.name) !== "kendia")
+      .map((u) => {
+        const mine = tasks.filter((t) => t.statut !== "Fait" && normName(t.responsable) === normName(u.name));
+        const late = mine.filter((t) => t.echeance && t.echeance < today).length;
+        const mails = (store.proposals || []).filter((p) => (p.status === "pending" || p.status === "ready") && String(p.cpEmail || "").toLowerCase() === String(u.email).toLowerCase()).length;
+        const last = acts.filter((a) => normName(a.cp) === normName(u.name)).sort((a, b) => (b.at || 0) - (a.at || 0))[0] || null;
+        return { name: u.name, role: u.role, open: mine.length, late, mails,
+          lastAct: last ? { type: last.type, creator: last.creator, at: last.at } : null };
+      });
+    res.json({ members, today });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// --- Pense-bête weekly : ce que la dirigeante veut dire lundi ------------------
+// Une note jetée à chaud (« dire à Prunelle de… ») pour vider la tête ; on coche
+// pendant la réunion. Stocké sur le disque persistant, visible des superviseures.
+const WEEKLY_STORE = path.join(DATA_DIR, "weekly.json");
+function loadWeekly() { try { return JSON.parse(fs.readFileSync(WEEKLY_STORE, "utf8")); } catch (e) { return { notes: [] }; } }
+function saveWeekly(w) { try { fs.writeFileSync(WEEKLY_STORE, JSON.stringify(w, null, 2)); } catch (e) {} }
+app.get("/api/weekly", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  const w = loadWeekly();
+  const notes = (w.notes || []).sort((a, b) => (a.done === b.done ? (b.at || 0) - (a.at || 0) : (a.done ? 1 : -1)));
+  res.json({ notes });
+});
+app.post("/api/weekly", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  const text = String(req.body?.text || "").trim().slice(0, 500);
+  if (!text) return res.status(400).json({ error: "note vide" });
+  const w = loadWeekly(); w.notes = w.notes || [];
+  w.notes.push({ id: crypto.randomBytes(6).toString("hex"), text, who: String(req.body?.who || "").trim().slice(0, 40), by: req.user.name, at: Date.now(), done: false });
+  saveWeekly(w); res.json({ ok: true });
+});
+app.post("/api/weekly/:id/done", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  const w = loadWeekly(); const n = (w.notes || []).find((x) => x.id === req.params.id);
+  if (!n) return res.status(404).json({ error: "note introuvable" });
+  n.done = !n.done; saveWeekly(w); res.json({ ok: true, done: n.done });
+});
+app.post("/api/weekly/:id/del", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  const w = loadWeekly(); w.notes = (w.notes || []).filter((x) => x.id !== req.params.id);
+  saveWeekly(w); res.json({ ok: true });
+});
 app.get("/api/alerts", auth, async (req, res) => {
   // Remplissage des calendriers : visible par TOUTES les CP (plus seulement le pilote).
   if (DEMO) return res.json({ monthLabel: "juillet 2026", minDays: MIN_DAYS, fill: [

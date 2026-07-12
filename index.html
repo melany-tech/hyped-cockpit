@@ -639,6 +639,11 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
       <p class="pt"><span class="pi">🔭</span> Pipeline profils</p>
       <div id="pipeline"><div class="state" style="padding:18px">Chargement…</div></div>
     </section>
+    <!-- Vue dirigeante : l'équipe en un coup d'œil (remplace le pipeline sur l'accueil « Moi ») -->
+    <section class="panel hidden" id="dirpanel">
+      <p class="pt"><span class="pi">👥</span> Mon équipe aujourd'hui</p>
+      <div id="dirbox"><div class="state" style="padding:18px">Chargement…</div></div>
+    </section>
   </div>
 
   <!-- Vue par marque · Remplissage calendriers -->
@@ -646,6 +651,11 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
     <section class="panel" id="brandpanel">
       <p class="pt"><span class="pi">🏷️</span> Vue par marque</p>
       <div id="brandcards"><div class="state" style="padding:18px">Chargement…</div></div>
+    </section>
+    <!-- Pense-bête weekly de la dirigeante (accueil « Moi » des superviseures) -->
+    <section class="panel hidden" id="weeklypanel">
+      <p class="pt"><span class="pi">🧠</span> À dire à la weekly</p>
+      <div id="weeklybox"></div>
     </section>
     <section class="panel" id="fillpanel">
       <p class="pt"><span class="pi">📊</span> Remplissage des calendriers</p>
@@ -726,7 +736,7 @@ function setupChrome(){
   showView('cockpit');
 }
 const VIEW_MAP={ profils:['srcpanel','brandpanel'], contenus:['listpanel','brandpanel','fillpanel'], messages:['mailpanel'] };
-const ALL_BLOCKS=['onbpanel','statcards','agendapanel','todopanel','pipelinepanel','brandpanel','fillpanel','srcpanel','listpanel','mailpanel'];
+const ALL_BLOCKS=['onbpanel','statcards','agendapanel','todopanel','pipelinepanel','dirpanel','brandpanel','weeklypanel','fillpanel','srcpanel','listpanel','mailpanel'];
 function navGo(a){ document.querySelectorAll('.sb-nav .nav').forEach(x=>x.classList.toggle('on',x===a)); showView(a.dataset.go); }
 function navToView(v){ const a=[...document.querySelectorAll('.sb-nav .nav')].find(x=>x.dataset.go===v); if(a)navGo(a); else showView(v); }
 function statCardGo(act){
@@ -793,7 +803,7 @@ function showView(v){
     refreshCustomView();
     window.scrollTo({top:0,behavior:'smooth'}); return;
   }
-  if(isCockpit){ const lite=(typeof dirigeantMode==='function'&&dirigeantMode())?DIRIGEANT_HIDE:[]; ALL_BLOCKS.forEach(id=>{const e=$(id);if(e)e.style.display=lite.includes(id)?'none':'';}); }
+  if(isCockpit){ const dm=(typeof dirigeantMode==='function'&&dirigeantMode()); const lite=dm?DIRIGEANT_HIDE:[]; ALL_BLOCKS.forEach(id=>{const e=$(id);if(e)e.style.display=(lite.includes(id)||(DIRIGEANT_ONLY.includes(id)&&!dm))?'none':'';}); }
   else { const keep=VIEW_MAP[v]||[]; ALL_BLOCKS.forEach(id=>{const e=$(id);if(e)e.style.display=keep.includes(id)?'':'none';});
     const anyVisible=keep.some(id=>{const e=$(id);return e&&!e.classList.contains('hidden');});
     if(sv){ if(!anyVisible){ sv.style.display=''; sv.querySelector('.sv-t').textContent=(v==='calendrier')?'Agenda non connecté 📅':'Rien à afficher pour le moment.'; sv.querySelector('.sv-s').textContent=(v==='calendrier')?'Connecte ton Google Agenda (bouton « Connecter mon Gmail » dans Messages) pour voir tes visios ici.':''; } else sv.style.display='none'; } }
@@ -977,6 +987,7 @@ async function load(){
   loadTodo();
   loadOnboarding();      // parcours d'arrivée (nouvelles) + suivi superviseures
   loadOverview();        // pipeline + vue par marque + indicateurs
+  if(isSup){loadDirigeant();loadWeeklyPanel();} // vue dirigeante : équipe + pense-bête weekly
   loadSourcing();
   loadMail();
   loadDrafts();
@@ -1066,11 +1077,12 @@ function updateStats(){
   const d=o.deltas||null;
   const delta=(k)=>{ if(!d) return ''; const v=d[k]; if(v>0) return '<div class="dl chg">▴ '+v+' vs hier</div>'; if(v<0) return '<div class="dl chg">▾ '+Math.abs(v)+' vs hier</div>'; return '<div class="dl eq">= stable</div>'; };
   const card=(ic,bg,col,lbl,num,dk,act)=>`<div class="scard" data-act="${act||''}" tabindex="0" role="button" title="Voir ${esc(lbl)}"><div class="sic" style="background:${bg};color:${col}">${ic}</div><div class="slbl">${lbl}</div><div class="snum">${num}</div>${delta(dk)}</div>`;
+  const dm=(typeof dirigeantMode==='function'&&dirigeantMode()); // dirigeante : chiffres de toute l'équipe
   $('statcards').innerHTML=
-    card('🗒️','#E4F0EA','#2C9087','À traiter aujourd\'hui',aTraiter,'aTraiter','todo')+
-    card('👥','#EDE7F5','#7A5AA8','Profils à contacter',aContacter,'aContacter','profils')+
-    card('⏱️','#FBEBDD','#C77F2A','Relances en attente',relances,'relances','relances')+
-    card('📄','#FCF3DC','#B98A12','Contenus validés',aValider,'aValider','contenus');
+    card('🗒️','#E4F0EA','#2C9087',dm?'À traiter (équipe)':'À traiter aujourd\'hui',aTraiter,'aTraiter','todo')+
+    card('👥','#EDE7F5','#7A5AA8',dm?'À contacter (équipe)':'Profils à contacter',aContacter,'aContacter','profils')+
+    card('⏱️','#FBEBDD','#C77F2A',dm?'Relances (équipe)':'Relances en attente',relances,'relances','relances')+
+    card('📄','#FCF3DC','#B98A12',dm?'Contenus validés (équipe)':'Contenus validés',aValider,'aValider','contenus');
   updateBell();
 }
 // --- Pipeline + vue par marque ------------------------------------------
@@ -1083,7 +1095,8 @@ function cpSingle(){ const p=cpSelParts(); return p.length===1?p[0]:null; }
 // s'épure : stats, priorités et agenda seulement. Les blocs de travail CP (profils à
 // contacter, mails créateurs, pipeline…) réapparaissent dès qu'elle choisit une CP ou l'équipe.
 function dirigeantMode(){ if(!VIEWER||VIEWER.role!=='supervisor')return false; const p=cpSelParts(); return p.length===1&&nlow(p[0])===nlow(VIEWER.name); }
-const DIRIGEANT_HIDE=['srcpanel','mailpanel','pipelinepanel','brandpanel','fillpanel','listpanel'];
+const DIRIGEANT_HIDE=['srcpanel','mailpanel','pipelinepanel','brandpanel','listpanel'];
+const DIRIGEANT_ONLY=['dirpanel','weeklypanel'];
 function renderCpChips(){
   const box=$('cpchips'); if(!box)return;
   const me=VIEWER.name, parts=cpSelParts();
@@ -1108,8 +1121,59 @@ function renderCpChips(){
     render();loadTodo();loadOverview();loadMail();loadVisios();
   });
 }
+// --- Vue dirigeante : « Mon équipe aujourd'hui » ---------------------------
+async function loadDirigeant(){
+  const p=$('dirpanel'); if(!p||!VIEWER||VIEWER.role!=='supervisor')return;
+  try{
+    const r=await api('/api/dirigeant'); if(!r.ok)return;
+    const d=await r.json();
+    const ini=n=>String(n||'?').slice(0,2).toUpperCase();
+    const actLbl={contacte:'a contacté',relance:'a relancé',sourcing:'a ajouté',mail:'a écrit à',compte:'compte créé :'};
+    const bg=(v,ic,t,warn)=>'<span title="'+esc(t)+'" style="font-size:12px;font-weight:700;padding:3px 8px;border-radius:12px;white-space:nowrap;background:'+((warn&&v>0)?'#F8E3DC':'#EFF4F4')+';color:'+((warn&&v>0)?'#C2553B':'#33475C')+'">'+ic+' '+v+'</span>';
+    $('dirbox').innerHTML=(d.members||[]).map(m=>{
+      const la=m.lastAct?((actLbl[m.lastAct.type]||m.lastAct.type)+' '+(m.lastAct.creator||'')+' · '+fnoteDate(m.lastAct.at)):'pas d\'action récente';
+      return '<div class="dirrow" data-n="'+esc(m.name)+'" title="Ouvrir la vue pilotage de '+esc(m.name)+'" style="display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid #EEF2F2;cursor:pointer">'
+        +'<div style="width:34px;height:34px;flex:0 0 34px;border-radius:50%;background:#E4F0EA;color:#2C9087;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">'+esc(ini(m.name))+'</div>'
+        +'<div style="flex:1;min-width:0"><div style="font-weight:700">'+esc(m.name)+(m.role==='team'?' <span style="font-weight:600;font-size:11px;color:#6A7A7A">· social média</span>':'')+'</div>'
+        +'<div style="font-size:12px;color:#6A7A7A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(la)+'</div></div>'
+        +bg(m.open,'🗒️','tâches ouvertes',false)+bg(m.late,'🔴','tâches en retard',true)+bg(m.mails,'✉️','mails créateurs en attente de décision',true)
+        +'</div>';
+    }).join('')||'<div class="state2" style="padding:10px">Personne dans l\'équipe pour l\'instant.</div>';
+    $('dirbox').querySelectorAll('.dirrow').forEach(el=>el.onclick=()=>{
+      $('cpfilter').value=el.dataset.n; try{localStorage.setItem('hc_cpsel',el.dataset.n);}catch(e){}
+      renderCpChips(); showView('cockpit'); render();loadTodo();loadOverview();loadMail();loadVisios();
+    });
+    show(p,true);
+  }catch(e){}
+}
+// --- Pense-bête weekly : vider sa tête entre deux réunions ------------------
+async function loadWeeklyPanel(){
+  const p=$('weeklypanel'); if(!p||!VIEWER||VIEWER.role!=='supervisor')return;
+  try{
+    const r=await api('/api/weekly'); if(!r.ok)return;
+    const d=await r.json();
+    const items=(d.notes||[]).map(n=>'<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 2px;border-bottom:1px solid #EEF2F2">'
+      +'<input type="checkbox" class="wkdone" data-id="'+esc(n.id)+'" '+(n.done?'checked':'')+' style="width:16px;height:16px;flex:0 0 16px;margin-top:2px">'
+      +'<div style="flex:1;min-width:0'+(n.done?';text-decoration:line-through;color:#9AAAAA':'')+'">'+(n.who?'<b>'+esc(n.who)+'</b> · ':'')+esc(n.text)+' <span style="font-size:11px;color:#9AAAAA">'+esc(fnoteDate(n.at))+'</span></div>'
+      +'<button class="lk wkdel" data-id="'+esc(n.id)+'" title="Supprimer" style="color:#C2553B">✕</button></div>').join('');
+    p.querySelector('#weeklybox').innerHTML=(items||'<div class="state2" style="padding:8px">Un truc à dire lundi ? Note-le ici dès que ça te passe par la tête, et coche pendant la réunion. 🧠</div>')
+      +'<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap"><input id="wkwho" list="wkteam" placeholder="Pour qui ? (optionnel)" style="flex:0 0 130px"><datalist id="wkteam">'+(TEAM||[]).map(t=>'<option value="'+esc(t)+'">').join('')+'</datalist>'
+      +'<input id="wktext" placeholder="À dire à la weekly… (Entrée pour ajouter)" style="flex:1;min-width:160px"><button class="lk primary" id="wkadd">+ Noter</button></div>';
+    const add=async()=>{
+      const t=$('wktext').value.trim(); if(!t)return;
+      await api('/api/weekly',{method:'POST',body:JSON.stringify({text:t,who:$('wkwho').value.trim()})});
+      loadWeeklyPanel();
+    };
+    $('wkadd').onclick=add;
+    $('wktext').onkeydown=e=>{if(e.key==='Enter')add();};
+    p.querySelectorAll('.wkdone').forEach(c=>c.onchange=async()=>{await api('/api/weekly/'+encodeURIComponent(c.dataset.id)+'/done',{method:'POST',body:'{}'});loadWeeklyPanel();});
+    p.querySelectorAll('.wkdel').forEach(b=>b.onclick=async()=>{await api('/api/weekly/'+encodeURIComponent(b.dataset.id)+'/del',{method:'POST',body:'{}'});loadWeeklyPanel();});
+    show(p,true);
+  }catch(e){}
+}
 function overviewParam(){
   const isSup=VIEWER&&VIEWER.role==='supervisor';
+  if(isSup&&dirigeantMode()) return ''; // vue dirigeante : stats de TOUTE l'équipe (avec deltas vs hier)
   const v=isSup?cpSingle():null;
   if(isSup&&v) return '?view='+encodeURIComponent(v); // pilote → cale l'overview sur la personne choisie
   return tparam();
