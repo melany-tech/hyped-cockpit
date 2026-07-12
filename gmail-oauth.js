@@ -70,6 +70,27 @@ async function handleCallback(code, state) {
 }
 // Débrancher une boîte (mauvais compte connecté, départ…) : on supprime ses jetons.
 function disconnect(email) { const s = loadStore(); delete s[email]; saveStore(s); return true; }
+// Recherche Gmail brute (ex. mails Sembly du kickoff) : renvoie corps + pièces jointes
+function walkAttachments(payload, out = []) {
+  if (!payload) return out;
+  if (payload.filename && payload.body && payload.body.attachmentId) out.push({ filename: payload.filename, attId: payload.body.attachmentId, mime: payload.mimeType || "" });
+  (payload.parts || []).forEach((p) => walkAttachments(p, out));
+  return out;
+}
+async function fetchMessagesByQuery(email, query, max = 5) {
+  const gmail = gmailFor(email);
+  if (!gmail) return [];
+  const list = await gmail.users.messages.list({ userId: "me", q: query, maxResults: max });
+  const out = [];
+  for (const m of (list.data.messages || [])) {
+    try {
+      const full = await gmail.users.messages.get({ userId: "me", id: m.id, format: "full" });
+      const h = Object.fromEntries((full.data.payload?.headers || []).map((x) => [x.name, x.value]));
+      out.push({ id: m.id, subject: h.Subject || "", from: h.From || "", date: h.Date || "", body: extractBody(full.data.payload) || full.data.snippet || "", attachments: walkAttachments(full.data.payload) });
+    } catch (e) {}
+  }
+  return out;
+}
 
 // --- Lecture + analyse de LA boîte de cette CP --------------------------
 function gmailFor(email) {
@@ -401,4 +422,4 @@ async function draftsToValidate(email) {
   return { count: keep.length };
 }
 
-module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, disconnect, analyzeFor, calendarToday, createDraft, sendEmail, draftsToValidate, fetchThreadText, lastReplyFromMe, threadHasExternal, threadExternalContact, getSignature, getAttachment, SCOPES };
+module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, disconnect, analyzeFor, calendarToday, createDraft, sendEmail, draftsToValidate, fetchThreadText, lastReplyFromMe, threadHasExternal, threadExternalContact, getSignature, getAttachment, fetchMessagesByQuery, SCOPES };

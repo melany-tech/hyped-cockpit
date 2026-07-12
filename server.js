@@ -2248,6 +2248,87 @@ setInterval(ensureStatsTasks, 6 * 3600 * 1000);
 app.get(["/guide", "/guide.pdf"], (req, res) => res.sendFile(path.join(__dirname, "guide.pdf")));
 // Modèle de shortlist à envoyer aux marques : leurs fichiers rentrent alors parfaitement dans l'import
 app.get("/modele-shortlist.xlsx", (req, res) => res.download(path.join(__dirname, "modele_shortlist.xlsx"), "Shortlist profils - modele Hyped Agency.xlsx"));
+// --- Kickoff du lundi : la transcription Sembly devient des tâches, toute seule --
+// Le mail Sembly arrive dans la boîte de Mélany après la weekly. Le cockpit le détecte,
+// lit la transcription (corps du mail + PDF joint), extrait les « qui fait quoi » avec
+// l'IA (responsables et marques matchés sur l'équipe réelle, rien d'inventé), crée les
+// tâches dans Notion (donc dans la to-do de chacune) et envoie le récap Slack à Mélany.
+const KICKOFF_STORE = path.join(DATA_DIR, "kickoff.json");
+const KICKOFF_BOX = (process.env.KICKOFF_BOX || "melany@hyped-agency.fr").toLowerCase();
+function loadKickoff() { try { return JSON.parse(fs.readFileSync(KICKOFF_STORE, "utf8")); } catch (e) { return { done: [] }; } }
+function saveKickoff(o) { try { fs.writeFileSync(KICKOFF_STORE, JSON.stringify(o)); } catch (e) {} }
+async function kickoffExtract(transcript) {
+  const hasOpenAI = !!process.env.OPENAI_API_KEY, hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
+  if (!hasOpenAI && !hasAnthropic) return null;
+  const team = USERS.map((u) => u.name).join(", ");
+  const brands = quickBrandsList().join(", ");
+  const sys = [
+    "Tu lis la transcription d'une réunion d'équipe d'une agence d'influence et tu en extrais UNIQUEMENT les tâches décidées (les « qui fait quoi »). Réponds UNIQUEMENT un JSON valide :",
+    '{"taches":[{"tache":"...","responsable":"...","marque":"...","echeance":"YYYY-MM-DD ou null"}]}',
+    "RÈGLES STRICTES :",
+    "- tache = une action concrète décidée en réunion, reformulée courte et claire (ex. « Relancer Yasmine pour la preview »). PAS les sujets simplement évoqués, PAS le bavardage, PAS ce qui est déjà fait.",
+    "- responsable = EXACTEMENT un de : " + team + ". Si la personne n'est pas claire, mets \"\".",
+    "- marque = EXACTEMENT une de : " + brands + ". Sinon \"\".",
+    "- echeance = SEULEMENT si une date précise a été dite, sinon null. Année 2026.",
+    "- Maximum 25 tâches, les plus importantes. N'invente RIEN : chaque tâche doit être traçable à un passage de la réunion.",
+  ].join("\n");
+  try {
+    const out = hasOpenAI ? await callOpenAI(sys, String(transcript || "").slice(0, 90000)) : await callAnthropic(sys, String(transcript || "").slice(0, 90000));
+    if (!out.ok) return null;
+    const j = JSON.parse(String(out.body).replace(/^[^{]*/, "").replace(/[^}]*$/, ""));
+    return Array.isArray(j.taches) ? j.taches : null;
+  } catch (e) { return null; }
+}
+async function kickoffTick() {
+  try {
+    if (!gm.ENABLED || !notion || DEMO) return;
+    if (!gm.isConnected(KICKOFF_BOX)) return;
+    const store = loadKickoff();
+    const mails = await gm.fetchMessagesByQuery(KICKOFF_BOX, 'from:sembly newer_than:3d (subject:"Weekly" OR subject:"meeting" OR subject:"Transcription" OR subject:"notes")', 3);
+    for (const m of mails) {
+      if (store.done.includes(m.id)) continue;
+      store.done.push(m.id); store.done = store.done.slice(-50); saveKickoff(store); // marqué AVANT traitement : jamais de doublon
+      let text = String(m.body || "");
+      // PDF joint (transcription complète) : on le préfère au corps du mail
+      for (const a of (m.attachments || [])) {
+        if (/pdf$/i.test(a.filename || "") || /pdf/.test(a.mime || "")) {
+          try {
+            const buf = await gm.getAttachment(KICKOFF_BOX, m.id, a.attId);
+            if (buf) { const pdfParse = require("pdf-parse"); const r = await pdfParse(buf); if (r && r.text && r.text.length > text.length) text = r.text; }
+          } catch (e) { try { console.error("[kickoff] pdf :", e.message); } catch (e2) {} }
+        }
+      }
+      if (!text || text.length < 200) continue;
+      const taches = await kickoffExtract(text);
+      const su = COPILOT.slackIds[KICKOFF_BOX] || "";
+      if (!taches || !taches.length) { if (su) await copilotNotify({ slackUser: su, text: "📋 J'ai lu le compte-rendu de ta weekly (« " + (m.subject || "réunion") + " ») mais je n'ai extrait aucune tâche claire. Tu peux les ajouter à la main dans la to-do." }); continue; }
+      const teamNames = USERS.map((u) => u.name);
+      const created = [], orphans = [];
+      for (const t of taches.slice(0, 25)) {
+        const resp = teamNames.find((n) => nrmName(n) === nrmName(t.responsable || "")) || "";
+        const brand = quickBrandsList().find((b) => nrmName(b) === nrmName(t.marque || "")) || "";
+        if (!String(t.tache || "").trim()) continue;
+        if (!resp) { orphans.push(t.tache); continue; }
+        const props = {
+          "Tâche": { title: [{ text: { content: String(t.tache).slice(0, 200) } }] },
+          "Type": { select: { name: "Autre" } },
+          "Statut": { select: { name: "À faire" } },
+          "Responsable": { select: { name: resp } },
+        };
+        if (brand) props["Projet"] = { select: { name: brand } };
+        if (t.echeance && /^\d{4}-\d{2}-\d{2}$/.test(String(t.echeance))) props["Échéance"] = { date: { start: t.echeance } };
+        try { await notion.pages.create({ parent: { database_id: TASKS_DB }, properties: props }); created.push("• " + t.tache + " → *" + resp + "*" + (brand ? (" (" + brand + ")") : "") + (t.echeance ? (" · " + t.echeance) : "")); }
+        catch (e) { orphans.push(t.tache + " (échec Notion)"); }
+      }
+      invalidateTasksCache();
+      if (su) await copilotNotify({ slackUser: su, text: "📋 *Kickoff traité* (« " + (m.subject || "réunion") + " ») : " + created.length + " tâche(s) créée(s) dans les to-do :\n" + created.join("\n") + (orphans.length ? ("\n\n🤷 Sans responsable clair (à attribuer à la main) :\n• " + orphans.join("\n• ")) : "") + "\n\n_Une tâche en trop ? Supprime-la dans Notion ou décoche-la, rien d'autre à faire._" });
+      try { console.log("[kickoff]", m.subject, ":", created.length, "tâches créées,", orphans.length, "orphelines"); } catch (e) {}
+    }
+  } catch (e) { try { console.error("[kickoff] tick :", e.message); } catch (e2) {} }
+}
+function nrmName(s) { return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim(); }
+setInterval(kickoffTick, 15 * 60 * 1000); // toutes les 15 min : le récap tombe peu après la fin de la réunion
+setTimeout(kickoffTick, 30 * 1000);
 // --- Hypedbot en direct : envoie un lien en DM Slack, la tâche est créée -------
 // Remplace le chatbot Make. Analyse DÉTERMINISTE (lien + nom de marque + prénom de CP
 // tels quels, aucune devinette IA) et confirmation explicite. S'il manque une info,
