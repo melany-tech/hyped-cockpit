@@ -722,13 +722,13 @@ setTimeout(() => { runScheduledSends().catch(() => {}); }, 8000); // rattrapage 
 //   - ANTHROPIC_API_KEY -> Claude (modèle REPLY_MODEL, défaut claude-3-5-haiku-latest)
 const REPLY_MODEL = process.env.REPLY_MODEL || "claude-3-5-haiku-latest";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
-async function callOpenAI(sys, ctx) {
+async function callOpenAI(sys, ctx, maxTok) {
   const key = process.env.OPENAI_API_KEY;
   try {
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { "content-type": "application/json", "authorization": "Bearer " + key },
-      body: JSON.stringify({ model: OPENAI_MODEL, max_tokens: 700, temperature: 0.7,
+      body: JSON.stringify({ model: OPENAI_MODEL, max_tokens: maxTok || 700, temperature: 0.7,
         messages: [{ role: "system", content: sys }, { role: "user", content: ctx }] }),
     });
     if (!r.ok) { const t = await r.text().catch(() => ""); return { ok: false, reason: "api", detail: (t || "").slice(0, 300), status: r.status }; }
@@ -737,13 +737,13 @@ async function callOpenAI(sys, ctx) {
     return text ? { ok: true, body: text, via: "openai" } : { ok: false, reason: "empty" };
   } catch (e) { return { ok: false, reason: "exc", detail: String(e && e.message || e) }; }
 }
-async function callAnthropic(sys, ctx) {
+async function callAnthropic(sys, ctx, maxTok) {
   const key = process.env.ANTHROPIC_API_KEY;
   try {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: REPLY_MODEL, max_tokens: 700, system: sys, messages: [{ role: "user", content: ctx }] }),
+      body: JSON.stringify({ model: REPLY_MODEL, max_tokens: maxTok || 700, system: sys, messages: [{ role: "user", content: ctx }] }),
     });
     if (!r.ok) { const t = await r.text().catch(() => ""); return { ok: false, reason: "api", detail: (t || "").slice(0, 300), status: r.status }; }
     const d = await r.json();
@@ -2533,11 +2533,15 @@ async function kickoffExtract(transcript, deja) {
   if (deja && deja.length) lines.push("- DÉJÀ dans la to-do (ne PAS les recréer, même reformulées différemment) :\n" + deja.slice(0, 90).map((s) => "• " + String(s).slice(0, 120)).join("\n"));
   const sys = lines.join("\n");
   try {
-    const out = hasOpenAI ? await callOpenAI(sys, String(transcript || "").slice(0, 90000)) : await callAnthropic(sys, String(transcript || "").slice(0, 90000));
-    if (!out.ok) return null;
-    const j = JSON.parse(String(out.body).replace(/^[^{]*/, "").replace(/[^}]*$/, ""));
-    return Array.isArray(j.taches) ? j.taches : null;
-  } catch (e) { return null; }
+    // 25 tâches en JSON ne tiennent pas dans 700 tokens : plafond dédié bien plus large,
+    // sinon la réponse est tronquée, le JSON invalide, et on croit qu'il n'y a « rien ».
+    const out = hasOpenAI ? await callOpenAI(sys, String(transcript || "").slice(0, 90000), 4000) : await callAnthropic(sys, String(transcript || "").slice(0, 90000), 4000);
+    if (!out.ok) { try { console.error("[kickoff] IA :", out.reason, out.status || "", String(out.detail || "").slice(0, 200)); } catch (e2) {} return null; }
+    try {
+      const j = JSON.parse(String(out.body).replace(/^[^{]*/, "").replace(/[^}]*$/, ""));
+      return Array.isArray(j.taches) ? j.taches : null;
+    } catch (e) { try { console.error("[kickoff] JSON invalide :", e.message, "· réponse :", String(out.body).slice(0, 250)); } catch (e2) {} return null; }
+  } catch (e) { try { console.error("[kickoff] extract :", e.message); } catch (e2) {} return null; }
 }
 async function kickoffTick() {
   try {
