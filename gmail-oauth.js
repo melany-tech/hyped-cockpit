@@ -104,7 +104,7 @@ async function fetchEmails(gmail, query = "newer_than:30d -in:sent -in:draft -ca
   // EN PARALLÈLE : on récupère les fils tous en même temps (au lieu d'un par un), démarrage bien plus rapide
   const results = await Promise.all((list.data.threads || []).map(async (th) => {
     try {
-      const t = await gmail.users.threads.get({ userId: "me", id: th.id, format: "metadata", metadataHeaders: ["From", "Subject", "Date"] });
+      const t = await gmail.users.threads.get({ userId: "me", id: th.id, format: "metadata", metadataHeaders: ["From", "To", "Cc", "Subject", "Date"] });
       const msgs = t.data.messages || [];
       const last = msgs[msgs.length - 1];
       const h = Object.fromEntries((last.payload?.headers || []).map((x) => [x.name, x.value]));
