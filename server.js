@@ -1678,19 +1678,25 @@ async function copilotTick() {
       }
       for (const m of (r && r.creatorReplies) || []) {
         if (!m.threadId) continue;
-        // Doublon de boîte : cette boîte n'est qu'en COPIE d'un mail destiné à une collègue.
-        // Deux indices croisés : 1) le champ « À » ne contient pas cette boîte, ET
-        // 2) soit « À » vise une autre boîte surveillée, soit le message salue une autre
-        // collègue par son prénom (« Hello Rozenn », « Bonjour Prunelle »...).
+        // Doublon de boîte : le mail est en réalité la conversation d'une AUTRE CP surveillée.
+        // Indices croisés :
+        //  a) le « À » ne contient pas cette boîte mais vise une autre boîte surveillée
+        //     (on n'est qu'en copie), OU
+        //  b) le message salue une autre collègue par son prénom (« Hello Rozenn ») ET la
+        //     boîte de cette collègue est aussi destinataire du fil (À ou Cc) : c'est SON fil,
+        //     même si notre boîte figure dans le « À » (réponse à tous).
         const toL = String(m.to || "").toLowerCase();
+        const tocc = (toL + " " + String(m.cc || "").toLowerCase());
         const notToMe = toL && !toL.includes(email.toLowerCase());
         const toOtherBox = COPILOT.cps.some((e2) => e2 !== email && toL.includes(e2));
         const gm2 = nrmName(String(m.snippet || "").slice(0, 90)).match(/^(?:re\s*:?\s*)?(?:hello|bonjour|coucou|salut|hey|hi)[\s,!:]*([a-z-]{2,20})/);
         const greetName = gm2 ? gm2[1] : "";
-        const greetsOther = greetName && greetName !== nrmName(copilotCpName(email)) && USERS.some((u) => nrmName(u.name) === greetName);
-        if (notToMe && (toOtherBox || greetsOther)) {
+        const greeted = greetName && greetName !== nrmName(copilotCpName(email)) ? USERS.find((u) => nrmName(u.name) === greetName) : null;
+        const greetedBox = greeted ? String(greeted.email || "").toLowerCase() : "";
+        const hersToo = greetedBox && COPILOT.cps.includes(greetedBox) && tocc.includes(greetedBox);
+        if ((notToMe && toOtherBox) || hersToo) {
           const dup = store.proposals.find((x) => x.cpEmail === email && x.threadId === m.threadId && (x.status === "pending" || x.status === "ready"));
-          if (dup) { dup.status = "handled"; dup.decision = "doublon de boîte : mail destiné à une autre CP"; }
+          if (dup) { dup.status = "handled"; dup.decision = "doublon de boîte : conversation d'une autre CP (" + (greeted ? greeted.name : "destinataire principale") + ")"; }
           continue;
         }
         // Fil déjà traité : on ne l'ignore QUE si rien de nouveau depuis. Si le créateur a écrit
