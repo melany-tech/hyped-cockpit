@@ -846,15 +846,16 @@ async function renderBudgetView(){
       // Responsable : le champ de la fiche, sinon la CP la plus présente sur les collabs du mois
       let resp=(fiche.interlocuteurHA||'').split(/[+,&]| et /)[0].trim();
       if(!resp){const cnt={};(F.entries||[]).forEach(e=>{if(e.cp)cnt[e.cp]=(cnt[e.cp]||0)+1;});resp=Object.entries(cnt).sort((a,b)=>b[1]-a[1]).map(x=>x[0])[0]||'';}
-      // Répartition par personne : montants si les budgets sont remplis, sinon nombre de collabs
-      const byCp={},byN={};(F.entries||[]).forEach(e=>{const k=e.cp||'Non attribué';byN[k]=(byN[k]||0)+1;if(Number(e.budget)>0)byCp[k]=(byCp[k]||0)+Number(e.budget);});
-      const money=Object.keys(byCp).length>0;
-      const src=money?byCp:byN;
-      const mx=Math.max(1,...Object.values(src),0);
-      const prows=Object.entries(src).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([k,v])=>{
-        const share=money?(tot>0?Math.round(100*v/tot):0):Math.round(100*v/Math.max(1,(F.entries||[]).length));
-        return `<div class="bgd-prow"><span class="bgd-pav" style="background:${bgdCol(k)}">${esc(bgdIni(k))}</span><span style="flex:0 0 92px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(k)}</span><b style="flex:0 0 82px;text-align:right;white-space:nowrap">${money?esc(eur(v)):(v+' collab'+(v>1?'s':''))}</b><span style="flex:0 0 44px;text-align:right;color:#5D6D74">${share} %</span><div class="bgd-bar"><div style="width:${Math.round(100*v/mx)}%"></div></div></div>`;
-      }).join('');
+      // Répartition par CRÉATRICE (maquette) : chaque influenceuse et son spend du mois.
+      // Le montant vient de la colonne « Budget » du calendrier Notion (à la main ou via copilote).
+      const byInf={};(F.entries||[]).forEach(e=>{if(!(Number(e.budget)>0))return;const k=e.nom||'(sans nom)';byInf[k]=(byInf[k]||0)+Number(e.budget);});
+      const infs=Object.entries(byInf).sort((a,b)=>b[1]-a[1]);
+      const mx=Math.max(1,...infs.map(x=>x[1]),0);
+      const clean=(s)=>String(s).replace(/^Démo\s*·\s*/i,'');
+      const prows=infs.slice(0,7).map(([k,v])=>{
+        const share=tot>0?Math.round(100*v/tot):0;
+        return `<div class="bgd-prow"><span class="bgd-pav" style="background:${bgdCol(k)}">${esc(bgdIni(clean(k)))}</span><span style="flex:1;min-width:80px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(clean(k))}</span><b style="flex:0 0 82px;text-align:right;white-space:nowrap">${esc(eur(v))}</b><span style="flex:0 0 44px;text-align:right;color:#5D6D74">${share} %</span><div class="bgd-bar" style="flex:0 0 30%"><div style="width:${Math.round(100*v/mx)}%"></div></div></div>`;
+      }).join('')+(infs.length>7?('<div class="bgd-prow" style="color:#8A9AA0;font-size:12px">+ '+(infs.length-7)+' autre(s) créatrice(s)</div>'):'');
       featured=`<div class="bgd-card">
         <div style="display:flex;align-items:center;gap:13px">
           <div class="bgd-logo" style="background:${bgdCol(F.brand)}">${esc(bgdIni(F.brand))}</div>
@@ -875,7 +876,7 @@ async function renderBudgetView(){
             <div class="bgd-leg" style="margin-left:17px">Restant</div><div class="bgd-legval" style="color:${rest<0?'#DC2626':'#17252B'}">${bm>0?eur(rest):'-'}</div>
           </div>
         </div>
-        <div style="margin-top:14px">${prows||'<div class="bgd-prow" style="color:#8A9AA0">La répartition par personne apparaît dès que les collabs du mois sont dans le calendrier.</div>'}</div>
+        <div style="margin-top:14px">${prows||'<div class="bgd-prow" style="color:#8A9AA0">Les créatrices du mois apparaissent ici avec leur spend dès qu\'un montant est mis dans la colonne « Budget » du calendrier Notion de la marque.</div>'}</div>
         <button class="bgd-btn bgex" data-b="${esc(F.brand)}">⬇️ &nbsp;Exporter le détail budget</button>
       </div>`;
     }
