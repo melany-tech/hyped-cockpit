@@ -1380,7 +1380,8 @@ async function loadWeeklyPanel(){
       +'<button class="lk wkdel" data-id="'+esc(n.id)+'" title="Supprimer" style="color:#C2553B">✕</button></div>').join('');
     p.querySelector('#weeklybox').innerHTML=(items||'<div class="state2" style="padding:8px">Un truc à dire lundi ? Note-le ici dès que ça te passe par la tête, et coche pendant la réunion. 🧠</div>')
       +'<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap"><input id="wkwho" list="wkteam" placeholder="Pour qui ? (optionnel)" style="flex:0 0 130px"><datalist id="wkteam">'+(TEAM||[]).map(t=>'<option value="'+esc(t)+'">').join('')+'</datalist>'
-      +'<input id="wktext" placeholder="À dire à la weekly… (Entrée pour ajouter)" style="flex:1;min-width:160px"><button class="lk primary" id="wkadd">+ Noter</button></div>';
+      +'<input id="wktext" placeholder="À dire à la weekly… (Entrée pour ajouter)" style="flex:1;min-width:160px"><button class="lk primary" id="wkadd">+ Noter</button></div>'
+      +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px;border-top:1px solid #EEF2F2;padding-top:9px"><button class="lk wkimport">📥 Importer le compte-rendu weekly (PDF) → tâches auto</button><span class="fichemsg wkimpmsg"></span></div>';
     const add=async()=>{
       const t=$('wktext').value.trim(); if(!t)return;
       if(WK_EDIT) await api('/api/weekly/'+encodeURIComponent(WK_EDIT)+'/edit',{method:'POST',body:JSON.stringify({text:t,who:$('wkwho').value.trim()})});
@@ -1405,6 +1406,30 @@ async function loadWeeklyPanel(){
       };
       fi.click();
     });
+    // 📥 : importer le PDF de transcription Sembly → l'IA crée les tâches de la weekly
+    const wi=p.querySelector('.wkimport');
+    if(wi)wi.onclick=()=>{
+      const fi=document.createElement('input'); fi.type='file'; fi.accept='.pdf,application/pdf'; fi.id='wkimpfile';
+      fi.style.display='none'; document.body.appendChild(fi);
+      fi.onchange=()=>{
+        const f=fi.files&&fi.files[0]; if(!f)return;
+        if(f.size>15*1024*1024){alert('PDF trop lourd (15 Mo max)');return;}
+        wi.textContent='⏳ Lecture de la transcription et création des tâches…';
+        const rd=new FileReader();
+        rd.onload=async()=>{
+          try{
+            const r=await api('/api/kickoff/upload',{method:'POST',body:JSON.stringify({filename:f.name,data:rd.result})});
+            const dd=await r.json().catch(()=>({}));
+            if(r.ok){p.querySelector('.wkimpmsg').textContent='✅ '+dd.created+' tâche(s) créée(s)'+(dd.skipped?(' · '+dd.skipped+' déjà présente(s)'):'')+((dd.orphans||[]).length?(' · '+dd.orphans.length+' sans responsable'):'')+' · détail sur Slack';loadTodo();loadDirigeant();}
+            else p.querySelector('.wkimpmsg').textContent=dd.error||'Erreur, réessaie';
+          }catch(e){p.querySelector('.wkimpmsg').textContent='Erreur réseau, réessaie';}
+          wi.textContent='📥 Importer le compte-rendu weekly (PDF) → tâches auto';
+          fi.remove();
+        };
+        rd.readAsDataURL(f);
+      };
+      fi.click();
+    };
     // 🔗 : attacher un lien à une note (aussi projetable que la pièce jointe)
     p.querySelectorAll('.wklink').forEach(b=>b.onclick=async()=>{
       const url=prompt('Le lien à attacher (drive, Notion, TikTok…) :'); if(!url||!url.trim())return;

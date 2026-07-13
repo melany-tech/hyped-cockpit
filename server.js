@@ -2558,14 +2558,28 @@ async function kickoffTick() {
           } catch (e) { try { console.error("[kickoff] pdf :", e.message); } catch (e2) {} }
         }
       }
-      if (!text || text.length < 200) continue;
+      const su = COPILOT.slackIds[KICKOFF_BOX] || "";
+      // Mail Sembly « insights » : souvent juste un LIEN, sans la transcription.
+      // Dans ce cas on préviens clairement et on pointe vers l'import manuel du PDF.
+      if (!text || text.length < 1500) {
+        if (su) await copilotNotify({ slackUser: su, text: "📋 J'ai vu le mail Sembly (« " + (m.subject || "réunion") + " ») mais la transcription n'était pas dedans, juste un lien. Exporte le PDF de la transcription depuis Sembly et importe-le dans le cockpit : panneau « 🧠 À dire à la weekly » → bouton 📥 Importer le compte-rendu. Les tâches seront créées pareil." });
+        continue;
+      }
+      const out = await kickoffProcess(text, m.subject);
+      try { console.log("[kickoff]", m.subject, ":", (out.created || []).length, "tâches créées,", (out.orphans || []).length, "orphelines"); } catch (e) {}
+    }
+  } catch (e) { try { console.error("[kickoff] tick :", e.message); } catch (e2) {} }
+}
+// Le cœur du kickoff : transcription → tâches Notion + récap Slack.
+// Utilisé par la détection auto (mail Sembly) ET par l'import manuel du PDF.
+async function kickoffProcess(text, subject) {
       // Anti-doublons : tâches ouvertes existantes + notes weekly (poussées ou pas)
       let existing = []; try { existing = (await fetchAllTasks()).filter((x) => x.statut !== "Fait"); } catch (e) {}
       const wkNotes = (loadWeekly().notes || []).map((x) => (x.who ? x.who + " : " : "") + x.text);
       const deja = existing.slice(-80).map((x) => (x.responsable ? x.responsable + " : " : "") + x.task).concat(wkNotes.slice(-30));
       const taches = await kickoffExtract(text, deja);
       const su = COPILOT.slackIds[KICKOFF_BOX] || "";
-      if (!taches || !taches.length) { if (su) await copilotNotify({ slackUser: su, text: "📋 J'ai lu le compte-rendu de ta weekly (« " + (m.subject || "réunion") + " ») mais je n'ai extrait aucune tâche claire. Tu peux les ajouter à la main dans la to-do." }); continue; }
+      if (!taches || !taches.length) { if (su) await copilotNotify({ slackUser: su, text: "📋 J'ai lu le compte-rendu (« " + (subject || "réunion") + " ») mais je n'ai extrait aucune tâche claire. Tu peux les ajouter à la main dans la to-do." }); return { created: [], skipped: [], orphans: [] }; }
       const teamNames = USERS.map((u) => u.name);
       const created = [], orphans = [], skipped = [];
       const nrmT = (s) => nrmName(s).replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
@@ -2591,11 +2605,25 @@ async function kickoffTick() {
         catch (e) { orphans.push(t.tache + " (échec Notion)"); }
       }
       invalidateTasksCache();
-      if (su) await copilotNotify({ slackUser: su, text: "📋 *Kickoff traité* (« " + (m.subject || "réunion") + " ») : " + created.length + " tâche(s) créée(s) dans les to-do :\n" + created.join("\n") + (skipped.length ? ("\n\n♻️ Déjà dans la to-do, pas recréées :\n• " + skipped.join("\n• ")) : "") + (orphans.length ? ("\n\n🤷 Sans responsable clair (à attribuer à la main) :\n• " + orphans.join("\n• ")) : "") + "\n\n_Une tâche en trop ? Supprime-la dans Notion ou décoche-la, rien d'autre à faire._" });
-      try { console.log("[kickoff]", m.subject, ":", created.length, "tâches créées,", orphans.length, "orphelines"); } catch (e) {}
-    }
-  } catch (e) { try { console.error("[kickoff] tick :", e.message); } catch (e2) {} }
+      if (su) await copilotNotify({ slackUser: su, text: "📋 *Kickoff traité* (« " + (subject || "réunion") + " ») : " + created.length + " tâche(s) créée(s) dans les to-do :\n" + created.join("\n") + (skipped.length ? ("\n\n♻️ Déjà dans la to-do, pas recréées :\n• " + skipped.join("\n• ")) : "") + (orphans.length ? ("\n\n🤷 Sans responsable clair (à attribuer à la main) :\n• " + orphans.join("\n• ")) : "") + "\n\n_Une tâche en trop ? Supprime-la dans Notion ou décoche-la, rien d'autre à faire._" });
+      return { created, skipped, orphans };
 }
+// Import manuel du compte-rendu (PDF Sembly exporté) : mêmes tâches, même récap.
+app.post("/api/kickoff/upload", auth, async (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  if (!notion || DEMO) return res.status(400).json({ error: "Notion non branché" });
+  const mm = /^data:([^;]+);base64,(.+)$/.exec(String(req.body?.data || ""));
+  if (!mm) return res.status(400).json({ error: "fichier illisible" });
+  const buf = Buffer.from(mm[2], "base64");
+  if (buf.length > 15 * 1024 * 1024) return res.status(400).json({ error: "PDF trop lourd (15 Mo max)" });
+  let text = "";
+  try { const pdfParse = require("pdf-parse"); const r = await pdfParse(buf); text = r.text || ""; } catch (e) {}
+  if (!text || text.length < 200) return res.status(400).json({ error: "je n'arrive pas à lire de texte dans ce PDF" });
+  try {
+    const out = await kickoffProcess(text, String(req.body?.filename || "compte-rendu importé").replace(/\.pdf$/i, ""));
+    res.json({ ok: true, created: (out.created || []).length, skipped: (out.skipped || []).length, orphans: out.orphans || [] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 function nrmName(s) { return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim(); }
 setInterval(kickoffTick, 15 * 60 * 1000); // toutes les 15 min : le récap tombe peu après la fin de la réunion
 setTimeout(kickoffTick, 30 * 1000);
