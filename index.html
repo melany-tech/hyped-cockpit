@@ -579,6 +579,7 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
       <a class="nav" data-go="contenus"><span class="ni">🎬</span> Contenus</a>
       <a class="nav" data-go="marques"><span class="ni">🏷️</span> Marques</a>
       <a class="nav" data-go="todo"><span class="ni">✅</span> To-do</a>
+      <a class="nav" data-go="budget"><span class="ni">💶</span> Budget</a>
       <!-- Onglet Contacts masqué à la demande de Mélany (13/07/2026) : l'annuaire faisait
            doublon à l'usage. Pour le réactiver, remettre la ligne ci-dessous.
            <a class="nav" data-go="contacts"><span class="ni">👥</span> Contacts</a> -->
@@ -690,6 +691,7 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
     <section id="campagnesview" style="display:none"><p class="pt"><span class="pi">📣</span> Campagnes par marque</p><div id="campagnesbox"><div class="state">Chargement…</div></div></section>
     <section id="contactsview" style="display:none"><p class="pt"><span class="pi">👥</span> Contacts créateurs</p><div id="contactsbox"><div class="state">Chargement…</div></div></section>
     <section id="processview" style="display:none"><p class="pt"><span class="pi">📚</span> Process &amp; documents de référence</p><div class="panelhint">Tout ce qu'il faut lire ou renvoyer : guides, fiches de process, modèles. Ajoute un document, il est visible par toute l'équipe.</div><div id="processbox"><div class="state">Chargement…</div></div></section>
+    <section id="budgetview" style="display:none"><p class="pt"><span class="pi">💶</span> Budgets du mois</p><div class="panelhint">Toutes les marques d'un coup d'œil : engagé, restant, dépassements. Le budget mensuel se règle dans la fiche de chaque marque (onglet Marques), l'engagé vient du calendrier Notion. Export Excel par marque pour le reporting client.</div><div id="budgetallbox"><div class="state">Chargement…</div></div></section>
     <section id="rapportsview" style="display:none"><p class="pt"><span class="pi">📊</span> Rapports</p><div id="rapportsbox"><div class="state">Chargement…</div></div></section>
     <section id="calendrierview" style="display:none"><p class="pt"><span class="pi">📅</span> Calendrier</p><div id="calendrierbox"><div class="state">Chargement…</div></div></section>
     <section id="todoview" style="display:none"><p class="pt"><span class="pi">✅</span> To-do</p><div class="panelhint">Tes tâches à faire, marque par marque. Une case cochée = statut « Fait » dans Notion, tout est synchronisé.</div><div id="todowrap"><div class="state">Chargement…</div></div></section>
@@ -747,8 +749,8 @@ function statCardGo(act){
   else { navToView('cockpit'); setTimeout(()=>{const el=$('todopanel'); if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},220); } // à traiter / relances → priorités
 }
 let CURRENT_VIEW='cockpit';
-const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview',historique:'historiqueview',marques:'marquesview',todo:'todoview',processus:'processview'};
-function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','historiqueview','marquesview','todoview','processview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
+const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview',historique:'historiqueview',marques:'marquesview',todo:'todoview',processus:'processview',budget:'budgetview'};
+function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','historiqueview','marquesview','todoview','processview','budgetview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
 function refreshCustomView(){
   if(CURRENT_VIEW==='campagnes')renderCampagnes();
   else if(CURRENT_VIEW==='contacts')renderContacts();
@@ -758,6 +760,51 @@ function refreshCustomView(){
   else if(CURRENT_VIEW==='marques')renderMarques();
   else if(CURRENT_VIEW==='todo')renderTodoTab();
   else if(CURRENT_VIEW==='processus')renderProcess();
+  else if(CURRENT_VIEW==='budget')renderBudgetView();
+}
+// ===== Vue Budget : toutes les marques côte à côte ==========================
+let BG_MONTH='';
+async function renderBudgetView(){
+  const box=$('budgetallbox'); if(!box)return;
+  const month=BG_MONTH||new Date().toISOString().slice(0,7);
+  box.innerHTML='<div class="state">Chargement des budgets…</div>';
+  try{
+    const fi=await getFiches();
+    const brands=[...new Set(['In Haircare','Doucéa','Curls Matter',...Object.keys((fi&&fi.brands)||{})])].filter(Boolean);
+    const res=await Promise.all(brands.map(async b=>{try{const r=await api('/api/budget/'+encodeURIComponent(b)+'?month='+month);return r.ok?{brand:b,...(await r.json())}:null;}catch(e){return null;}}));
+    const eur=(n)=>Number(n||0).toLocaleString('fr-FR')+' €';
+    const C=2*Math.PI*34;
+    const cards=res.filter(Boolean).filter(d=>(d.budgetMensuel||0)>0||(d.total||0)>0||!d.noCal).map(d=>{
+      const bm=d.budgetMensuel||0,tot=d.total||0,rest=bm-tot;
+      const pct=bm>0?Math.min(1,tot/bm):0;
+      const col=(bm>0&&tot>bm)?'#C2553B':'#2C9087';
+      const donut=bm>0?`<svg viewBox="0 0 90 90" style="width:86px;height:86px;flex:0 0 86px"><circle cx="45" cy="45" r="34" fill="none" stroke="#E8EEEE" stroke-width="11"/><circle cx="45" cy="45" r="34" fill="none" stroke="${col}" stroke-width="11" stroke-dasharray="${(C*pct).toFixed(1)} ${C.toFixed(1)}" stroke-linecap="round" transform="rotate(-90 45 45)"/><text x="45" y="50" text-anchor="middle" style="font-size:13px;font-weight:800;fill:#1C3A44">${Math.round(100*tot/bm)}%</text></svg>`
+        :'<div style="width:86px;height:86px;flex:0 0 86px;display:flex;align-items:center;justify-content:center;background:#F2F6F6;border-radius:50%;font-size:11px;color:#9AAAAA;text-align:center">budget<br>à définir</div>';
+      return `<div class="panel" style="display:flex;gap:14px;align-items:center;padding:14px">${donut}
+        <div style="flex:1;min-width:0"><div style="font-weight:800">${esc(d.brand)}</div>
+        <div style="font-size:13px;margin-top:2px"><b>${eur(tot)}</b> engagés${bm>0?(' / '+eur(bm)):''}</div>
+        ${bm>0?`<div style="font-size:13px;font-weight:700;color:${rest<0?'#C2553B':'#2C9087'}">${rest<0?('⚠️ Dépassement '+eur(-rest)):('Reste '+eur(rest))}</div>`:'<div class="fs">Budget mensuel à renseigner dans la fiche marque</div>'}
+        <div class="fs">${(d.entries||[]).length} collab(s)${d.noCal?' · calendrier non branché':''} · <a class="lk bgex" data-b="${esc(d.brand)}" style="cursor:pointer">⬇️ Excel</a> · <a class="lk bgfiche" data-b="${esc(d.brand)}" style="cursor:pointer">Ouvrir la fiche</a></div>
+        </div></div>`;
+    }).join('');
+    box.innerHTML='<div style="margin-bottom:10px"><label style="font-size:12px;font-weight:600">Mois </label><input type="month" id="bgallmonth" value="'+esc(month)+'" style="width:auto;display:inline-block;font-size:12px;padding:2px 6px"></div>'
+      +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px">'+(cards||'<div class="state">Aucune marque avec budget pour l\'instant.</div>')+'</div>';
+    const mi=$('bgallmonth'); if(mi)mi.onchange=()=>{BG_MONTH=mi.value;renderBudgetView();};
+    box.querySelectorAll('.bgfiche').forEach(a=>a.onclick=()=>{MQ_SELECTED=a.dataset.b;navToView('marques');});
+    box.querySelectorAll('.bgex').forEach(a=>a.onclick=async()=>{
+      const d=res.find(x=>x&&x.brand===a.dataset.b); if(!d)return;
+      try{
+        await ensureXLSX();
+        const bm=d.budgetMensuel||0,tot=d.total||0;
+        const rows=[['Créatrice / contenu','Date','Statut','Budget (€)']].concat((d.entries||[]).map(e=>[e.nom,e.date||'',e.statut||'',Number(e.budget)||0]));
+        rows.push([]);rows.push(['Total engagé','','',tot]);
+        if(bm>0){rows.push(['Budget mensuel','','',bm]);rows.push(['Restant','','',bm-tot]);}
+        const ws=XLSX.utils.aoa_to_sheet(rows); ws['!cols']=[{wch:36},{wch:12},{wch:20},{wch:12}];
+        const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,('Budget '+month).slice(0,31));
+        XLSX.writeFile(wb,'Budget '+d.brand+' '+month+'.xlsx');
+      }catch(e){alert('Export impossible, réessaie.');}
+    });
+  }catch(e){box.innerHTML='<div class="state">Erreur de chargement.</div>';}
 }
 // --- Onglet Process : la bibliothèque des documents de référence ------------
 async function renderProcess(){
@@ -979,7 +1026,7 @@ async function load(){
   // Rôle « team » (ex. social media manager) : espace allégé, centré sur la to-do.
   // On masque les outils créateurs (profils, mails, campagnes, marques, contacts, rapports).
   if(VIEWER.role==='team'){
-    ['profils','campagnes','contenus','marques','contacts','messages','rapports'].forEach(g=>{const a=document.querySelector('.sb-nav .nav[data-go="'+g+'"]');if(a)a.style.display='none';});
+    ['profils','campagnes','contenus','marques','contacts','messages','rapports','budget'].forEach(g=>{const a=document.querySelector('.sb-nav .nav[data-go="'+g+'"]');if(a)a.style.display='none';});
     ['srcpanel','mailpanel','pipelinepanel','brandpanel','fillpanel','listpanel','statcards'].forEach(id=>{const e=$(id);if(e){e.classList.add('hidden');e.style.display='none';}});
   }
   loadAlerts();          // remplissage des calendriers : visible par toutes les CP
