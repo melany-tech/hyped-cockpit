@@ -1174,7 +1174,11 @@ app.get("/api/budget/:brand", auth, async (req, res) => {
     const entries = []; let cursor;
     do {
       const r = await notion.databases.query({ database_id: cfg.dbId, start_cursor: cursor, page_size: 100,
-        filter: { property: cfg.dateProp, date: { on_or_after: month + "-01", on_or_before: month + "-" + String(lastDay).padStart(2, "0") } } });
+        // filtre composé explicite : les deux bornes du mois (la forme à double clé était ignorée)
+        filter: { and: [
+          { property: cfg.dateProp, date: { on_or_after: month + "-01" } },
+          { property: cfg.dateProp, date: { on_or_before: month + "-" + String(lastDay).padStart(2, "0") } },
+        ] } });
       r.results.forEach((pg) => {
         const p = pg.properties || {};
         entries.push({
