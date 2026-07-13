@@ -789,8 +789,10 @@ async function renderBudgetView(){
     const prev=bgPrevMonth(month);
     const get=async(b,m)=>{try{const r=await api('/api/budget/'+encodeURIComponent(b)+'?month='+m);return r.ok?{brand:b,...(await r.json())}:null;}catch(e){return null;}};
     const [cur,old]=await Promise.all([Promise.all(brands.map(b=>get(b,month))),Promise.all(brands.map(b=>get(b,prev)))]);
-    const ds=cur.filter(Boolean).filter(d=>(d.budgetMensuel||0)>0||(d.total||0)>0);
-    ds.sort((a,b)=>((b.budgetMensuel||0)-(a.budgetMensuel||0))||((b.total||0)-(a.total||0)));
+    // TOUTES les marques s'affichent, même à zéro : les cartes montrent « budget à
+    // définir » tant que la fiche et le calendrier ne sont pas remplis (maquette Mélany).
+    const ds=cur.filter(Boolean);
+    ds.sort((a,b)=>((b.budgetMensuel||0)-(a.budgetMensuel||0))||((b.total||0)-(a.total||0))||((b.entries||[]).length-(a.entries||[]).length));
     const eur=n=>Number(n||0).toLocaleString('fr-FR')+' €';
     const totBudget=ds.reduce((s,d)=>s+(d.budgetMensuel||0),0);
     const totDep=ds.reduce((s,d)=>s+(d.total||0),0);
@@ -808,7 +810,7 @@ async function renderBudgetView(){
     if(F){
       const bm=F.budgetMensuel||0,tot=F.total||0,rest=bm-tot,pct=bm>0?Math.min(1,tot/bm):0;
       const C=2*Math.PI*52, col=(bm>0&&tot>bm)?'#C2553B':'#7A5AA8';
-      const byCp={};(F.entries||[]).forEach(e=>{const k=e.cp||'Non attribué';byCp[k]=(byCp[k]||0)+(Number(e.budget)||0);});
+      const byCp={};(F.entries||[]).forEach(e=>{if(!(Number(e.budget)>0))return;const k=e.cp||'Non attribué';byCp[k]=(byCp[k]||0)+Number(e.budget);});
       const mx=Math.max(1,...Object.values(byCp));
       const cps=Object.entries(byCp).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([k,v])=>`<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;margin-top:5px"><span style="flex:0 0 90px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(k)}</span><b style="flex:0 0 66px;text-align:right">${eur(v)}</b><div style="flex:1;height:7px;background:#EFF2F2;border-radius:4px"><div style="width:${Math.round(100*v/mx)}%;height:7px;background:#7A5AA8;border-radius:4px"></div></div></div>`).join('');
       featured=`<div class="panel" style="padding:16px">
@@ -840,6 +842,7 @@ async function renderBudgetView(){
       if(bm>0&&tot>bm)alerts.push('🔴 <b>'+esc(d.brand)+'</b> · budget dépassé de '+eur(tot-bm));
       else if(bm>0&&tot>=0.8*bm)alerts.push('🟠 <b>'+esc(d.brand)+'</b> · budget bientôt atteint ('+Math.round(100*tot/bm)+' %)');
       if(bm===0&&tot>0)alerts.push('ℹ️ <b>'+esc(d.brand)+'</b> · '+eur(tot)+' engagés mais budget mensuel non renseigné (fiche marque)');
+      else if(bm===0)alerts.push('📊 <b>'+esc(d.brand)+'</b> · budget mensuel à renseigner dans la fiche marque');
     });
     const alertsBox=`<div class="panel" style="padding:16px"><div style="font-weight:800">Alertes & statuts</div>${alerts.length?alerts.map(a=>'<div style="font-size:13px;margin-top:8px">'+a+'</div>').join(''):'<div class="state2" style="padding:8px">Tout est dans les clous ce mois-ci ✅</div>'}</div>`;
     // Mini-cartes des autres marques
@@ -859,7 +862,7 @@ async function renderBudgetView(){
       +kpis
       +'<div class="dgrid dgrid-2" style="margin-top:2px">'+(featured||'')+'<div style="display:flex;flex-direction:column;gap:12px">'+evo+alertsBox+'</div></div>'
       +(minis?('<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-top:12px">'+minis+'</div>'):'')
-      +((!ds.length)?'<div class="state">Aucune marque avec budget pour l\'instant. Renseigne « 📊 Budget mensuel » dans les fiches marques.</div>':'');
+      +((!ds.length)?'<div class="state">Aucune marque pour l\'instant : crée les fiches dans l\'onglet Marques.</div>':'');
     const mi=$('bgallmonth'); if(mi)mi.onchange=()=>{BG_MONTH=mi.value;renderBudgetView();};
     box.querySelectorAll('.bgmini').forEach(el=>el.onclick=()=>{MQ_SELECTED=el.dataset.b;navToView('marques');});
     box.querySelectorAll('.bgex').forEach(a=>{const d=ds.find(x=>x.brand===a.dataset.b);if(d)a.onclick=(ev)=>{ev.stopPropagation();bgExport(d,month)();};});
