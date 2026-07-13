@@ -790,7 +790,7 @@ function refreshCustomView(){
   else if(CURRENT_VIEW==='budget')renderBudgetView();
 }
 // ===== Vue Budget : dashboard « Suivi des budgets » =========================
-let BG_MONTH='', BG_BRAND='';
+let BG_MONTH='', BG_BRAND='', BG_ALL=false;
 try{BG_BRAND=localStorage.getItem('hc_bgbrand')||'';}catch(e){}
 function bgPrevMonth(m){const y=+m.slice(0,4),mm=+m.slice(5,7);const d=new Date(y,mm-2,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
 function bgExport(d,month){
@@ -856,10 +856,10 @@ async function renderBudgetView(){
       const infs=Object.entries(byInf).sort((a,b)=>b[1]-a[1]);
       const mx=Math.max(1,...infs.map(x=>x[1]),0);
       const clean=(s)=>String(s).replace(/^Démo\s*·\s*/i,'');
-      const prows=infs.slice(0,7).map(([k,v])=>{
+      const prows=(BG_ALL?infs:infs.slice(0,7)).map(([k,v])=>{
         const share=tot>0?Math.round(100*v/tot):0;
         return `<div class="bgd-prow"><span class="bgd-pav" style="background:${bgdCol(k)}">${esc(bgdIni(clean(k)))}</span><span style="flex:1;min-width:80px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(clean(k))}</span><b style="flex:0 0 82px;text-align:right;white-space:nowrap">${esc(eur(v))}</b><span style="flex:0 0 44px;text-align:right;color:#5D6D74">${share} %</span><div class="bgd-bar" style="flex:0 0 30%"><div style="width:${Math.round(100*v/mx)}%"></div></div></div>`;
-      }).join('')+(infs.length>7?('<div class="bgd-prow" style="color:#8A9AA0;font-size:12px">+ '+(infs.length-7)+' autre(s) créatrice(s)</div>'):'');
+      }).join('')+(infs.length>7?('<div class="bgd-prow bgshowall" style="cursor:pointer;color:#6D5AE0;font-weight:700">'+(BG_ALL?'▲ Réduire la liste':('▼ Tout dérouler · + '+(infs.length-7)+' autre(s) créatrice(s)'))+'</div>'):'');
       featured=`<div class="bgd-card">
         <div style="display:flex;align-items:center;gap:13px">
           <div class="bgd-logo" style="background:${bgdCol(F.brand)}">${esc(bgdIni(F.brand))}</div>
@@ -954,6 +954,7 @@ async function renderBudgetView(){
     const mi=$('bgallmonth'); if(mi)mi.onchange=()=>{BG_MONTH=mi.value;renderBudgetView();};
     const selectBrand=(b)=>{BG_BRAND=b;try{localStorage.setItem('hc_bgbrand',b);}catch(e){}renderBudgetView();};
     box.querySelectorAll('.bgchip').forEach(c=>c.onclick=()=>selectBrand(c.dataset.b));
+    const sa=box.querySelector('.bgshowall'); if(sa)sa.onclick=()=>{BG_ALL=!BG_ALL;renderBudgetView();};
     box.querySelectorAll('.bgmini').forEach(el=>el.onclick=()=>selectBrand(el.dataset.b));
     box.querySelectorAll('.bgfiche2').forEach(a=>a.onclick=(ev)=>{ev.stopPropagation();MQ_SELECTED=a.dataset.b;navToView('marques');});
     // « + » : ajout rapide profil + budget dans le calendrier de la marque affichée
