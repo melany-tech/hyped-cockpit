@@ -1366,6 +1366,13 @@ async function loadWeeklyPanel(){
   try{
     const r=await api('/api/weekly'); if(!r.ok)return;
     const d=await r.json();
+    // Tâches extraites de la weekly en attente de validation (rien n'est créé sans relecture)
+    let PK=null; try{const rp=await api('/api/kickoff/pending'); if(rp.ok)PK=(await rp.json()).pending||null;}catch(e){}
+    const review=PK?('<div style="border:1px solid #E8DCA6;background:#FDF8E7;border-radius:12px;padding:12px;margin-bottom:12px">'
+      +'<div style="font-weight:800">📋 '+PK.taches.length+' tâche(s) extraites de « '+esc(PK.subject)+' »</div>'
+      +'<div class="fs" style="margin:2px 0 6px">Rien n\'est encore dans les to-do : relis, décoche ce qui ne va pas, puis valide.</div>'
+      +PK.taches.map((t,i)=>'<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid #F0E9CF"><input type="checkbox" class="kfk" data-i="'+i+'" checked style="width:16px;height:16px;flex:0 0 16px;margin-top:2px"><div style="flex:1;min-width:0">'+esc(t.tache)+' <b>→ '+esc(t.responsable||'?')+'</b>'+(t.marque?(' <span class="fs">· '+esc(t.marque)+'</span>'):'')+(t.echeance?(' <span class="fs">· 📅 '+esc(t.echeance)+'</span>'):'')+'</div></div>').join('')
+      +'<div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap"><button class="lk primary kfok">✅ Créer les tâches cochées dans les to-do</button><button class="lk kfno">🗑️ Tout ignorer</button><span class="fichemsg kfmsg"></span></div></div>'):'';
     const items=(d.notes||[]).map(n=>'<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 2px;border-bottom:1px solid #EEF2F2">'
       +'<input type="checkbox" class="wkdone" data-id="'+esc(n.id)+'" '+(n.done?'checked':'')+' style="width:16px;height:16px;flex:0 0 16px;margin-top:2px">'
       +'<div style="flex:1;min-width:0'+(n.done?';text-decoration:line-through;color:#9AAAAA':'')+'">'+(n.who?'<b>'+esc(n.who)+'</b> · ':'')+esc(n.text)+' <span style="font-size:11px;color:#9AAAAA">'+esc(fnoteDate(n.at))+'</span>'
@@ -1378,7 +1385,7 @@ async function loadWeeklyPanel(){
       +'<button class="lk wklink" data-id="'+esc(n.id)+'" title="Attacher un lien (drive, Notion, TikTok…)">🔗</button>'
       +'<button class="lk wkedit" data-id="'+esc(n.id)+'" title="Modifier (texte ou destinataire)">✎</button>'
       +'<button class="lk wkdel" data-id="'+esc(n.id)+'" title="Supprimer" style="color:#C2553B">✕</button></div>').join('');
-    p.querySelector('#weeklybox').innerHTML=(items||'<div class="state2" style="padding:8px">Un truc à dire lundi ? Note-le ici dès que ça te passe par la tête, et coche pendant la réunion. 🧠</div>')
+    p.querySelector('#weeklybox').innerHTML=review+(items||'<div class="state2" style="padding:8px">Un truc à dire lundi ? Note-le ici dès que ça te passe par la tête, et coche pendant la réunion. 🧠</div>')
       +'<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap"><input id="wkwho" list="wkteam" placeholder="Pour qui ? (optionnel)" style="flex:0 0 130px"><datalist id="wkteam">'+(TEAM||[]).map(t=>'<option value="'+esc(t)+'">').join('')+'</datalist>'
       +'<input id="wktext" placeholder="À dire à la weekly… (Entrée pour ajouter)" style="flex:1;min-width:160px"><button class="lk primary" id="wkadd">+ Noter</button></div>'
       +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px;border-top:1px solid #EEF2F2;padding-top:9px"><button class="lk wkimport">📥 Importer le compte-rendu weekly (PDF) → tâches auto</button><span class="fichemsg wkimpmsg"></span></div>';
@@ -1406,7 +1413,19 @@ async function loadWeeklyPanel(){
       };
       fi.click();
     });
-    // 📥 : importer le PDF de transcription Sembly → l'IA crée les tâches de la weekly
+    // Validation des tâches extraites : créer les cochées / tout ignorer
+    const ko=p.querySelector('.kfok');
+    if(ko)ko.onclick=async()=>{
+      const keep=[...p.querySelectorAll('.kfk')].filter(c=>c.checked).map(c=>Number(c.dataset.i));
+      ko.textContent='⏳ Création…';
+      const r2=await api('/api/kickoff/confirm',{method:'POST',body:JSON.stringify({keep})});
+      const dd=await r2.json().catch(()=>({}));
+      if(r2.ok){loadWeeklyPanel();loadTodo();loadDirigeant();alert('✅ '+dd.created+' tâche(s) créée(s) dans les to-do'+(dd.skipped?(' · '+dd.skipped+' déjà présente(s), ignorée(s)'):'')+((dd.orphans||[]).length?(' · '+dd.orphans.length+' sans responsable (détail Slack)'):''));}
+      else{ko.textContent='✅ Créer les tâches cochées dans les to-do';p.querySelector('.kfmsg').textContent=dd.error||'Erreur, réessaie';}
+    };
+    const kn=p.querySelector('.kfno');
+    if(kn)kn.onclick=async()=>{if(!confirm('Ignorer toutes ces tâches extraites ?'))return;await api('/api/kickoff/discard',{method:'POST',body:'{}'});loadWeeklyPanel();};
+    // 📥 : importer le PDF de transcription Sembly → l'IA propose les tâches à valider
     const wi=p.querySelector('.wkimport');
     if(wi)wi.onclick=()=>{
       const fi=document.createElement('input'); fi.type='file'; fi.accept='.pdf,application/pdf'; fi.id='wkimpfile';
@@ -1420,7 +1439,7 @@ async function loadWeeklyPanel(){
           try{
             const r=await api('/api/kickoff/upload',{method:'POST',body:JSON.stringify({filename:f.name,data:rd.result})});
             const dd=await r.json().catch(()=>({}));
-            if(r.ok){p.querySelector('.wkimpmsg').textContent='✅ '+dd.created+' tâche(s) créée(s)'+(dd.skipped?(' · '+dd.skipped+' déjà présente(s)'):'')+((dd.orphans||[]).length?(' · '+dd.orphans.length+' sans responsable'):'')+' · détail sur Slack';loadTodo();loadDirigeant();}
+            if(r.ok){p.querySelector('.wkimpmsg').textContent='📋 Transcription lue : '+(dd.pending||0)+' tâche(s) à relire ci-dessus avant création';loadWeeklyPanel();}
             else p.querySelector('.wkimpmsg').textContent=dd.error||'Erreur, réessaie';
           }catch(e){p.querySelector('.wkimpmsg').textContent='Erreur réseau, réessaie';}
           wi.textContent='📥 Importer le compte-rendu weekly (PDF) → tâches auto';

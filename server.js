@@ -2584,6 +2584,18 @@ async function kickoffProcess(text, subject) {
       const taches = await kickoffExtract(text, deja);
       const su = COPILOT.slackIds[KICKOFF_BOX] || "";
       if (!taches || !taches.length) { if (su) await copilotNotify({ slackUser: su, text: "📋 J'ai lu le compte-rendu (« " + (subject || "réunion") + " ») mais je n'ai extrait aucune tâche claire. Tu peux les ajouter à la main dans la to-do." }); return { created: [], skipped: [], orphans: [] }; }
+      // VALIDATION D'ABORD : rien ne part dans les to-do sans relecture de Mélany.
+      // Les tâches extraites attendent dans le cockpit (panneau À dire à la weekly).
+      const st = loadKickoff();
+      st.pending = { id: crypto.randomBytes(6).toString("hex"), subject: String(subject || "réunion"), at: Date.now(), taches: taches.slice(0, 25) };
+      saveKickoff(st);
+      if (su) await copilotNotify({ slackUser: su, text: "📋 J'ai extrait *" + st.pending.taches.length + " tâche(s)* de « " + st.pending.subject + " ». Rien n'est encore créé : relis-les et valide dans le cockpit → panneau « 🧠 À dire à la weekly »." });
+      return { pending: st.pending.taches.length };
+}
+// La création réelle, après validation : anti-doublons + récap Slack.
+async function kickoffCreate(taches, subject) {
+      let existing = []; try { existing = (await fetchAllTasks()).filter((x) => x.statut !== "Fait"); } catch (e) {}
+      const su = COPILOT.slackIds[KICKOFF_BOX] || "";
       const teamNames = USERS.map((u) => u.name);
       const created = [], orphans = [], skipped = [];
       const nrmT = (s) => nrmName(s).replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
@@ -2612,6 +2624,32 @@ async function kickoffProcess(text, subject) {
       if (su) await copilotNotify({ slackUser: su, text: "📋 *Kickoff traité* (« " + (subject || "réunion") + " ») : " + created.length + " tâche(s) créée(s) dans les to-do :\n" + created.join("\n") + (skipped.length ? ("\n\n♻️ Déjà dans la to-do, pas recréées :\n• " + skipped.join("\n• ")) : "") + (orphans.length ? ("\n\n🤷 Sans responsable clair (à attribuer à la main) :\n• " + orphans.join("\n• ")) : "") + "\n\n_Une tâche en trop ? Supprime-la dans Notion ou décoche-la, rien d'autre à faire._" });
       return { created, skipped, orphans };
 }
+// Les tâches extraites en attente de validation (relues dans le cockpit)
+app.get("/api/kickoff/pending", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  const st = loadKickoff();
+  res.json({ pending: st.pending || null });
+});
+// Validation : on crée UNIQUEMENT les tâches cochées, le reste est oublié
+app.post("/api/kickoff/confirm", auth, async (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  const st = loadKickoff();
+  if (!st.pending) return res.status(400).json({ error: "rien à valider" });
+  const keep = Array.isArray(req.body?.keep) ? req.body.keep.map(Number) : [];
+  const taches = st.pending.taches.filter((_, i) => keep.includes(i));
+  const subject = st.pending.subject;
+  st.pending = null; saveKickoff(st);
+  if (!taches.length) return res.json({ ok: true, created: 0, skipped: 0, orphans: [] });
+  try {
+    const out = await kickoffCreate(taches, subject);
+    res.json({ ok: true, created: (out.created || []).length, skipped: (out.skipped || []).length, orphans: out.orphans || [] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post("/api/kickoff/discard", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  const st = loadKickoff(); st.pending = null; saveKickoff(st);
+  res.json({ ok: true });
+});
 // Import manuel du compte-rendu (PDF Sembly exporté) : mêmes tâches, même récap.
 app.post("/api/kickoff/upload", auth, async (req, res) => {
   if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
@@ -2625,7 +2663,7 @@ app.post("/api/kickoff/upload", auth, async (req, res) => {
   if (!text || text.length < 200) return res.status(400).json({ error: "je n'arrive pas à lire de texte dans ce PDF" });
   try {
     const out = await kickoffProcess(text, String(req.body?.filename || "compte-rendu importé").replace(/\.pdf$/i, ""));
-    res.json({ ok: true, created: (out.created || []).length, skipped: (out.skipped || []).length, orphans: out.orphans || [] });
+    res.json({ ok: true, pending: out.pending || 0, created: (out.created || []).length });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 function nrmName(s) { return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim(); }
