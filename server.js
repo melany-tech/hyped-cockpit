@@ -410,9 +410,25 @@ app.get("/api/dirigeant", auth, async (req, res) => {
 const WEEKLY_STORE = path.join(DATA_DIR, "weekly.json");
 function loadWeekly() { try { return JSON.parse(fs.readFileSync(WEEKLY_STORE, "utf8")); } catch (e) { return { notes: [] }; } }
 function saveWeekly(w) { try { fs.writeFileSync(WEEKLY_STORE, JSON.stringify(w, null, 2)); } catch (e) {} }
+// Les notes barrées s'auto-nettoient au bout de 7 jours (pièces jointes comprises) :
+// le pense-bête reste frais d'une weekly à l'autre sans ménage manuel.
+function purgeWeekly(w) {
+  const cut = Date.now() - 7 * 24 * 3600 * 1000;
+  let changed = false; const keep = [];
+  (w.notes || []).forEach((n) => {
+    if (n.done && !n.doneAt) { n.doneAt = Date.now(); changed = true; keep.push(n); return; } // anciennes notes : le compteur démarre maintenant
+    if (n.done && n.doneAt < cut) {
+      (n.files || []).forEach((f) => { try { fs.unlinkSync(path.join(WEEKLY_FILES_DIR, String(f.id).replace(/[^a-f0-9]/g, ""))); } catch (e) {} });
+      changed = true; return;
+    }
+    keep.push(n);
+  });
+  if (changed) { w.notes = keep; saveWeekly(w); }
+  return w;
+}
 app.get("/api/weekly", auth, (req, res) => {
   if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
-  const w = loadWeekly();
+  const w = purgeWeekly(loadWeekly());
   const notes = (w.notes || []).sort((a, b) => (a.done === b.done ? (b.at || 0) - (a.at || 0) : (a.done ? 1 : -1)));
   res.json({ notes });
 });
@@ -428,7 +444,8 @@ app.post("/api/weekly/:id/done", auth, (req, res) => {
   if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
   const w = loadWeekly(); const n = (w.notes || []).find((x) => x.id === req.params.id);
   if (!n) return res.status(404).json({ error: "note introuvable" });
-  n.done = !n.done; saveWeekly(w); res.json({ ok: true, done: n.done });
+  n.done = !n.done; n.doneAt = n.done ? Date.now() : null; // top départ des 7 jours avant auto-nettoyage
+  saveWeekly(w); res.json({ ok: true, done: n.done });
 });
 app.post("/api/weekly/:id/edit", auth, (req, res) => {
   if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
@@ -464,7 +481,7 @@ app.post("/api/weekly/:id/totask", auth, async (req, res) => {
     try { await notion.pages.create({ parent: { database_id: TASKS_DB }, properties: props }); made.push(resp); } catch (e) {}
   }
   if (!made.length) return res.status(500).json({ error: "échec de création dans Notion" });
-  n.done = true; n.tasked = true; saveWeekly(w); invalidateTasksCache();
+  n.done = true; n.tasked = true; n.doneAt = Date.now(); saveWeekly(w); invalidateTasksCache();
   logActivity({ type: "todo", creator: String(n.text).slice(0, 60), cp: req.user.name });
   res.json({ ok: true, made });
 });

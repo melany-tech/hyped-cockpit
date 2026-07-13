@@ -1422,13 +1422,26 @@ async function loadWeeklyPanel(){
     // dans la to-do de la ou des personnes (« Rozenn et Najem » = une tâche chacun).
     p.querySelectorAll('.wkdone').forEach(c=>c.onchange=async()=>{
       const n=(d.notes||[]).find(x=>x.id===c.dataset.id);
+      // Note avec un « pour qui » : deux choix clairs, en ligne (pas de popup)
       if(c.checked&&n&&!n.tasked&&(n.who||'').trim()){
-        if(confirm('Envoyer « '+n.text.slice(0,90)+(n.text.length>90?'…':'')+' » dans la to-do de '+n.who+' ?')){
+        const row=c.closest('div');
+        if(row.querySelector('.wkchoice'))return;
+        row.style.flexWrap='wrap';
+        const ch=document.createElement('div'); ch.className='wkchoice';
+        ch.style.cssText='flex-basis:100%;width:100%;display:flex;gap:8px;margin-top:7px;flex-wrap:wrap;align-items:center';
+        ch.innerHTML='<button class="lk primary wk_todo">📌 Mettre dans la to-do de '+esc(n.who)+'</button>'
+          +'<button class="lk wk_done">✅ C\'est dit, elle est informée</button>'
+          +'<span class="fichemsg wk_msg"></span>';
+        row.appendChild(ch);
+        ch.querySelector('.wk_todo').onclick=async()=>{
+          ch.querySelector('.wk_todo').textContent='⏳ …';
           const r=await api('/api/weekly/'+encodeURIComponent(n.id)+'/totask',{method:'POST',body:'{}'});
           const dd=await r.json().catch(()=>({}));
-          if(r.ok){alert('📌 Ajouté à la to-do de : '+(dd.made||[]).join(', ')+'. Le kickoff du lundi ne la recréera pas.');loadWeeklyPanel();loadDirigeant();return;}
-          alert(dd.error||'Impossible de créer la tâche, réessaie.');
-        }
+          if(!r.ok){ch.querySelector('.wk_todo').textContent='📌 Mettre dans la to-do de '+n.who;ch.querySelector('.wk_msg').textContent=dd.error||'Erreur, réessaie';return;}
+          loadWeeklyPanel();loadDirigeant();
+        };
+        ch.querySelector('.wk_done').onclick=async()=>{await api('/api/weekly/'+encodeURIComponent(n.id)+'/done',{method:'POST',body:'{}'});loadWeeklyPanel();};
+        return; // on attend le choix
       }
       await api('/api/weekly/'+encodeURIComponent(c.dataset.id)+'/done',{method:'POST',body:'{}'});loadWeeklyPanel();
     });
