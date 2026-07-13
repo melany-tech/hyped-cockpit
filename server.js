@@ -1678,6 +1678,15 @@ async function copilotTick() {
       }
       for (const m of (r && r.creatorReplies) || []) {
         if (!m.threadId) continue;
+        // Mail adressé à une AUTRE boîte surveillée (ici on n'est qu'en copie) : on laisse
+        // la boîte destinataire s'en occuper. Sinon la même carte sort en double et la
+        // réponse partirait de la mauvaise boîte (ex. Victoria écrit à Rozenn, Amena en cc).
+        const toL = String(m.to || "").toLowerCase();
+        if (toL && !toL.includes(email.toLowerCase()) && COPILOT.cps.some((e2) => e2 !== email && toL.includes(e2))) {
+          const dup = store.proposals.find((x) => x.cpEmail === email && x.threadId === m.threadId && (x.status === "pending" || x.status === "ready"));
+          if (dup) { dup.status = "handled"; dup.decision = "doublon de boîte : mail adressé à une autre CP"; }
+          continue;
+        }
         // Fil déjà traité : on ne l'ignore QUE si rien de nouveau depuis. Si le créateur a écrit
         // APRÈS le traitement, le fil redevient à traiter (sinon ses relances passaient aux oubliettes).
         const tr = tt[m.threadId];

@@ -108,7 +108,7 @@ async function fetchEmails(gmail, query = "newer_than:30d -in:sent -in:draft -ca
       const msgs = t.data.messages || [];
       const last = msgs[msgs.length - 1];
       const h = Object.fromEntries((last.payload?.headers || []).map((x) => [x.name, x.value]));
-      return { id: last.id, threadId: th.id, from: h.From || "", subject: h.Subject || "", snippet: last.snippet || "",
+      return { id: last.id, threadId: th.id, from: h.From || "", to: h.To || "", cc: h.Cc || "", subject: h.Subject || "", snippet: last.snippet || "",
         date: h.Date || "", url: `https://mail.google.com/mail/u/0/#all/${th.id}` };
     } catch (e) { return null; }
   }));
