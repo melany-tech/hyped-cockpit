@@ -861,7 +861,21 @@ async function renderBudgetView(){
           <div class="bgd-logo" style="background:${bgdCol(F.brand)}">${esc(bgdIni(F.brand))}</div>
           <div style="flex:1;min-width:0"><div class="bgd-h" style="font-size:19px">${esc(F.brand)}</div>
             <div style="margin-top:3px"><span class="bgd-badge" style="background:#E7F6EE;color:#16A34A">Active</span>${resp?(' <span class="fs">Responsable : '+esc(resp)+'</span>'):''}</div></div>
+          <a class="lk bgaddbtn" title="Ajouter un profil et son budget au calendrier" style="cursor:pointer;font-size:19px;font-weight:800;color:#6D5AE0;border:1px solid #E5EAEC;border-radius:10px;padding:2px 10px">＋</a>
           <a class="lk bgfiche2" data-b="${esc(F.brand)}" title="Ouvrir la fiche marque" style="cursor:pointer;font-size:20px;color:#8A9AA0">⋮</a>
+        </div>
+        <div id="bgaddform" style="display:none;margin-top:12px;padding:12px;background:#F7F8FA;border-radius:12px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input class="bga_nom" placeholder="Nom du profil (ex. CurlyNaïa)" style="flex:2;min-width:150px">
+            <input class="bga_budget" type="number" min="0" placeholder="Budget €" style="flex:1;min-width:90px">
+            <input class="bga_date" type="date" value="${esc(month===new Date().toISOString().slice(0,7)?new Date().toISOString().slice(0,10):(month+'-15'))}" style="flex:1;min-width:120px">
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+            <button class="lk primary bga_save">＋ Ajouter au calendrier</button>
+            <button class="lk bga_cancel">Annuler</button>
+            <span class="fichemsg bga_msg"></span>
+          </div>
+          <div class="fs" style="margin-top:4px">Ça crée la collab dans le calendrier Notion de ${esc(F.brand)}, avec toi en interlocutrice. Le budget compte immédiatement ici.</div>
         </div>
         <div style="display:flex;gap:26px;align-items:center;flex-wrap:wrap;margin-top:16px">
           <svg viewBox="0 0 160 160" style="width:172px;height:172px;flex:0 0 172px">
@@ -936,6 +950,21 @@ async function renderBudgetView(){
     box.querySelectorAll('.bgchip').forEach(c=>c.onclick=()=>selectBrand(c.dataset.b));
     box.querySelectorAll('.bgmini').forEach(el=>el.onclick=()=>selectBrand(el.dataset.b));
     box.querySelectorAll('.bgfiche2').forEach(a=>a.onclick=(ev)=>{ev.stopPropagation();MQ_SELECTED=a.dataset.b;navToView('marques');});
+    // « + » : ajout rapide profil + budget dans le calendrier de la marque affichée
+    const ab=box.querySelector('.bgaddbtn'), af=box.querySelector('#bgaddform');
+    if(ab&&af){
+      ab.onclick=()=>{af.style.display=(af.style.display==='none')?'block':'none';const n=af.querySelector('.bga_nom');if(n&&af.style.display==='block')n.focus();};
+      const save=async()=>{
+        const nom=af.querySelector('.bga_nom').value.trim(); if(!nom){af.querySelector('.bga_msg').textContent='Il me faut le nom du profil 🙂';return;}
+        const b2=af.querySelector('.bga_save'); b2.textContent='⏳ Ajout…';
+        const r=await api('/api/budget/'+encodeURIComponent(F.brand)+'/add',{method:'POST',body:JSON.stringify({nom,budget:af.querySelector('.bga_budget').value,date:af.querySelector('.bga_date').value})});
+        const dd=await r.json().catch(()=>({}));
+        if(r.ok)renderBudgetView(); else{b2.textContent='＋ Ajouter au calendrier';af.querySelector('.bga_msg').textContent=dd.error||'Erreur, réessaie';}
+      };
+      af.querySelector('.bga_save').onclick=save;
+      af.querySelector('.bga_nom').onkeydown=e=>{if(e.key==='Enter')save();};
+      af.querySelector('.bga_cancel').onclick=()=>{af.style.display='none';};
+    }
     box.querySelectorAll('.bgex').forEach(a=>{const d=ds.find(x=>x.brand===a.dataset.b);if(d)a.onclick=(ev)=>{ev.stopPropagation();bgExport(d,month)();};});
   }catch(e){box.innerHTML='<div class="state">Erreur de chargement.</div>';}
 }

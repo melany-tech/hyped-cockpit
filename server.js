@@ -1162,6 +1162,29 @@ const BUDGET_CALS = {
   "in haircare": { dbId: "380f8ac3-c3ae-80ce-ba4c-e8e82490edc6", dateProp: "Date" },
   "doucea": { dbId: "37bf8ac3-c3ae-81d6-9dbd-d7f4a64165a8", dateProp: "Date" },
 };
+// Le « + » de la vue Budget : ajoute un profil et son budget directement dans le
+// calendrier Notion de la marque (la CP connectée devient l'Interlocuteur).
+app.post("/api/budget/:brand/add", auth, async (req, res) => {
+  if (!notion || DEMO) return res.status(400).json({ error: "Notion non branché" });
+  const brand = String(req.params.brand || "").trim();
+  const cfg = BUDGET_CALS[nrmName(brand)];
+  if (!cfg) return res.status(400).json({ error: "pas de calendrier branché pour cette marque (ajoute la collab dans Notion)" });
+  const nom = String(req.body?.nom || "").trim();
+  if (!nom) return res.status(400).json({ error: "il me faut le nom du profil 🙂" });
+  const budget = parseFloat(String(req.body?.budget ?? "").replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body?.date || "")) ? String(req.body.date) : new Date().toISOString().slice(0, 10);
+  const props = {
+    "Nom": { title: [{ text: { content: nom.slice(0, 120) } }] },
+  };
+  props[cfg.dateProp] = { date: { start: date } };
+  if (budget > 0) props["Budget"] = { number: budget };
+  try { const uid = await userIdByName(req.user.name); if (uid) props["Interlocuteur"] = { people: [{ id: uid }] }; } catch (e) {}
+  try {
+    const pg = await notion.pages.create({ parent: { database_id: cfg.dbId }, properties: props });
+    logActivity({ type: "collab", creator: nom, brand, cp: req.user.name });
+    res.json({ ok: true, id: pg.id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 app.get("/api/budget/:brand", auth, async (req, res) => {
   try {
     const brand = String(req.params.brand || "").trim();
