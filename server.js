@@ -1694,7 +1694,6 @@ async function copilotTick() {
         const greeted = greetName && greetName !== nrmName(copilotCpName(email)) ? USERS.find((u) => nrmName(u.name) === greetName) : null;
         const greetedBox = greeted ? String(greeted.email || "").toLowerCase() : "";
         const hersToo = greetedBox && COPILOT.cps.includes(greetedBox) && tocc.includes(greetedBox);
-        try { if (email === "amena@hyped-agency.fr") console.log("[copilot-debug]", String(m.subject || "").slice(0, 25), "| from:", String(m.from || "").slice(0, 35), "| to:", toL.slice(0, 70), "| cc:", String(m.cc || "").toLowerCase().slice(0, 50), "| greet:", greetName || "-"); } catch (e) {}
         if ((notToMe && toOtherBox) || hersToo) {
           const dup = store.proposals.find((x) => x.cpEmail === email && x.threadId === m.threadId && (x.status === "pending" || x.status === "ready"));
           if (dup) { dup.status = "handled"; dup.decision = "doublon de boîte : conversation d'une autre CP (" + (greeted ? greeted.name : "destinataire principale") + ")"; }
