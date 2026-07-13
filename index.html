@@ -762,8 +762,23 @@ function refreshCustomView(){
   else if(CURRENT_VIEW==='processus')renderProcess();
   else if(CURRENT_VIEW==='budget')renderBudgetView();
 }
-// ===== Vue Budget : toutes les marques côte à côte ==========================
+// ===== Vue Budget : dashboard « Suivi des budgets » =========================
 let BG_MONTH='';
+function bgPrevMonth(m){const y=+m.slice(0,4),mm=+m.slice(5,7);const d=new Date(y,mm-2,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
+function bgExport(d,month){
+  return async()=>{
+    try{
+      await ensureXLSX();
+      const bm=d.budgetMensuel||0,tot=d.total||0;
+      const rows=[['Créatrice / contenu','Date','CP','Statut','Budget (€)']].concat((d.entries||[]).map(e=>[e.nom,e.date||'',e.cp||'',e.statut||'',Number(e.budget)||0]));
+      rows.push([]);rows.push(['Total engagé','','','',tot]);
+      if(bm>0){rows.push(['Budget mensuel','','','',bm]);rows.push(['Restant','','','',bm-tot]);}
+      const ws=XLSX.utils.aoa_to_sheet(rows); ws['!cols']=[{wch:36},{wch:12},{wch:14},{wch:20},{wch:12}];
+      const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,('Budget '+month).slice(0,31));
+      XLSX.writeFile(wb,'Budget '+d.brand+' '+month+'.xlsx');
+    }catch(e){alert('Export impossible, réessaie.');}
+  };
+}
 async function renderBudgetView(){
   const box=$('budgetallbox'); if(!box)return;
   const month=BG_MONTH||new Date().toISOString().slice(0,7);
@@ -771,39 +786,83 @@ async function renderBudgetView(){
   try{
     const fi=await getFiches();
     const brands=[...new Set(['In Haircare','Doucéa','Curls Matter',...Object.keys((fi&&fi.brands)||{})])].filter(Boolean);
-    const res=await Promise.all(brands.map(async b=>{try{const r=await api('/api/budget/'+encodeURIComponent(b)+'?month='+month);return r.ok?{brand:b,...(await r.json())}:null;}catch(e){return null;}}));
-    const eur=(n)=>Number(n||0).toLocaleString('fr-FR')+' €';
-    const C=2*Math.PI*34;
-    const cards=res.filter(Boolean).filter(d=>(d.budgetMensuel||0)>0||(d.total||0)>0||!d.noCal).map(d=>{
-      const bm=d.budgetMensuel||0,tot=d.total||0,rest=bm-tot;
-      const pct=bm>0?Math.min(1,tot/bm):0;
-      const col=(bm>0&&tot>bm)?'#C2553B':'#2C9087';
-      const donut=bm>0?`<svg viewBox="0 0 90 90" style="width:86px;height:86px;flex:0 0 86px"><circle cx="45" cy="45" r="34" fill="none" stroke="#E8EEEE" stroke-width="11"/><circle cx="45" cy="45" r="34" fill="none" stroke="${col}" stroke-width="11" stroke-dasharray="${(C*pct).toFixed(1)} ${C.toFixed(1)}" stroke-linecap="round" transform="rotate(-90 45 45)"/><text x="45" y="50" text-anchor="middle" style="font-size:13px;font-weight:800;fill:#1C3A44">${Math.round(100*tot/bm)}%</text></svg>`
-        :'<div style="width:86px;height:86px;flex:0 0 86px;display:flex;align-items:center;justify-content:center;background:#F2F6F6;border-radius:50%;font-size:11px;color:#9AAAAA;text-align:center">budget<br>à définir</div>';
-      return `<div class="panel" style="display:flex;gap:14px;align-items:center;padding:14px">${donut}
-        <div style="flex:1;min-width:0"><div style="font-weight:800">${esc(d.brand)}</div>
-        <div style="font-size:13px;margin-top:2px"><b>${eur(tot)}</b> engagés${bm>0?(' / '+eur(bm)):''}</div>
-        ${bm>0?`<div style="font-size:13px;font-weight:700;color:${rest<0?'#C2553B':'#2C9087'}">${rest<0?('⚠️ Dépassement '+eur(-rest)):('Reste '+eur(rest))}</div>`:'<div class="fs">Budget mensuel à renseigner dans la fiche marque</div>'}
-        <div class="fs">${(d.entries||[]).length} collab(s)${d.noCal?' · calendrier non branché':''} · <a class="lk bgex" data-b="${esc(d.brand)}" style="cursor:pointer">⬇️ Excel</a> · <a class="lk bgfiche" data-b="${esc(d.brand)}" style="cursor:pointer">Ouvrir la fiche</a></div>
-        </div></div>`;
-    }).join('');
-    box.innerHTML='<div style="margin-bottom:10px"><label style="font-size:12px;font-weight:600">Mois </label><input type="month" id="bgallmonth" value="'+esc(month)+'" style="width:auto;display:inline-block;font-size:12px;padding:2px 6px"></div>'
-      +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px">'+(cards||'<div class="state">Aucune marque avec budget pour l\'instant.</div>')+'</div>';
-    const mi=$('bgallmonth'); if(mi)mi.onchange=()=>{BG_MONTH=mi.value;renderBudgetView();};
-    box.querySelectorAll('.bgfiche').forEach(a=>a.onclick=()=>{MQ_SELECTED=a.dataset.b;navToView('marques');});
-    box.querySelectorAll('.bgex').forEach(a=>a.onclick=async()=>{
-      const d=res.find(x=>x&&x.brand===a.dataset.b); if(!d)return;
-      try{
-        await ensureXLSX();
-        const bm=d.budgetMensuel||0,tot=d.total||0;
-        const rows=[['Créatrice / contenu','Date','Statut','Budget (€)']].concat((d.entries||[]).map(e=>[e.nom,e.date||'',e.statut||'',Number(e.budget)||0]));
-        rows.push([]);rows.push(['Total engagé','','',tot]);
-        if(bm>0){rows.push(['Budget mensuel','','',bm]);rows.push(['Restant','','',bm-tot]);}
-        const ws=XLSX.utils.aoa_to_sheet(rows); ws['!cols']=[{wch:36},{wch:12},{wch:20},{wch:12}];
-        const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,('Budget '+month).slice(0,31));
-        XLSX.writeFile(wb,'Budget '+d.brand+' '+month+'.xlsx');
-      }catch(e){alert('Export impossible, réessaie.');}
+    const prev=bgPrevMonth(month);
+    const get=async(b,m)=>{try{const r=await api('/api/budget/'+encodeURIComponent(b)+'?month='+m);return r.ok?{brand:b,...(await r.json())}:null;}catch(e){return null;}};
+    const [cur,old]=await Promise.all([Promise.all(brands.map(b=>get(b,month))),Promise.all(brands.map(b=>get(b,prev)))]);
+    const ds=cur.filter(Boolean).filter(d=>(d.budgetMensuel||0)>0||(d.total||0)>0);
+    ds.sort((a,b)=>((b.budgetMensuel||0)-(a.budgetMensuel||0))||((b.total||0)-(a.total||0)));
+    const eur=n=>Number(n||0).toLocaleString('fr-FR')+' €';
+    const totBudget=ds.reduce((s,d)=>s+(d.budgetMensuel||0),0);
+    const totDep=ds.reduce((s,d)=>s+(d.total||0),0);
+    const oldDep=old.filter(Boolean).reduce((s,d)=>s+(d.total||0),0);
+    const delta=oldDep>0?Math.round(100*(totDep-oldDep)/oldDep):null;
+    const kpi=(ic,bg2,lbl,val,sub)=>`<div class="panel" style="display:flex;gap:12px;align-items:center;padding:14px;flex:1;min-width:200px"><div style="width:44px;height:44px;flex:0 0 44px;border-radius:12px;background:${bg2};display:flex;align-items:center;justify-content:center;font-size:20px">${ic}</div><div><div style="font-size:12px;color:#6A7A7A;font-weight:600">${lbl}</div><div style="font-size:21px;font-weight:800">${val}</div>${sub?('<div style="font-size:11.5px;color:#6A7A7A">'+sub+'</div>'):''}</div></div>`;
+    const deltaTxt=delta===null?'':('vs mois dernier '+(delta>=0?'<span style="color:#2C9087;font-weight:700">▲ '+delta+' %</span>':'<span style="color:#C2553B;font-weight:700">▼ '+Math.abs(delta)+' %</span>'));
+    const kpis='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">'
+      +kpi('💼','#EDE7F5','Budget total du mois',eur(totBudget),ds.filter(d=>d.budgetMensuel>0).length+' marque(s) avec budget défini')
+      +kpi('💸','#FBEBDD','Dépensé / engagé',eur(totDep),deltaTxt)
+      +kpi('⏳','#E4F0EA','Budget restant',eur(totBudget-totDep),totBudget>0?Math.round(100*totDep/totBudget)+' % utilisé':'')
+      +kpi('🏷️','#E7F0F8','Marques suivies',String(ds.length),'actives ce mois-ci')+'</div>';
+    // Grande carte : la marque principale (plus gros budget)
+    const F=ds[0]; let featured='';
+    if(F){
+      const bm=F.budgetMensuel||0,tot=F.total||0,rest=bm-tot,pct=bm>0?Math.min(1,tot/bm):0;
+      const C=2*Math.PI*52, col=(bm>0&&tot>bm)?'#C2553B':'#7A5AA8';
+      const byCp={};(F.entries||[]).forEach(e=>{const k=e.cp||'Non attribué';byCp[k]=(byCp[k]||0)+(Number(e.budget)||0);});
+      const mx=Math.max(1,...Object.values(byCp));
+      const cps=Object.entries(byCp).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([k,v])=>`<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;margin-top:5px"><span style="flex:0 0 90px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(k)}</span><b style="flex:0 0 66px;text-align:right">${eur(v)}</b><div style="flex:1;height:7px;background:#EFF2F2;border-radius:4px"><div style="width:${Math.round(100*v/mx)}%;height:7px;background:#7A5AA8;border-radius:4px"></div></div></div>`).join('');
+      featured=`<div class="panel" style="padding:16px">
+        <div style="font-weight:800;font-size:16px">${esc(F.brand)} <span class="fs">· marque principale du mois</span></div>
+        <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-top:8px">
+          <svg viewBox="0 0 130 130" style="width:128px;height:128px;flex:0 0 128px"><circle cx="65" cy="65" r="52" fill="none" stroke="#EFF2F2" stroke-width="16"/><circle cx="65" cy="65" r="52" fill="none" stroke="${col}" stroke-width="16" stroke-dasharray="${(C*pct).toFixed(1)} ${C.toFixed(1)}" stroke-linecap="round" transform="rotate(-90 65 65)"/><text x="65" y="62" text-anchor="middle" style="font-size:20px;font-weight:800;fill:#1C3A44">${bm>0?Math.round(100*tot/bm):0}%</text><text x="65" y="80" text-anchor="middle" style="font-size:10px;fill:#6A7A7A">utilisé</text></svg>
+          <div style="flex:1;min-width:180px;font-size:13.5px">
+            <div>Budget mensuel <b style="float:right">${bm>0?eur(bm):'à renseigner'}</b></div>
+            <div style="margin-top:5px">Dépensé <b style="float:right">${eur(tot)}</b></div>
+            <div style="margin-top:5px">Restant <b style="float:right;color:${rest<0?'#C2553B':'#2C9087'}">${bm>0?eur(rest):'-'}</b></div>
+            <div style="margin-top:10px;border-top:1px solid #EEF2F2;padding-top:6px">${cps||'<span class="fs">Répartition par CP dès que les collabs du mois ont un budget.</span>'}</div>
+          </div>
+        </div>
+        <button class="lk primary bgex" data-b="${esc(F.brand)}" style="width:100%;margin-top:10px">⬇️ Exporter le détail budget (Excel client)</button>
+      </div>`;
+    }
+    // Évolution des dépenses par jour (toutes marques)
+    const lastDay=new Date(+month.slice(0,4),+month.slice(5,7),0).getDate();
+    const byDay=Array(lastDay).fill(0);
+    ds.forEach(d=>(d.entries||[]).forEach(e=>{if(e.date&&e.date.slice(0,7)===month)byDay[+e.date.slice(8,10)-1]+=Number(e.budget)||0;}));
+    const mxD=Math.max(1,...byDay);
+    const bars=byDay.map((v,i)=>`<div title="${(i+1)} · ${eur(v)}" style="flex:1;display:flex;flex-direction:column;justify-content:flex-end"><div style="height:${Math.max(v>0?6:1,Math.round(100*v/mxD))}%;background:${v>0?'#7A5AA8':'#EFF2F2'};border-radius:3px 3px 0 0"></div></div>`).join('');
+    const evo=`<div class="panel" style="padding:16px"><div style="font-weight:800">Évolution des dépenses <span class="fs">· par jour de publication</span></div>
+      <div style="display:flex;gap:2px;align-items:stretch;height:120px;margin-top:10px">${bars}</div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#9AAAAA;margin-top:3px"><span>1</span><span>${Math.round(lastDay/2)}</span><span>${lastDay}</span></div></div>`;
+    // Alertes & statuts
+    const alerts=[];
+    ds.forEach(d=>{const bm=d.budgetMensuel||0,tot=d.total||0;
+      if(bm>0&&tot>bm)alerts.push('🔴 <b>'+esc(d.brand)+'</b> · budget dépassé de '+eur(tot-bm));
+      else if(bm>0&&tot>=0.8*bm)alerts.push('🟠 <b>'+esc(d.brand)+'</b> · budget bientôt atteint ('+Math.round(100*tot/bm)+' %)');
+      if(bm===0&&tot>0)alerts.push('ℹ️ <b>'+esc(d.brand)+'</b> · '+eur(tot)+' engagés mais budget mensuel non renseigné (fiche marque)');
     });
+    const alertsBox=`<div class="panel" style="padding:16px"><div style="font-weight:800">Alertes & statuts</div>${alerts.length?alerts.map(a=>'<div style="font-size:13px;margin-top:8px">'+a+'</div>').join(''):'<div class="state2" style="padding:8px">Tout est dans les clous ce mois-ci ✅</div>'}</div>`;
+    // Mini-cartes des autres marques
+    const C2=2*Math.PI*26;
+    const minis=ds.slice(1).map(d=>{
+      const bm=d.budgetMensuel||0,tot=d.total||0,pct=bm>0?Math.min(1,tot/bm):0;
+      const col=(bm>0&&tot>bm)?'#C2553B':(bm>0&&tot>=0.8*bm?'#C77F2A':'#2C9087');
+      const donut=bm>0?`<svg viewBox="0 0 66 66" style="width:62px;height:62px;flex:0 0 62px"><circle cx="33" cy="33" r="26" fill="none" stroke="#EFF2F2" stroke-width="8"/><circle cx="33" cy="33" r="26" fill="none" stroke="${col}" stroke-width="8" stroke-dasharray="${(C2*pct).toFixed(1)} ${C2.toFixed(1)}" stroke-linecap="round" transform="rotate(-90 33 33)"/><text x="33" y="38" text-anchor="middle" style="font-size:12px;font-weight:800;fill:#1C3A44">${Math.round(100*pct)}%</text></svg>`
+        :'<div style="width:62px;height:62px;flex:0 0 62px;border-radius:50%;background:#F2F6F6;display:flex;align-items:center;justify-content:center;font-size:9.5px;color:#9AAAAA;text-align:center">budget<br>à définir</div>';
+      return `<div class="panel bgmini" data-b="${esc(d.brand)}" style="display:flex;gap:12px;align-items:center;padding:12px;cursor:pointer" title="Ouvrir la fiche ${esc(d.brand)}">${donut}
+        <div style="flex:1;min-width:0"><div style="font-weight:800">${esc(d.brand)}</div>
+        <div style="font-size:12.5px">${eur(tot)} dépensés${bm>0?(' / '+eur(bm)):''}</div>
+        ${bm>0?('<div style="font-size:12.5px;font-weight:700;color:'+((bm-tot)<0?'#C2553B':'#2C9087')+'">'+((bm-tot)<0?('dépassé de '+eur(tot-bm)):(eur(bm-tot)+' restants'))+'</div>'):''}
+        <div class="fs"><a class="lk bgex" data-b="${esc(d.brand)}" style="cursor:pointer" onclick="event.stopPropagation()">⬇️ Excel</a></div></div></div>`;
+    }).join('');
+    box.innerHTML=`<div style="display:flex;justify-content:flex-end;margin-bottom:10px"><label style="font-size:12px;font-weight:600;margin-right:6px;align-self:center">📅 Mois</label><input type="month" id="bgallmonth" value="${esc(month)}" style="width:auto;display:inline-block;font-size:12px;padding:2px 6px"></div>`
+      +kpis
+      +'<div class="dgrid dgrid-2" style="margin-top:2px">'+(featured||'')+'<div style="display:flex;flex-direction:column;gap:12px">'+evo+alertsBox+'</div></div>'
+      +(minis?('<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-top:12px">'+minis+'</div>'):'')
+      +((!ds.length)?'<div class="state">Aucune marque avec budget pour l\'instant. Renseigne « 📊 Budget mensuel » dans les fiches marques.</div>':'');
+    const mi=$('bgallmonth'); if(mi)mi.onchange=()=>{BG_MONTH=mi.value;renderBudgetView();};
+    box.querySelectorAll('.bgmini').forEach(el=>el.onclick=()=>{MQ_SELECTED=el.dataset.b;navToView('marques');});
+    box.querySelectorAll('.bgex').forEach(a=>{const d=ds.find(x=>x.brand===a.dataset.b);if(d)a.onclick=(ev)=>{ev.stopPropagation();bgExport(d,month)();};});
   }catch(e){box.innerHTML='<div class="state">Erreur de chargement.</div>';}
 }
 // --- Onglet Process : la bibliothèque des documents de référence ------------

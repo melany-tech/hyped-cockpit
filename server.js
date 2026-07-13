@@ -1182,6 +1182,7 @@ app.get("/api/budget/:brand", auth, async (req, res) => {
           date: p[cfg.dateProp]?.date?.start?.slice(0, 10) || null,
           statut: p["Statut"]?.select?.name || "",
           budget: Number(p["Budget"]?.number || 0),
+          cp: firstPerson(p["Interlocuteur"]) || "",
         });
       });
       cursor = r.has_more ? r.next_cursor : null;
