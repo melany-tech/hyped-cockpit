@@ -1193,7 +1193,9 @@ app.post("/api/budget/:brand/add", auth, async (req, res) => {
   const props = {
     "Nom": { title: [{ text: { content: nom.slice(0, 120) } }] },
   };
-  props[cfg.dateProp] = { date: { start: date } };
+  // Budget validé mais date à confirmer : on crée SANS date (le calendrier reste honnête),
+  // et la collab compte dans le mois en cours avec un marqueur TBC.
+  if (!req.body?.tbc) props[cfg.dateProp] = { date: { start: date } };
   if (budget > 0) props["Budget"] = { number: budget };
   try { const uid = await userIdByName(req.user.name); if (uid) props["Interlocuteur"] = { people: [{ id: uid }] }; } catch (e) {}
   try {
@@ -1231,6 +1233,21 @@ app.get("/api/budget/:brand", auth, async (req, res) => {
       });
       cursor = r.has_more ? r.next_cursor : null;
     } while (cursor);
+    // Budgets validés SANS date (TBC) : comptés dans le mois en cours uniquement
+    if (month === new Date().toISOString().slice(0, 7)) {
+      let cursor2;
+      do {
+        const r2 = await notion.databases.query({ database_id: cfg.dbId, start_cursor: cursor2, page_size: 100,
+          filter: { property: cfg.dateProp, date: { is_empty: true } } });
+        r2.results.forEach((pg) => {
+          const p = pg.properties || {};
+          const b = Number(p["Budget"]?.number || 0);
+          if (!(b > 0)) return;
+          entries.push({ nom: (p["Nom"]?.title || []).map((t) => t.plain_text).join("") || "(sans nom)", date: null, tbc: true, statut: p["Statut"]?.select?.name || "", budget: b, cp: firstPerson(p["Interlocuteur"]) || "" });
+        });
+        cursor2 = r2.has_more ? r2.next_cursor : null;
+      } while (cursor2);
+    }
     entries.sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
     const total = entries.reduce((s, e) => s + (Number(e.budget) || 0), 0);
     res.json({ enabled: true, month, budgetMensuel, total, restant: budgetMensuel ? (budgetMensuel - total) : null, entries });
