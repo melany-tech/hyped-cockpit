@@ -831,14 +831,18 @@ async function renderBudgetView(){
     const oldArr=old.filter(Boolean);
     const oldBudget=oldArr.reduce((s,d)=>s+(d.budgetMensuel||0),0);
     const oldDep=oldArr.reduce((s,d)=>s+(d.total||0),0);
-    // ---- 3 indicateurs du haut (maquette) ----
-    const kpi=(ic,bg2,lbl,val,sub)=>`<div class="bgd-card" style="display:flex;gap:14px;align-items:center"><div class="bgd-kic" style="background:${bg2}">${ic}</div><div style="min-width:0"><div class="bgd-klbl">${lbl}</div><div class="bgd-kval">${val}</div>${sub||''}</div></div>`;
-    const kpis='<div class="bgd-kpis">'
-      +kpi('💼','#EFEAFB','Budget total du mois',eur(totBudget),bgdDelta(totBudget,oldBudget)||('<span class="bgd-ksub">'+ds.filter(d=>d.budgetMensuel>0).length+' marque(s) avec budget défini</span>'))
-      +kpi('🕐','#FDF0E3','Budget restant',eur(totBudget-totDep),bgdDelta(totBudget-totDep,oldBudget-oldDep)||('<span class="bgd-ksub">'+(totBudget>0?(Math.round(100*totDep/totBudget)+' % utilisés'):('dépensé : '+eur(totDep)))+'</span>'))
-      +kpi('👩‍👩‍👧','#E8F2FC','Marques suivies',String(ds.length),'<span class="bgd-ksub">Actives ce mois-ci</span>')+'</div>';
     // ---- Grande carte : la marque sélectionnée ----
     const F=ds.find(d=>d.brand===BG_BRAND)||ds[0]; let featured='';
+    // ---- 3 indicateurs du haut : PAR MARQUE sélectionnée. Pas de cumul entre marques :
+    // certaines sont facturées par nous, d'autres par la marque, l'addition ne veut rien dire.
+    const oldF=F?(old.filter(Boolean).find(x=>x.brand===F.brand)||null):null;
+    const fbm=F?(F.budgetMensuel||0):0, ftot=F?(F.total||0):0;
+    const obm=oldF?(oldF.budgetMensuel||0):0, otot=oldF?(oldF.total||0):0;
+    const kpi=(ic,bg2,lbl,val,sub)=>`<div class="bgd-card" style="display:flex;gap:14px;align-items:center"><div class="bgd-kic" style="background:${bg2}">${ic}</div><div style="min-width:0"><div class="bgd-klbl">${lbl}</div><div class="bgd-kval">${val}</div>${sub||''}</div></div>`;
+    const kpis='<div class="bgd-kpis">'
+      +kpi('💼','#EFEAFB','Budget du mois · '+(F?esc(F.brand):''),fbm>0?eur(fbm):'à renseigner',bgdDelta(fbm,obm)||('<span class="bgd-ksub">se règle dans la fiche marque</span>'))
+      +kpi('🕐','#FDF0E3','Budget restant · '+(F?esc(F.brand):''),fbm>0?eur(fbm-ftot):'-',bgdDelta(fbm-ftot,obm-otot)||('<span class="bgd-ksub">dépensé ce mois : '+eur(ftot)+'</span>'))
+      +kpi('👩‍👩‍👧','#E8F2FC','Marques suivies',String(ds.length),'<span class="bgd-ksub">Actives ce mois-ci</span>')+'</div>';
     if(F){
       const bm=F.budgetMensuel||0,tot=F.total||0,rest=bm-tot,pct=bm>0?Math.min(1,tot/bm):0;
       const R=62,CC=2*Math.PI*R,col=(bm>0&&tot>bm)?'#DC2626':'#6D5AE0';
