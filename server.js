@@ -1678,13 +1678,19 @@ async function copilotTick() {
       }
       for (const m of (r && r.creatorReplies) || []) {
         if (!m.threadId) continue;
-        // Mail adressé à une AUTRE boîte surveillée (ici on n'est qu'en copie) : on laisse
-        // la boîte destinataire s'en occuper. Sinon la même carte sort en double et la
-        // réponse partirait de la mauvaise boîte (ex. Victoria écrit à Rozenn, Amena en cc).
+        // Doublon de boîte : cette boîte n'est qu'en COPIE d'un mail destiné à une collègue.
+        // Deux indices croisés : 1) le champ « À » ne contient pas cette boîte, ET
+        // 2) soit « À » vise une autre boîte surveillée, soit le message salue une autre
+        // collègue par son prénom (« Hello Rozenn », « Bonjour Prunelle »...).
         const toL = String(m.to || "").toLowerCase();
-        if (toL && !toL.includes(email.toLowerCase()) && COPILOT.cps.some((e2) => e2 !== email && toL.includes(e2))) {
+        const notToMe = toL && !toL.includes(email.toLowerCase());
+        const toOtherBox = COPILOT.cps.some((e2) => e2 !== email && toL.includes(e2));
+        const gm2 = nrmName(String(m.snippet || "").slice(0, 90)).match(/^(?:re\s*:?\s*)?(?:hello|bonjour|coucou|salut|hey|hi)[\s,!:]*([a-z-]{2,20})/);
+        const greetName = gm2 ? gm2[1] : "";
+        const greetsOther = greetName && greetName !== nrmName(copilotCpName(email)) && USERS.some((u) => nrmName(u.name) === greetName);
+        if (notToMe && (toOtherBox || greetsOther)) {
           const dup = store.proposals.find((x) => x.cpEmail === email && x.threadId === m.threadId && (x.status === "pending" || x.status === "ready"));
-          if (dup) { dup.status = "handled"; dup.decision = "doublon de boîte : mail adressé à une autre CP"; }
+          if (dup) { dup.status = "handled"; dup.decision = "doublon de boîte : mail destiné à une autre CP"; }
           continue;
         }
         // Fil déjà traité : on ne l'ignore QUE si rien de nouveau depuis. Si le créateur a écrit
