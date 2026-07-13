@@ -2338,6 +2338,16 @@ app.post("/api/sourcing", auth, async (req, res) => {
     res.json({ ok: true, id: pg.id, draft });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// Supprimer un profil de la liste « à contacter » (erreur, doublon, plus d'actualité) :
+// la tâche Notion part à la corbeille, récupérable depuis Notion si besoin.
+app.post("/api/sourcing/:id/delete", auth, async (req, res) => {
+  if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
+  try {
+    await notion.pages.update({ page_id: req.params.id, archived: true });
+    invalidateTasksCache();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 app.post("/api/sourcing/:id/contacted", auth, async (req, res) => {
   if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
   try {

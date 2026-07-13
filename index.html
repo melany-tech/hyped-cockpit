@@ -2627,11 +2627,18 @@ function renderSourcing(profils){
     return `<div class="row" data-id="${p.id}"><span class="rdot" style="background:#C77F2A"></span>
       <div class="info"><div class="t">${linkify(p.task)}</div><div class="s">${sub}</div></div>
       ${p.projet?`<span class="brand">${esc(p.projet)}</span>`:''}${who}${link}
-      <button class="lk primary srcmsg">✍️ Message</button><button class="lk srcdone">Marquer comme contacté</button></div>`;
+      <button class="lk primary srcmsg">✍️ Message</button><button class="lk srcdone">Marquer comme contacté</button><button class="lk srcdel" title="Supprimer ce profil de la liste (corbeille Notion)" style="color:#C2553B">✕</button></div>`;
   }).join('');
   $('srcbox').innerHTML=add+rows;
   $('srcbtn').onclick=addProfil;
   $('srcprofil').onkeydown=(e)=>{if(e.key==='Enter')addProfil();};
+  document.querySelectorAll('#srcbox .srcdel').forEach(b=>b.onclick=async()=>{
+    const row=b.closest('.row');
+    if(!confirm('Supprimer ce profil de la liste « à contacter » ?'))return;
+    b.textContent='⏳';
+    const r=await api('/api/sourcing/'+encodeURIComponent(row.dataset.id)+'/delete',{method:'POST'});
+    if(r.ok){row.remove();}else{b.textContent='✕';alert('Suppression impossible, réessaie.');}
+  });
   document.querySelectorAll('#srcbox .srcdone').forEach(b=>b.onclick=()=>markContacted(b));
   document.querySelectorAll('#srcbox .srcmsg').forEach(b=>b.onclick=()=>openMessage(b));
   const si2=$('srcimport'); if(si2)si2.onclick=()=>$('srcfile').click();
