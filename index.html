@@ -1917,7 +1917,7 @@ async function loadCopilotBox(who){
         const who2=esc(disp), br=p.brand?(' · '+esc(p.brand)):'';
         const mailTag=(p.to&&nlow(p.to)!==nlow(disp))?(' <span class="cpmail">'+esc(p.to)+'</span>'):'';
         const quiTag=(p.creator||p.fromLabel)?(' · <a class="cpqui" data-qui="'+esc(disp)+'">👤 Qui c\'est ?</a>'):'';
-        const boxTag=p.cpName?(' · <span class="cptag">boîte '+esc(p.cpName)+'</span>'):'';
+        const boxTag=p.cpName?(' · <span class="cptag">'+(p.via&&p.via!==p.cpName?('🔁 suivi par '+esc(p.cpName)+' · via boîte '+esc(p.via)):('boîte '+esc(p.cpName)))+'</span>'):'';
         const head='<div class="cpwho"><b>'+who2+'</b>'+mailTag+br+boxTag+(p.categorie==='interne'?' · <span class="cptag">interne</span>':'')+quiTag+' · <a class="cpqui cpthread" data-id="'+esc(p.id)+'">📖 Voir le fil</a></div>'
           +(p.subject?('<div class="cpsubj">'+esc(p.subject)+'</div>'):'')
           +'<div class="cpthreadbox" style="display:none"></div>';

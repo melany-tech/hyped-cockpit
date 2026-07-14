@@ -1450,6 +1450,19 @@ const COPILOT_STORE = path.join(DATA_DIR, "copilot.json");
 // soit le « À » vise une autre boîte (la nôtre n'est qu'en copie), soit le message
 // salue une autre CP par son prénom ET sa boîte est aussi destinataire (réponse à
 // tous). Utilisé par le copilote ET par l'onglet Messages : même histoire partout.
+// Fil qui ne vit QUE dans cette boîte mais dont la conversation est menée par une
+// AUTRE CP surveillée (« Hello Rozenn » dans la boîte d'Amena, sans rozenn@ en
+// destinataire) : renvoie cette CP. La carte lui est attribuée, l'envoi technique
+// reste sur la boîte d'origine pour ne pas casser le fil.
+function greetedOtherCp(email, m) {
+  try {
+    const me = String(email || "").toLowerCase();
+    const g = nrmName(String(m.snippet || "").slice(0, 90)).match(/^(?:re\s*:?\s*)?(?:hello|bonjour|coucou|salut|hey|hi)[\s,!:]*([a-z-]{2,20})/);
+    if (!g || g[1] === nrmName(copilotCpName(me))) return null;
+    const u = USERS.find((x) => nrmName(x.name) === g[1]);
+    return (u && (COPILOT.cps || []).includes(String(u.email || "").toLowerCase())) ? u : null;
+  } catch (e) { return null; }
+}
 function isOtherCpMail(email, m) {
   try {
     const me = String(email || "").toLowerCase();
@@ -1706,6 +1719,14 @@ async function copilotTick() {
           if (dup) { dup.status = "handled"; dup.decision = "doublon de boîte : conversation d'une autre CP"; }
           continue;
         }
+        // Fil mené par une autre CP mais vivant UNIQUEMENT dans cette boîte : la carte
+        // est attribuée à la vraie interlocutrice (vue, Slack, signature), l'envoi
+        // technique restant sur cette boîte. On migre aussi les cartes déjà en attente.
+        const gCp = greetedOtherCp(email, m);
+        if (gCp) {
+          const old = store.proposals.find((x) => x.cpEmail === email && x.threadId === m.threadId && (x.status === "pending" || x.status === "ready"));
+          if (old && !old.handlerEmail) { old.cpName = gCp.name; old.handlerEmail = String(gCp.email).toLowerCase(); old.via = copilotCpName(email); }
+        }
         // Fil déjà traité : on ne l'ignore QUE si rien de nouveau depuis. Si le créateur a écrit
         // APRÈS le traitement, le fil redevient à traiter (sinon ses relances passaient aux oubliettes).
         const tr = tt[m.threadId];
@@ -1719,10 +1740,11 @@ async function copilotTick() {
         try { const full = await gm.fetchThreadText(email, m.threadId); if (full && full.ok) { transcript = full.transcript || full.text || ""; lastText = full.text || ""; } } catch (e) {}
         const creator = m["créateur"] || "";
         const cls = await copilotClassify({ creator, subject: m.subject, received: m.snippet, transcript });
-        const rep = await claudeReply({ cp: copilotCpName(email), creator, brand: m.brand, category: m.category, received: m.snippet, subject: m.subject, transcript, planning: planningForBrand(collabs, m.brand), brandNotes: brandNotesFor(m.brand), brandInfo: brandInfoFor(m.brand), profileNote: await profileNoteFor(creator) });
+        const rep = await claudeReply({ cp: (gCp ? gCp.name : copilotCpName(email)), creator, brand: m.brand, category: m.category, received: m.snippet, subject: m.subject, transcript, planning: planningForBrand(collabs, m.brand), brandNotes: brandNotesFor(m.brand), brandInfo: brandInfoFor(m.brand), profileNote: await profileNoteFor(creator) });
         const p = {
           id: crypto.randomBytes(8).toString("hex"),
-          cpEmail: email, cpName: copilotCpName(email),
+          cpEmail: email, cpName: (gCp ? gCp.name : copilotCpName(email)),
+          handlerEmail: (gCp ? String(gCp.email).toLowerCase() : undefined), via: (gCp ? copilotCpName(email) : undefined),
           msgId: m.id || m.threadId, threadId: m.threadId,
           to: mailAddr(m.from), creator, fromLabel: fromLabelOf(m.from), brand: m.brand || "", subject: m.subject || "",
           lastMsg: String(lastText || m.snippet || "").slice(0, 1500), // le VRAI dernier message du créateur, affiché sur la carte
@@ -1732,8 +1754,8 @@ async function copilotTick() {
         };
         store.proposals.push(p);
         seen.add(email + "|" + p.msgId);
-        const slackUser = COPILOT.slackIds[email] || "";
-        queueNotif(store, email, p.id); // notification groupée (récap 1x/heure), plus de ping par mail
+        const slackUser = COPILOT.slackIds[(gCp ? String(gCp.email).toLowerCase() : email)] || COPILOT.slackIds[email] || "";
+        queueNotif(store, (gCp ? String(gCp.email).toLowerCase() : email), p.id); // notification groupée, à la vraie interlocutrice
         // Pipeline : entrée au calendrier UNIQUEMENT quand une date de publication est actée dans le fil
         try {
           store.calAdded = store.calAdded || {};
@@ -2014,10 +2036,11 @@ app.get("/api/copilot/box", auth, (req, res) => {
   const store = loadCopilot();
   const list = (store.proposals || [])
     .filter((p) => (p.status === "pending" || p.status === "ready"))
-    // superviseure sans filtre : elle voit les décisions de TOUTES les boîtes ; sinon la boîte affichée
-    .filter((p) => ((sup && !asked) ? true : p.cpEmail === t.email))
+    // superviseure sans filtre : elle voit les décisions de TOUTES les boîtes ; sinon la
+    // boîte affichée OU les fils attribués à cette CP (handlerEmail, ex. Rozenn via Amena)
+    .filter((p) => ((sup && !asked) ? true : (p.cpEmail === t.email || p.handlerEmail === t.email)))
     .slice(-30).reverse()
-    .map((p) => ({ id: p.id, cpName: p.cpName, threadId: p.threadId, creator: p.creator, fromLabel: p.fromLabel || "", to: p.to || "", brand: p.brand, subject: p.subject, lastMsg: p.lastMsg || "", categorie: p.categorie, resume: p.resume, question: p.question, reply: p.reply, status: p.status, decision: p.decision, at: p.at }));
+    .map((p) => ({ id: p.id, cpName: p.cpName, via: p.via || "", threadId: p.threadId, creator: p.creator, fromLabel: p.fromLabel || "", to: p.to || "", brand: p.brand, subject: p.subject, lastMsg: p.lastMsg || "", categorie: p.categorie, resume: p.resume, question: p.question, reply: p.reply, status: p.status, decision: p.decision, at: p.at }));
   res.json({ enabled: true, proposals: list });
 });
 // Le fil complet d'une proposition : Rozenn n'a plus à retourner dans Gmail pour
