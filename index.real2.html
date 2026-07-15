@@ -1464,7 +1464,7 @@ async function loadCeoPanel(){
       +(watch.length?watch.slice(0,4).map(w=>'<div class="ceor" data-go="budget" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #F0F3F3;cursor:pointer"><b style="flex:1">'+esc(w.brand)+'</b>'+(w.ras?chip('RAS','#2C9087','#E4F0EA'):chip(esc(w.label),w.urgent?'#C2553B':'#1C3A44',w.urgent?'#F8E3DC':'#E7F0F8'))+'<span style="color:#B7C2C6">›</span></div>').join(''):'<div class="state2" style="padding:8px">Rien à surveiller ✅</div>')
       +'<a class="lk ceok" data-go="budget" style="display:inline-block;margin-top:8px;cursor:pointer">Voir tous les clients →</a></div>';
     const dp='<div class="bgd-card"><div class="bgd-h" style="margin-bottom:4px">🗳️ Décisions à prendre '+(props.length?chip(props.length+' en attente','#C77F2A','#FBEBDD'):'')+'</div>'
-      +(props.length?props.slice(0,4).map(x=>'<div class="ceor" data-go="messages" style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid #F0F3F3;cursor:pointer"><span style="color:#2C9087">●</span><span style="flex:1;min-width:0">'+esc(String(x.question||x.resume||x.subject||'').slice(0,90))+'</span></div>').join(''):'<div class="state2" style="padding:8px">Aucune décision en attente ✅</div>')
+      +(props.length?props.slice(0,4).map(x=>{const q=String(x.question||x.resume||x.subject||'').replace(/&#(\d+);/g,(m,c)=>String.fromCharCode(+c)).replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&lt;/g,'<').replace(/&gt;/g,'>');return '<div class="ceor" data-go="messages" style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid #F0F3F3;cursor:pointer"><span style="color:#2C9087">●</span><span style="flex:1;min-width:0">'+esc(q.slice(0,90))+'</span></div>';}).join(''):'<div class="state2" style="padding:8px">Aucune décision en attente ✅</div>')
       +'<a class="lk ceok" data-go="messages" style="display:inline-block;margin-top:8px;cursor:pointer">Voir toutes les décisions →</a></div>';
     // ---- bandeau personal brand ----
     const pb=ps?('<div class="bgd-card ceok" data-go="__perso" style="display:flex;gap:16px;align-items:center;cursor:pointer;flex-wrap:wrap;margin-top:12px"><span style="font-size:19px">📱</span><b>Personal brand</b>'
@@ -1474,8 +1474,8 @@ async function loadCeoPanel(){
       +'<span class="lk primary" style="margin-left:auto">Voir le contenu →</span></div>'):'';
     p.innerHTML='<div style="margin-bottom:12px"><div style="font-weight:800;font-size:24px;color:#1C3A44">Cockpit fondatrice</div><div style="color:#2C9087;font-weight:700;font-size:12.5px;letter-spacing:1px">CEO VIEW · HYPED AGENCY</div></div>'
       +kpis
-      +'<div class="bgd-grid" style="grid-template-columns:1.4fr 1fr;margin-bottom:12px">'+semaine+'<div style="display:flex;flex-direction:column;gap:12px">'+prio+ops+'</div></div>'
-      +'<div class="bgd-grid" style="grid-template-columns:1fr 1fr">'+cw+dp+'</div>'
+      +'<div class="bgd-grid" style="grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);margin-bottom:12px">'+semaine+'<div style="display:flex;flex-direction:column;gap:12px">'+prio+ops+'</div></div>'
+      +'<div class="bgd-grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">'+cw+dp+'</div>'
       +pb;
     const go=(g)=>{
       if(!g)return;
