@@ -2926,6 +2926,62 @@ async function remindTick() {
 }
 setInterval(remindTick, 15 * 60 * 1000);
 setTimeout(remindTick, 90 * 1000);
+// --- Attribution de tâches par DM : « dis à Rozenn de relancer la facture pour vendredi » ---
+// L'IA extrait {tâche, responsable, échéance}, la tâche est créée dans Notion,
+// l'expéditrice reçoit une confirmation et la personne assignée une notification.
+async function taskExtractFromDm(text, senderName) {
+  const hasOpenAI = !!process.env.OPENAI_API_KEY, hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
+  if (!hasOpenAI && !hasAnthropic) return null;
+  const team = USERS.map((u) => u.name).join(", ");
+  const today = new Date().toISOString().slice(0, 10);
+  const sys = [
+    "Tu aides " + senderName + " (agence d'influence) à créer des tâches depuis un message Slack. Réponds UNIQUEMENT un JSON valide :",
+    '{"taches":[{"tache":"...","responsable":"...","echeance":"YYYY-MM-DD ou null"}]}',
+    "- tache : reformulée courte et impérative, SANS le nom du responsable dedans.",
+    "- responsable : EXACTEMENT un de : " + team + ". Si aucun nom n'est cité, mets \"" + senderName + "\".",
+    "- echeance : date ISO si mentionnée (aujourd'hui = " + today + " ; calcule « demain », « vendredi », « le 20 »…), sinon null.",
+    "- Si le message n'est PAS une demande de création de tâche, réponds {\"taches\":[]}.",
+  ].join("\n");
+  try {
+    const out = hasOpenAI ? await callOpenAI(sys, String(text || "").slice(0, 2000), 800) : await callAnthropic(sys, String(text || "").slice(0, 2000), 800);
+    if (!out.ok) { try { console.error("[hypedbot tache] IA :", out.reason || out.status); } catch (e2) {} return null; }
+    const j = JSON.parse(String(out.body).replace(/^[^{]*/, "").replace(/[^}]*$/, ""));
+    return Array.isArray(j.taches) ? j.taches : [];
+  } catch (e) { try { console.error("[hypedbot tache]", e.message); } catch (e2) {} return null; }
+}
+async function hypedbotTaskIntent(ev, who, raw, low, say) {
+  const trigger = /(^|\W)(tache|todo)s?(\W|$)/.test(low) || /^(dis|demande|rappelle)\s+a\s+/.test(low) || /^(ajoute|mets|note|cree|creer)\b/.test(low);
+  if (!trigger || !notion || DEMO) return false;
+  const taches = await taskExtractFromDm(String(raw || "").replace(/<[^>]*>/g, " "), who.name);
+  if (taches === null) { await say("Je n'arrive pas à analyser ta demande là tout de suite 🙈 Réessaie, ou passe par l'onglet To-do du cockpit."); return true; }
+  if (!taches.length) return false; // pas une création de tâche : on laisse le reste du flux répondre
+  const dmy = (d) => String(d).split("-").reverse().join("/");
+  const done = [];
+  for (const x of taches.slice(0, 10)) {
+    const respName = USERS.map((u) => u.name).find((n) => normName(n) === normName(x.responsable)) || who.name;
+    const props = {
+      "Tâche": { title: [{ text: { content: String(x.tache || "").slice(0, 200) } }] },
+      "Statut": { select: { name: "À faire" } },
+      "Responsable": { select: { name: respName } },
+    };
+    if (x.echeance && /^\d{4}-\d{2}-\d{2}$/.test(String(x.echeance))) props["Échéance"] = { date: { start: x.echeance } };
+    try { await notion.pages.create({ parent: { database_id: TASKS_DB }, properties: props }); done.push({ ...x, responsable: respName }); }
+    catch (e) { await say("⚠️ Échec sur « " + String(x.tache || "") + " » : " + String((e && e.message) || e).slice(0, 100)); }
+  }
+  if (done.length) {
+    invalidateTasksCache();
+    await say("✅ Créé dans Notion :\n" + done.map((x) => "• « " + x.tache + " » → *" + x.responsable + "*" + (x.echeance ? " (pour le " + dmy(x.echeance) + ")" : "")).join("\n"));
+    const byResp = {};
+    done.forEach((x) => { (byResp[x.responsable] = byResp[x.responsable] || []).push(x); });
+    for (const [name, list] of Object.entries(byResp)) {
+      if (normName(name) === normName(who.name)) continue;
+      const em = emailOf(name); const sid = em ? (COPILOT.slackIds || {})[em.toLowerCase()] : "";
+      if (sid) { try { await copilotNotify({ slackUser: sid, text: "🆕 " + who.name + " t'a ajouté " + (list.length > 1 ? list.length + " tâches" : "une tâche") + " :\n" + list.map((x) => "• « " + x.tache + " »" + (x.echeance ? " (pour le " + dmy(x.echeance) + ")" : "")).join("\n") + "\nC'est dans ta to-do du cockpit ✨" }); } catch (e) {} }
+    }
+    if (done.length) { try { logActivity({ type: "tache_dm", creator: done.map((x) => x.tache).join(" · "), cp: who.name }); } catch (e) {} }
+  }
+  return true;
+}
 async function hypedbotHandle(ev) {
   const channel = ev.channel;
   const say = (text) => copilotNotify({ slackUser: channel, text });
@@ -2938,6 +2994,7 @@ async function hypedbotHandle(ev) {
   const low = nlow(plain);
   // réponses aux relances (« c'est fait », merci…) : prioritaires sur le flux « ajout de profil »
   if (!links.length) { try { if (await hypedbotDoneIntent(ev, who, low, say)) return; } catch (e) { try { console.error("[hypedbot done]", e.message); } catch (e2) {} } }
+  if (!links.length) { try { if (await hypedbotTaskIntent(ev, who, raw, low, say)) return; } catch (e) { try { console.error("[hypedbot tache]", e.message); } catch (e2) {} } }
   const brand = quickBrandsList().find((b) => low.includes(nlow(b))) || "";
   const cpUser = USERS.map((u) => u.name).find((n) => new RegExp("(^|[^a-zà-ÿ])" + nlow(n).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "([^a-zà-ÿ]|$)").test(low)) || "";
   const pend = SLACK_PENDING[ev.user] && (Date.now() - SLACK_PENDING[ev.user].at < 10 * 60 * 1000) ? SLACK_PENDING[ev.user] : null;
