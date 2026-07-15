@@ -2899,13 +2899,18 @@ async function remindTick() {
     if (!notion || DEMO) return;
     if (String(process.env.HYPEDBOT_RELANCES || "on").toLowerCase() === "off") return;
     const now = new Date();
-    const day = now.getUTCDay(); // entre 9 h et 12 h à Paris, le jour UTC est le même
+    const day = now.getUTCDay(); // aux heures visées, le jour UTC = le jour Paris
     if (day === 0 || day === 6) return; // week-end : on laisse tout le monde tranquille
-    const h = Number(new Intl.DateTimeFormat("fr-FR", { hour: "numeric", hour12: false, timeZone: "Europe/Paris" }).format(now));
-    if (h < 9 || h > 12) return; // relance en matinée uniquement
+    const parts = new Intl.DateTimeFormat("fr-FR", { hour: "numeric", minute: "numeric", hour12: false, timeZone: "Europe/Paris" }).formatToParts(now);
+    const hm = Number((parts.find((p) => p.type === "hour") || {}).value || 0) * 60 + Number((parts.find((p) => p.type === "minute") || {}).value || 0);
+    // deux créneaux (demande de Mélany) : 10h30 le matin, 17h30 avant la fin de journée (18h)
+    let slot = null;
+    if (hm >= 630 && hm < 720) slot = "am";        // 10h30 → 12h00
+    else if (hm >= 1050 && hm < 1080) slot = "pm"; // 17h30 → 17h59, jamais après 18h
+    if (!slot) return;
     const today = now.toISOString().slice(0, 10);
     const st = loadRemind();
-    if (st.lastRun === today) return;
+    if (st["last_" + slot] === today) return;
     const all = await fetchAllTasks();
     for (const u of USERS) {
       const sid = (COPILOT.slackIds || {})[String(u.email || "").toLowerCase()];
@@ -2913,14 +2918,22 @@ async function remindTick() {
       const late = all.filter((t) => t.statut !== "Fait" && normName(t.responsable) === normName(u.name) && t.echeance && t.echeance < today)
         .sort((a, b) => String(a.echeance).localeCompare(String(b.echeance))).slice(0, 5);
       if (!late.length) { delete st.byUser[sid]; continue; }
-      const lignes = late.map((t) => "• « " + t.task + " » (échéance le " + t.echeance.split("-").reverse().join("/") + ")").join("\n");
-      const txt = late.length === 1
-        ? "Coucou ✨ petite relance : la tâche « " + late[0].task + " » est en retard (échéance le " + late[0].echeance.split("-").reverse().join("/") + ").\nRéponds « c'est fait » et je la passe en Fait dans Notion, ou dis-moi si tu bloques 🙂"
-        : "Coucou ✨ petit point du matin, " + late.length + " tâches en retard :\n" + lignes + "\nRéponds « c'est fait » (ou « le moodboard est fait ») et je mets Notion à jour, pour de vrai 😉";
+      const dmy = (d) => String(d).split("-").reverse().join("/");
+      const lignes = late.map((t) => "• « " + t.task + " » (échéance le " + dmy(t.echeance) + ")").join("\n");
+      let txt;
+      if (slot === "am") {
+        txt = late.length === 1
+          ? "Coucou ✨ petite relance : la tâche « " + late[0].task + " » est en retard (échéance le " + dmy(late[0].echeance) + ").\nRéponds « c'est fait » et je la passe en Fait dans Notion, ou dis-moi si tu bloques 🙂"
+          : "Coucou ✨ petit point du matin, " + late.length + " tâches en retard :\n" + lignes + "\nRéponds « c'est fait » (ou « le moodboard est fait ») et je mets Notion à jour, pour de vrai 😉";
+      } else {
+        txt = late.length === 1
+          ? "Avant de partir 🌙 il reste « " + late[0].task + " » en retard. Si c'est réglé, réponds « c'est fait » et je m'occupe de Notion ✨"
+          : "Avant de partir 🌙 petit point de fin de journée, il reste " + late.length + " tâches en retard :\n" + lignes + "\nSi certaines sont réglées, dis-le-moi et je mets Notion à jour ✨";
+      }
       await copilotNotify({ slackUser: sid, text: txt });
       st.byUser[sid] = { at: Date.now(), tasks: late.map((t) => ({ id: t.id, task: t.task })) };
     }
-    st.lastRun = today;
+    st["last_" + slot] = today;
     saveRemind(st);
   } catch (e) { try { console.error("[relances]", e.message); } catch (e2) {} }
 }
