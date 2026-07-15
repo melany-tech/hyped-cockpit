@@ -2822,6 +2822,110 @@ function slackWho(userId) { // Slack userId -> { email, name } via COPILOT_SLACK
   return { email, name: u ? u.name : email.split("@")[0], role: u ? u.role : "cp" };
 }
 function quickBrandsList() { return [...new Set(["In Haircare", "Curls Matter", "Doucéa", "LIVA", "Toki Bona", "FND'HER", "Hyped Agency", ...Object.keys(loadBrandFiches())])]; }
+// --- Relances de tâches en retard + « c'est fait » (remplace le scénario Make) ---
+// Chaque matin (jours ouvrés), le bot relance en DM les tâches en retard de chacun.
+// Quand la personne répond « c'est fait », il passe la tâche en Fait dans Notion
+// et VERIFIE que l'écriture a bien pris avant de confirmer (fini les faux « ✅ »).
+const nlow = normName; // alias (correctif : nlow n'était pas défini, tout DM au bot plantait)
+const REMIND_FILE = path.join(DATA_DIR, "remind.json");
+function loadRemind() { try { return JSON.parse(fs.readFileSync(REMIND_FILE, "utf8")); } catch (e) { return { lastRun: "", byUser: {} }; } }
+function saveRemind(o) { try { fs.writeFileSync(REMIND_FILE, JSON.stringify(o, null, 2)); } catch (e) {} }
+const DONE_PENDING = {}; // slackUserId -> { tasks:[...], at } quand on a demandé « laquelle ? »
+async function markTaskDone(t) {
+  await notion.pages.update({ page_id: t.id, properties: { "Statut": { select: { name: "Fait" } } } });
+  const pg = await notion.pages.retrieve({ page_id: t.id }); // relecture : on ne confirme que si c'est VRAIMENT passé
+  invalidateTasksCache();
+  return (pg?.properties?.["Statut"]?.select?.name || "") === "Fait";
+}
+async function finishTasks(list, say) {
+  const ok = [], ko = [];
+  for (const t of list.slice(0, 10)) { try { (await markTaskDone(t)) ? ok.push(t) : ko.push(t); } catch (e) { ko.push(t); } }
+  let msg = "";
+  if (ok.length) msg += "✅ Passé en Fait dans Notion (vérifié) : " + ok.map((t) => "« " + t.task + " »").join(", ") + ". Bien joué !";
+  if (ko.length) msg += (msg ? "\n" : "") + "⚠️ Je n'ai PAS réussi à mettre à jour : " + ko.map((t) => "« " + t.task + " »").join(", ") + ". Je préviens Mélany.";
+  await say(msg || "Rien à mettre à jour.");
+  if (ok.length) { try { logActivity({ type: "tache_faite_slack", creator: ok.map((t) => t.task).join(" · ") }); } catch (e) {} }
+}
+async function myOpenTasks(name) {
+  return (await fetchAllTasks()).filter((t) => t.statut !== "Fait" && normName(t.responsable) === normName(name));
+}
+async function hypedbotDoneIntent(ev, who, low, say) {
+  if (!notion || DEMO) return false;
+  // réponse à « laquelle ? » : numéro(s) ou « toutes »
+  const pend = DONE_PENDING[ev.user] && (Date.now() - DONE_PENDING[ev.user].at < 15 * 60 * 1000) ? DONE_PENDING[ev.user] : null;
+  if (pend) {
+    const nums = [...low.matchAll(/\b(\d{1,2})\b/g)].map((m) => Number(m[1])).filter((n) => n >= 1 && n <= pend.tasks.length);
+    const tout = /toutes|tout est fait|les deux|les 2/.test(low);
+    const picked = tout ? pend.tasks : nums.map((n) => pend.tasks[n - 1]);
+    if (picked.length) { delete DONE_PENDING[ev.user]; await finishTasks(picked, say); return true; }
+  }
+  // simple politesse : on ne relance pas le flux « envoie un lien » sur un merci
+  if (/^\s*(merci+( beaucoup)?( cherie| ma vie)?|top|parfait|nickel|super)\s*\W*\s*$/.test(low)) { await say("Avec plaisir 🤍"); return true; }
+  if (/pas\s+(encore\s+)?(fait|fini|termine)|toujours\s+pas|pas\s+eu\s+le\s+temps/.test(low)) return false; // « pas encore fait » : on ne coche rien
+  const done = /(^|\W)(c\s*['\u2019`]?\s*est\s+(deja\s+)?(fait|bon|regle|ok)|deja\s+fait|j\s*['\u2019`]?\s*ai\s+(deja\s+)?(fait|fini|envoye|termine)|fini|termine|done)(\W|$)/.test(low)
+    || /\best\s+fait(e|es|s)?(\W|$)/.test(low) || /^\W*fait\W*$/.test(low);
+  if (!done) return false;
+  const mine = await myOpenTasks(who.name);
+  // 1) la personne cite la tâche (« le moodboard est fait ») : on cherche les mots dans les titres
+  const stop = new Set(["est", "fait", "fini", "termine", "done", "deja", "bon", "depuis", "hier", "aujourd", "hui", "vie", "cest", "pour", "avec", "dans", "les", "des", "une", "sur", "que", "qui", "pas", "tache", "notion"]);
+  const words = low.replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((w) => w.length > 2 && !stop.has(w));
+  const scored = mine.map((t) => { const tl = normName(t.task); return { t, score: words.filter((w) => tl.includes(w)).length }; }).filter((x) => x.score > 0).sort((a, b) => b.score - a.score);
+  let picked = [];
+  if (scored.length && scored[0].score >= 2) picked = scored.filter((x) => x.score === scored[0].score).map((x) => x.t).slice(0, 3);
+  else if (scored.length === 1) picked = [scored[0].t];
+  // 2) sinon : la ou les tâches relancées ce matin (encore ouvertes)
+  if (!picked.length) {
+    const rem = loadRemind().byUser[ev.user];
+    if (rem && Date.now() - rem.at < 7 * 86400000) {
+      const ids = new Set((rem.tasks || []).map((x) => x.id));
+      const open = mine.filter((t) => ids.has(t.id));
+      if (open.length === 1) picked = [open[0]];
+      else if (open.length > 1) { DONE_PENDING[ev.user] = { tasks: open, at: Date.now() }; await say("Bien reçu ! Laquelle est faite ?\n" + open.map((t, i) => (i + 1) + ". " + t.task).join("\n") + "\n(réponds avec le numéro, ou « toutes »)"); return true; }
+    }
+  }
+  // 3) sinon : ses tâches en retard
+  if (!picked.length) {
+    const today = new Date().toISOString().slice(0, 10);
+    const late = mine.filter((t) => t.echeance && t.echeance < today);
+    if (late.length === 1) picked = [late[0]];
+    else if (late.length > 1) { DONE_PENDING[ev.user] = { tasks: late.slice(0, 8), at: Date.now() }; await say("Super ! Tu me dis laquelle ?\n" + late.slice(0, 8).map((t, i) => (i + 1) + ". " + t.task).join("\n") + "\n(numéro, ou « toutes »)"); return true; }
+    else { await say("Je te crois 😄 mais je ne vois pas de quelle tâche tu parles. Donne-moi un bout de son nom (ex. « le moodboard est fait ») et je la passe en Fait dans Notion."); return true; }
+  }
+  await finishTasks(picked, say);
+  return true;
+}
+async function remindTick() {
+  try {
+    if (!notion || DEMO) return;
+    if (String(process.env.HYPEDBOT_RELANCES || "on").toLowerCase() === "off") return;
+    const now = new Date();
+    const day = now.getUTCDay(); // entre 9 h et 12 h à Paris, le jour UTC est le même
+    if (day === 0 || day === 6) return; // week-end : on laisse tout le monde tranquille
+    const h = Number(new Intl.DateTimeFormat("fr-FR", { hour: "numeric", hour12: false, timeZone: "Europe/Paris" }).format(now));
+    if (h < 9 || h > 12) return; // relance en matinée uniquement
+    const today = now.toISOString().slice(0, 10);
+    const st = loadRemind();
+    if (st.lastRun === today) return;
+    const all = await fetchAllTasks();
+    for (const u of USERS) {
+      const sid = (COPILOT.slackIds || {})[String(u.email || "").toLowerCase()];
+      if (!sid) continue;
+      const late = all.filter((t) => t.statut !== "Fait" && normName(t.responsable) === normName(u.name) && t.echeance && t.echeance < today)
+        .sort((a, b) => String(a.echeance).localeCompare(String(b.echeance))).slice(0, 5);
+      if (!late.length) { delete st.byUser[sid]; continue; }
+      const lignes = late.map((t) => "• « " + t.task + " » (échéance le " + t.echeance.split("-").reverse().join("/") + ")").join("\n");
+      const txt = late.length === 1
+        ? "Coucou ✨ petite relance : la tâche « " + late[0].task + " » est en retard (échéance le " + late[0].echeance.split("-").reverse().join("/") + ").\nRéponds « c'est fait » et je la passe en Fait dans Notion, ou dis-moi si tu bloques 🙂"
+        : "Coucou ✨ petit point du matin, " + late.length + " tâches en retard :\n" + lignes + "\nRéponds « c'est fait » (ou « le moodboard est fait ») et je mets Notion à jour, pour de vrai 😉";
+      await copilotNotify({ slackUser: sid, text: txt });
+      st.byUser[sid] = { at: Date.now(), tasks: late.map((t) => ({ id: t.id, task: t.task })) };
+    }
+    st.lastRun = today;
+    saveRemind(st);
+  } catch (e) { try { console.error("[relances]", e.message); } catch (e2) {} }
+}
+setInterval(remindTick, 15 * 60 * 1000);
+setTimeout(remindTick, 90 * 1000);
 async function hypedbotHandle(ev) {
   const channel = ev.channel;
   const say = (text) => copilotNotify({ slackUser: channel, text });
@@ -2832,6 +2936,8 @@ async function hypedbotHandle(ev) {
   const links = [...raw.matchAll(/<(https?:\/\/[^>|]+)(?:\|[^>]*)?>/g)].map((m) => m[1]);
   const plain = raw.replace(/<[^>]*>/g, " ");
   const low = nlow(plain);
+  // réponses aux relances (« c'est fait », merci…) : prioritaires sur le flux « ajout de profil »
+  if (!links.length) { try { if (await hypedbotDoneIntent(ev, who, low, say)) return; } catch (e) { try { console.error("[hypedbot done]", e.message); } catch (e2) {} } }
   const brand = quickBrandsList().find((b) => low.includes(nlow(b))) || "";
   const cpUser = USERS.map((u) => u.name).find((n) => new RegExp("(^|[^a-zà-ÿ])" + nlow(n).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "([^a-zà-ÿ]|$)").test(low)) || "";
   const pend = SLACK_PENDING[ev.user] && (Date.now() - SLACK_PENDING[ev.user].at < 10 * 60 * 1000) ? SLACK_PENDING[ev.user] : null;
