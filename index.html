@@ -649,6 +649,9 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
     <div id="searchbar" class="searchbar hidden"><input id="searchinput" placeholder="Rechercher un profil, une collab, une marque…"></div>
     <div id="cards" class="hidden"></div>
 
+  <!-- Cockpit fondatrice : la vue CEO de Mélany (dirigeante uniquement) -->
+  <section class="panel hidden" id="ceopanel" style="background:transparent;border:none;box-shadow:none;padding:0"></section>
+
   <!-- Onboarding (nouvelles arrivantes + suivi superviseures) -->
   <section class="panel hidden" id="onbpanel"></section>
 
@@ -772,7 +775,7 @@ function setupChrome(){
   showView('cockpit');
 }
 const VIEW_MAP={ profils:['srcpanel','brandpanel'], contenus:['listpanel','brandpanel','fillpanel'], messages:['mailpanel'] };
-const ALL_BLOCKS=['onbpanel','statcards','agendapanel','todopanel','pipelinepanel','dirpanel','brandpanel','weeklypanel','persopanel','fillpanel','srcpanel','listpanel','mailpanel'];
+const ALL_BLOCKS=['ceopanel','onbpanel','statcards','agendapanel','todopanel','pipelinepanel','dirpanel','brandpanel','weeklypanel','persopanel','fillpanel','srcpanel','listpanel','mailpanel'];
 function navGo(a){ document.querySelectorAll('.sb-nav .nav').forEach(x=>x.classList.toggle('on',x===a)); showView(a.dataset.go); }
 function navToView(v){ const a=[...document.querySelectorAll('.sb-nav .nav')].find(x=>x.dataset.go===v); if(a)navGo(a); else showView(v); }
 function statCardGo(act){
@@ -1210,7 +1213,7 @@ async function load(){
   loadTodo();
   loadOnboarding();      // parcours d'arrivée (nouvelles) + suivi superviseures
   loadOverview();        // pipeline + vue par marque + indicateurs
-  if(isSup){loadDirigeant();loadWeeklyPanel();loadPersoPanel();} // vue dirigeante : équipe + weekly + perso branding
+  if(isSup){loadDirigeant();loadWeeklyPanel();loadPersoPanel();loadCeoPanel();} // vue dirigeante : CEO + équipe + weekly + perso
   loadSourcing();
   loadMail();
   loadDrafts();
@@ -1319,7 +1322,7 @@ function cpSingle(){ const p=cpSelParts(); return p.length===1?p[0]:null; }
 // contacter, mails créateurs, pipeline…) réapparaissent dès qu'elle choisit une CP ou l'équipe.
 function dirigeantMode(){ if(!VIEWER||VIEWER.role!=='supervisor')return false; const p=cpSelParts(); return p.length===1&&nlow(p[0])===nlow(VIEWER.name); }
 const DIRIGEANT_HIDE=['srcpanel','mailpanel','pipelinepanel','brandpanel','listpanel'];
-const DIRIGEANT_ONLY=['dirpanel','weeklypanel','persopanel'];
+const DIRIGEANT_ONLY=['ceopanel','dirpanel','weeklypanel','persopanel'];
 function renderCpChips(){
   const box=$('cpchips'); if(!box)return;
   const me=VIEWER.name, parts=cpSelParts();
@@ -1370,6 +1373,83 @@ async function loadDirigeant(){
     });
     show(p,true);
   }catch(e){}
+}
+// --- Cockpit fondatrice (CEO view) : la maquette de Mélany, données réelles ----
+// KPIs (décisions, clients à surveiller, retards, collabs), vue d'ensemble de la
+// semaine avec « Prochain : », équipe & opérations, bandeau personal brand.
+// Volontairement SANS le graphique santé financière.
+async function loadCeoPanel(){
+  const p=$('ceopanel'); if(!p||!VIEWER||VIEWER.role!=='supervisor')return;
+  try{
+    const month=new Date().toISOString().slice(0,7);
+    const gj=async(u)=>{try{const r=await api(u);return r.ok?await r.json():null;}catch(e){return null;}};
+    const [dg,cb,ps,wk]=await Promise.all([gj('/api/dirigeant'),gj('/api/copilot/box'),gj('/api/perso'),gj('/api/weekly')]);
+    const brands=['In Haircare','Doucéa','Curls Matter','LIVA'];
+    const buds=(await Promise.all(brands.map(b=>gj('/api/budget/'+encodeURIComponent(b)+'?month='+month).then(d=>d?{brand:b,...d}:null)))).filter(Boolean);
+    const today=new Date().toISOString().slice(0,10);
+    // KPIs
+    const pend=((cb&&cb.proposals)||[]).length;
+    const watch=[];buds.forEach(d=>{const bm=d.budgetMensuel||0,tot=d.total||0;
+      if(bm>0&&tot>bm)watch.push({brand:d.brand,label:'budget dépassé',urgent:true});
+      else if(bm>0&&tot>=0.8*bm)watch.push({brand:d.brand,label:'budget bientôt atteint',urgent:true});
+      else if(bm===0&&tot>0)watch.push({brand:d.brand,label:'budget à renseigner',urgent:false});});
+    const collabsMonth=buds.reduce((s,d)=>s+((d.entries||[]).length),0);
+    const mem=(dg&&dg.members)||[];
+    const late=mem.reduce((s,m)=>s+(m.late||0),0);
+    const mails=mem.reduce((s,m)=>s+(m.mails||0),0);
+    const opens=mem.map(m=>m.open||0);
+    const charge=opens.length?((Math.max(...opens)-Math.min(...opens))<=4?'équilibrée':('déséquilibrée · '+esc((mem.slice().sort((a,b)=>(b.open||0)-(a.open||0))[0]||{}).name||''))):'-';
+    const notes=((wk&&wk.notes)||[]).filter(n=>!n.done);
+    const posts=((ps&&ps.posts)||[]).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    const nextPost=posts.find(x=>x.statut!=='Posté');
+    const inWeek=posts.filter(x=>x.statut!=='Posté'&&x.date>=today&&(new Date(x.date)-new Date(today))<7*86400000).length;
+    const dJ=(dt)=>{const n=Math.round((new Date(dt)-new Date(today))/86400000);return n<0?(Math.abs(n)+' j de retard'):(n===0?"aujourd'hui":('dans '+n+' j'));};
+    const kpi=(ic,bg2,lbl,val,sub,go)=>`<div class="bgd-card ceok" data-go="${go||''}" style="display:flex;gap:13px;align-items:center;cursor:pointer"><div class="bgd-kic" style="background:${bg2};width:46px;height:46px;flex:0 0 46px;font-size:20px">${ic}</div><div style="min-width:0"><div class="bgd-klbl">${lbl}</div><div class="bgd-kval" style="font-size:22px">${val}</div>${sub?('<div class="bgd-ksub">'+sub+'</div>'):''}</div></div>`;
+    const kpis='<div class="bgd-kpis" style="grid-template-columns:repeat(auto-fit,minmax(215px,1fr))">'
+      +kpi('🗳️','#EFEAFB','Décisions en attente',String(pend),'copilote · un clic pour trancher','messages')
+      +kpi('⚠️','#FDF0E3','Clients à surveiller',String(watch.length),watch.filter(w=>w.urgent).length?('<b style="color:#C77F2A">'+watch.filter(w=>w.urgent).length+' urgent(s)</b>'):'rien d\'urgent','budget')
+      +kpi('⏰','#FDE8E8','Tâches en retard · équipe',String(late),late?'à répartir ou relancer':'tout est à l\'heure','__dir')
+      +kpi('📅','#E4F0EA','Collabs ce mois',String(collabsMonth),'tous calendriers confondus','calendrier')+'</div>';
+    // Vue d'ensemble de la semaine
+    const chip=(t,c,b2)=>'<span class="bgd-badge" style="background:'+b2+';color:'+c+'">'+t+'</span>';
+    const row=(ic,titre,detail,st,prochain,go)=>'<div class="ceor" data-go="'+(go||'')+'" style="display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid #F2F5F5;cursor:pointer">'
+      +'<div style="width:36px;height:36px;flex:0 0 36px;border-radius:10px;background:#F5F3EE;display:flex;align-items:center;justify-content:center;font-size:16px">'+ic+'</div>'
+      +'<div style="flex:1;min-width:0"><b>'+titre+'</b> <span class="fs">· '+detail+'</span></div>'+st
+      +'<div class="fs" style="flex:0 0 32%;text-align:right">Prochain : '+prochain+'</div><span style="color:#B7C2C6">›</span></div>';
+    const semaine='<div class="bgd-card"><div class="bgd-h" style="margin-bottom:2px">Vue d\'ensemble de la semaine</div>'
+      +row('🏷️','Clients',watch.length?esc(watch.map(w=>w.brand).slice(0,3).join(', ')):'RAS sur les budgets',watch.some(w=>w.urgent)?chip('À surveiller','#C77F2A','#FEF3E2'):chip('RAS','#16A34A','#E7F6EE'),watch.length?('point budget '+esc(watch[0].brand)):'rien d\'urgent','budget')
+      +row('👥','Équipe',late+' retard(s) · '+mails+' mail(s) créateurs en attente',late?chip('À traiter','#DC2626','#FDE8E8'):chip('En cours','#16A34A','#E7F6EE'),'weekly équipe lundi 10:00','__dir')
+      +row('🧠','Weekly',notes.length+' point(s) à aborder lundi',notes.length?chip('En cours','#C77F2A','#FEF3E2'):chip('RAS','#16A34A','#E7F6EE'),'lundi · le compte-rendu remplit les to-do','__weekly')
+      +row('📱','Personal brand',nextPost?('« '+esc(nextPost.titre)+' »'):'calendrier à jour',inWeek?chip(inWeek+' post cette semaine','#6D5AE0','#EFEAFB'):chip('OK','#16A34A','#E7F6EE'),nextPost?(esc(nextPost.format)+' · '+esc(dJ(nextPost.date))):'-','__perso')
+      +'</div>';
+    // Équipe & opérations
+    const mini=(ic,t,s,go)=>'<div class="bgd-card ceok" data-go="'+(go||'')+'" style="padding:12px;text-align:center;cursor:pointer"><div style="font-size:19px">'+ic+'</div><div style="font-weight:700;font-size:12.5px;margin-top:3px">'+t+'</div><div class="bgd-ksub">'+s+'</div></div>';
+    const ops='<div class="bgd-card"><div class="bgd-h" style="margin-bottom:8px">Équipe &amp; opérations</div>'
+      +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:9px">'
+      +mini('🗓️','Weekly équipe','lundi 10:00','__weekly')
+      +mini('⚖️','Charge équipe',esc(charge),'__dir')
+      +mini('✉️','Mails créateurs',mails+' en attente','messages')
+      +mini('👥','Équipe',mem.length+' personne(s)','__dir')+'</div></div>';
+    // Bandeau personal brand
+    const pb=ps?('<div class="bgd-card ceok" data-go="__perso" style="display:flex;gap:14px;align-items:center;cursor:pointer;flex-wrap:wrap"><div style="font-size:19px">📱</div><b>Personal brand</b>'
+      +'<span class="fs">'+inWeek+' post prévu(s) cette semaine</span>'
+      +'<span class="fs">· '+posts.filter(x=>x.statut!=='Posté').length+' à venir au calendrier</span>'
+      +(nextPost?('<span class="fs">· prochain : « '+esc(nextPost.titre)+' » '+esc(dJ(nextPost.date))+'</span>'):'')
+      +'<span style="margin-left:auto" class="lk primary">Voir le contenu →</span></div>'):'';
+    p.innerHTML='<div style="margin-bottom:10px"><span style="font-weight:800;font-size:19px">👑 Cockpit fondatrice</span> <span class="fs">· CEO view · Hyped Agency</span></div>'
+      +kpis
+      +'<div class="bgd-grid" style="grid-template-columns:1.35fr 1fr">'+semaine+ops+'</div>'
+      +(pb?('<div style="margin-top:12px">'+pb+'</div>'):'');
+    const go=(g)=>{
+      if(!g)return;
+      if(g==='__dir'){const e=$('dirpanel');if(e)e.scrollIntoView({behavior:'smooth',block:'start'});return;}
+      if(g==='__weekly'){const e=$('weeklypanel');if(e)e.scrollIntoView({behavior:'smooth',block:'start'});return;}
+      if(g==='__perso'){const e=$('persopanel');if(e)e.scrollIntoView({behavior:'smooth',block:'start'});return;}
+      navToView(g);
+    };
+    p.querySelectorAll('.ceok,.ceor').forEach(el=>el.onclick=()=>go(el.dataset.go));
+    show(p,true);
+  }catch(e){show(p,false);}
 }
 // --- Perso branding de Mélany : calendrier éditorial Instagram ---------------
 async function loadPersoPanel(){
