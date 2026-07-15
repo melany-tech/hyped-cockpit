@@ -367,6 +367,33 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .cpchips .chip{font-size:11.5px;padding:5px 10px;border:1px solid #CFDADA;border-radius:14px;background:var(--bg);cursor:pointer;color:var(--navy);font-weight:600;user-select:none}
 .cpchips .chip:hover{border-color:var(--navy)}
 .cpchips .chip.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+/* --- Dashboard « Suivi des budgets » (maquette Mélany) --- */
+.bgd-card{background:#fff;border:1px solid #EDF1F1;border-radius:18px;box-shadow:0 2px 10px rgba(28,58,68,.05);padding:18px}
+.bgd-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin-bottom:14px}
+.bgd-kic{width:54px;height:54px;flex:0 0 54px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px}
+.bgd-klbl{font-size:13px;color:#5D6D74;font-weight:600}
+.bgd-kval{font-size:25px;font-weight:800;color:#17252B;line-height:1.15}
+.bgd-ksub{font-size:12px;color:#8A9AA0;margin-top:2px}
+.bgd-grid{display:grid;grid-template-columns:1fr 1.05fr;gap:14px;align-items:start}
+@media(max-width:1150px){.bgd-grid{grid-template-columns:1fr}}
+.bgd-h{font-weight:800;font-size:16.5px;color:#17252B}
+.bgd-badge{display:inline-block;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:12px;vertical-align:1px}
+.bgd-logo{width:54px;height:54px;flex:0 0 54px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:16px;letter-spacing:.5px}
+.bgd-leg{display:flex;align-items:center;gap:8px;font-size:13px;color:#5D6D74;margin-top:10px}
+.bgd-leg .dot{width:9px;height:9px;border-radius:50%;flex:0 0 9px}
+.bgd-legval{font-size:19px;font-weight:800;color:#17252B;margin:1px 0 0 17px}
+.bgd-prow{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid #F2F5F5;font-size:13px}
+.bgd-pav{width:30px;height:30px;flex:0 0 30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;color:#fff}
+.bgd-bar{flex:1;height:7px;background:#EEF1F6;border-radius:4px;min-width:56px}
+.bgd-bar>div{height:7px;border-radius:4px;background:#6D5AE0}
+.bgd-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:#6D5AE0;color:#fff;font-weight:700;border:none;border-radius:12px;padding:13px;cursor:pointer;font-size:14px;font-family:inherit;margin-top:12px}
+.bgd-btn:hover{background:#5B49C9}
+.bgd-alert{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #F2F5F5;font-size:13px}
+.bgd-alert:first-of-type{border-top:none}
+.bgd-aic{width:26px;height:26px;flex:0 0 26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px}
+.bgd-minis{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin-top:14px}
+.bgd-mini{display:flex;align-items:center;gap:14px;cursor:pointer;transition:box-shadow .15s}
+.bgd-mini:hover{box-shadow:0 4px 16px rgba(28,58,68,.10)}
 .sb-filter .calbar{margin:9px 0 0;flex-direction:column;align-items:stretch;gap:6px}
 .sb-filter .calbar .lab{display:none}
 .sb-filter .calbar a{display:block;text-align:center}
@@ -478,6 +505,11 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .av-menu .lk{text-align:left}
 .searchbar{margin-bottom:16px}
 .searchbar input{width:100%}
+/* vue CEO plein écran : seul le ceopanel reste visible, quoi que fassent les loaders */
+body.ceomode #onbpanel,body.ceomode #statcards,body.ceomode #agendapanel,body.ceomode #todopanel,
+body.ceomode #pipelinepanel,body.ceomode #dirpanel,body.ceomode #brandpanel,body.ceomode #weeklypanel,
+body.ceomode #persopanel,body.ceomode #fillpanel,body.ceomode #srcpanel,body.ceomode #listpanel,
+body.ceomode #mailpanel{display:none !important}
 /* deltas vs hier */
 .scard .dl{font-size:11px;font-weight:700;margin-top:5px}
 .dl.chg{color:var(--teal)}.dl.eq{color:#9aa6a8}
@@ -579,7 +611,10 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
       <a class="nav" data-go="contenus"><span class="ni">🎬</span> Contenus</a>
       <a class="nav" data-go="marques"><span class="ni">🏷️</span> Marques</a>
       <a class="nav" data-go="todo"><span class="ni">✅</span> To-do</a>
-      <a class="nav" data-go="contacts"><span class="ni">👥</span> Contacts</a>
+      <a class="nav" data-go="budget"><span class="ni">💶</span> Budget</a>
+      <!-- Onglet Contacts masqué à la demande de Mélany (13/07/2026) : l'annuaire faisait
+           doublon à l'usage. Pour le réactiver, remettre la ligne ci-dessous.
+           <a class="nav" data-go="contacts"><span class="ni">👥</span> Contacts</a> -->
       <a class="nav" data-go="processus"><span class="ni">📚</span> Process</a>
       <a class="nav" data-go="calendrier"><span class="ni">📅</span> Calendrier</a>
       <a class="nav" data-go="messages"><span class="ni">💬</span> Messages</a>
@@ -619,6 +654,9 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
     <div id="searchbar" class="searchbar hidden"><input id="searchinput" placeholder="Rechercher un profil, une collab, une marque…"></div>
     <div id="cards" class="hidden"></div>
 
+  <!-- Cockpit fondatrice : la vue CEO de Mélany (dirigeante uniquement) -->
+  <section class="panel hidden" id="ceopanel" style="background:transparent;border:none;box-shadow:none;padding:0"></section>
+
   <!-- Onboarding (nouvelles arrivantes + suivi superviseures) -->
   <section class="panel hidden" id="onbpanel"></section>
 
@@ -639,6 +677,11 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
       <p class="pt"><span class="pi">🔭</span> Pipeline profils</p>
       <div id="pipeline"><div class="state" style="padding:18px">Chargement…</div></div>
     </section>
+    <!-- Vue dirigeante : l'équipe en un coup d'œil (remplace le pipeline sur l'accueil « Moi ») -->
+    <section class="panel hidden" id="dirpanel">
+      <p class="pt"><span class="pi">👥</span> Mon équipe aujourd'hui</p>
+      <div id="dirbox"><div class="state" style="padding:18px">Chargement…</div></div>
+    </section>
   </div>
 
   <!-- Vue par marque · Remplissage calendriers -->
@@ -646,6 +689,16 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
     <section class="panel" id="brandpanel">
       <p class="pt"><span class="pi">🏷️</span> Vue par marque</p>
       <div id="brandcards"><div class="state" style="padding:18px">Chargement…</div></div>
+    </section>
+    <!-- Pense-bête weekly de la dirigeante (accueil « Moi » des superviseures) -->
+    <section class="panel hidden" id="weeklypanel">
+      <p class="pt"><span class="pi">🧠</span> À dire à la weekly</p>
+      <div id="weeklybox"></div>
+    </section>
+    <!-- Perso branding de Mélany : calendrier éditorial Instagram (visible par elle seule) -->
+    <section class="panel hidden" id="persopanel">
+      <p class="pt"><span class="pi">📱</span> Mon perso branding · Instagram</p>
+      <div id="persobox"></div>
     </section>
     <section class="panel" id="fillpanel">
       <p class="pt"><span class="pi">📊</span> Remplissage des calendriers</p>
@@ -678,6 +731,7 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
     <section id="campagnesview" style="display:none"><p class="pt"><span class="pi">📣</span> Campagnes par marque</p><div id="campagnesbox"><div class="state">Chargement…</div></div></section>
     <section id="contactsview" style="display:none"><p class="pt"><span class="pi">👥</span> Contacts créateurs</p><div id="contactsbox"><div class="state">Chargement…</div></div></section>
     <section id="processview" style="display:none"><p class="pt"><span class="pi">📚</span> Process &amp; documents de référence</p><div class="panelhint">Tout ce qu'il faut lire ou renvoyer : guides, fiches de process, modèles. Ajoute un document, il est visible par toute l'équipe.</div><div id="processbox"><div class="state">Chargement…</div></div></section>
+    <section id="budgetview" style="display:none"><p class="pt"><span class="pi">💶</span> Budgets du mois</p><div class="panelhint">Toutes les marques d'un coup d'œil : engagé, restant, dépassements. Le budget mensuel se règle dans la fiche de chaque marque (onglet Marques), l'engagé vient du calendrier Notion. Export Excel par marque pour le reporting client.</div><div id="budgetallbox"><div class="state">Chargement…</div></div></section>
     <section id="rapportsview" style="display:none"><p class="pt"><span class="pi">📊</span> Rapports</p><div id="rapportsbox"><div class="state">Chargement…</div></div></section>
     <section id="calendrierview" style="display:none"><p class="pt"><span class="pi">📅</span> Calendrier</p><div id="calendrierbox"><div class="state">Chargement…</div></div></section>
     <section id="todoview" style="display:none"><p class="pt"><span class="pi">✅</span> To-do</p><div class="panelhint">Tes tâches à faire, marque par marque. Une case cochée = statut « Fait » dans Notion, tout est synchronisé.</div><div id="todowrap"><div class="state">Chargement…</div></div></section>
@@ -726,7 +780,7 @@ function setupChrome(){
   showView('cockpit');
 }
 const VIEW_MAP={ profils:['srcpanel','brandpanel'], contenus:['listpanel','brandpanel','fillpanel'], messages:['mailpanel'] };
-const ALL_BLOCKS=['onbpanel','statcards','agendapanel','todopanel','pipelinepanel','brandpanel','fillpanel','srcpanel','listpanel','mailpanel'];
+const ALL_BLOCKS=['ceopanel','onbpanel','statcards','agendapanel','todopanel','pipelinepanel','dirpanel','brandpanel','weeklypanel','persopanel','fillpanel','srcpanel','listpanel','mailpanel'];
 function navGo(a){ document.querySelectorAll('.sb-nav .nav').forEach(x=>x.classList.toggle('on',x===a)); showView(a.dataset.go); }
 function navToView(v){ const a=[...document.querySelectorAll('.sb-nav .nav')].find(x=>x.dataset.go===v); if(a)navGo(a); else showView(v); }
 function statCardGo(act){
@@ -735,8 +789,8 @@ function statCardGo(act){
   else { navToView('cockpit'); setTimeout(()=>{const el=$('todopanel'); if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},220); } // à traiter / relances → priorités
 }
 let CURRENT_VIEW='cockpit';
-const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview',historique:'historiqueview',marques:'marquesview',todo:'todoview',processus:'processview'};
-function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','historiqueview','marquesview','todoview','processview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
+const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview',historique:'historiqueview',marques:'marquesview',todo:'todoview',processus:'processview',budget:'budgetview'};
+function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','historiqueview','marquesview','todoview','processview','budgetview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
 function refreshCustomView(){
   if(CURRENT_VIEW==='campagnes')renderCampagnes();
   else if(CURRENT_VIEW==='contacts')renderContacts();
@@ -746,6 +800,193 @@ function refreshCustomView(){
   else if(CURRENT_VIEW==='marques')renderMarques();
   else if(CURRENT_VIEW==='todo')renderTodoTab();
   else if(CURRENT_VIEW==='processus')renderProcess();
+  else if(CURRENT_VIEW==='budget')renderBudgetView();
+}
+// ===== Vue Budget : dashboard « Suivi des budgets » =========================
+let BG_MONTH='', BG_BRAND='', BG_ALL=false;
+try{BG_BRAND=localStorage.getItem('hc_bgbrand')||'';}catch(e){}
+function bgPrevMonth(m){const y=+m.slice(0,4),mm=+m.slice(5,7);const d=new Date(y,mm-2,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
+function bgExport(d,month){
+  return async()=>{
+    try{
+      await ensureXLSX();
+      const bm=d.budgetMensuel||0,tot=d.total||0;
+      const rows=[['Créatrice / contenu','Date','CP','Statut','Budget (€)']].concat((d.entries||[]).map(e=>[e.nom,e.date||'',e.cp||'',e.statut||'',Number(e.budget)||0]));
+      rows.push([]);rows.push(['Total engagé','','','',tot]);
+      if(bm>0){rows.push(['Budget mensuel','','','',bm]);rows.push(['Restant','','','',bm-tot]);}
+      const ws=XLSX.utils.aoa_to_sheet(rows); ws['!cols']=[{wch:36},{wch:12},{wch:14},{wch:20},{wch:12}];
+      const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,('Budget '+month).slice(0,31));
+      XLSX.writeFile(wb,'Budget '+d.brand+' '+month+'.xlsx');
+    }catch(e){alert('Export impossible, réessaie.');}
+  };
+}
+const BGD_PAL=['#17252B','#6D5AE0','#E8865D','#2C9087','#C2553B','#B98A12','#4A7FB5','#7A5AA8'];
+function bgdCol(s){let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))>>>0;return BGD_PAL[h%BGD_PAL.length];}
+function bgdIni(s){return String(s||'?').split(/\s+/).map(w=>w[0]||'').join('').slice(0,3).toUpperCase();}
+function bgdDelta(cur,old2){ if(!(old2>0))return ''; const p=Math.round(1000*(cur-old2)/old2)/10; if(!p)return '<span class="bgd-ksub">vs mois dernier · stable</span>';
+  return '<span class="bgd-ksub">vs mois dernier '+(p>0?'<b style="color:#16A34A">↑ '+p.toLocaleString('fr-FR')+' %</b>':'<b style="color:#DC2626">↓ '+Math.abs(p).toLocaleString('fr-FR')+' %</b>')+'</span>'; }
+async function renderBudgetView(){
+  const box=$('budgetallbox'); if(!box)return;
+  const month=BG_MONTH||new Date().toISOString().slice(0,7);
+  box.innerHTML='<div class="state">Chargement des budgets…</div>';
+  try{
+    const fi=await getFiches();
+    const brands=[...new Set(['In Haircare','Doucéa','Curls Matter',...Object.keys((fi&&fi.brands)||{})])].filter(Boolean);
+    const prev=bgPrevMonth(month);
+    const get=async(b,m)=>{try{const r=await api('/api/budget/'+encodeURIComponent(b)+'?month='+m);return r.ok?{brand:b,...(await r.json())}:null;}catch(e){return null;}};
+    const [cur,old]=await Promise.all([Promise.all(brands.map(b=>get(b,month))),Promise.all(brands.map(b=>get(b,prev)))]);
+    const ds=cur.filter(Boolean); // toutes les marques, même à zéro (maquette Mélany)
+    ds.sort((a,b)=>((b.budgetMensuel||0)-(a.budgetMensuel||0))||((b.total||0)-(a.total||0))||((b.entries||[]).length-(a.entries||[]).length));
+    const eur=n=>Number(n||0).toLocaleString('fr-FR')+' €';
+    const moisLbl=new Date(+month.slice(0,4),+month.slice(5,7)-1,1).toLocaleDateString('fr-FR',{month:'short'});
+    const totBudget=ds.reduce((s,d)=>s+(d.budgetMensuel||0),0);
+    const totDep=ds.reduce((s,d)=>s+(d.total||0),0);
+    const oldArr=old.filter(Boolean);
+    const oldBudget=oldArr.reduce((s,d)=>s+(d.budgetMensuel||0),0);
+    const oldDep=oldArr.reduce((s,d)=>s+(d.total||0),0);
+    // ---- Grande carte : la marque sélectionnée ----
+    const F=ds.find(d=>d.brand===BG_BRAND)||ds[0]; let featured='';
+    // ---- 3 indicateurs du haut : PAR MARQUE sélectionnée. Pas de cumul entre marques :
+    // certaines sont facturées par nous, d'autres par la marque, l'addition ne veut rien dire.
+    const oldF=F?(old.filter(Boolean).find(x=>x.brand===F.brand)||null):null;
+    const fbm=F?(F.budgetMensuel||0):0, ftot=F?(F.total||0):0;
+    const obm=oldF?(oldF.budgetMensuel||0):0, otot=oldF?(oldF.total||0):0;
+    const kpi=(ic,bg2,lbl,val,sub)=>`<div class="bgd-card" style="display:flex;gap:14px;align-items:center"><div class="bgd-kic" style="background:${bg2}">${ic}</div><div style="min-width:0"><div class="bgd-klbl">${lbl}</div><div class="bgd-kval">${val}</div>${sub||''}</div></div>`;
+    const kpis='<div class="bgd-kpis">'
+      +kpi('💼','#EFEAFB','Budget du mois · '+(F?esc(F.brand):''),fbm>0?eur(fbm):'à renseigner',bgdDelta(fbm,obm)||('<span class="bgd-ksub">se règle dans la fiche marque</span>'))
+      +kpi('🕐','#FDF0E3','Budget restant · '+(F?esc(F.brand):''),fbm>0?eur(fbm-ftot):'-',bgdDelta(fbm-ftot,obm-otot)||('<span class="bgd-ksub">dépensé ce mois : '+eur(ftot)+'</span>'))
+      +kpi('👩‍👩‍👧','#E8F2FC','Marques suivies',String(ds.length),'<span class="bgd-ksub">Actives ce mois-ci</span>')+'</div>';
+    if(F){
+      const bm=F.budgetMensuel||0,tot=F.total||0,rest=bm-tot,pct=bm>0?Math.min(1,tot/bm):0;
+      const R=62,CC=2*Math.PI*R,col=(bm>0&&tot>bm)?'#DC2626':'#6D5AE0';
+      const fiche=((fi&&fi.brands)||{})[F.brand]||{};
+      // Responsable : le champ de la fiche, sinon la CP la plus présente sur les collabs du mois
+      let resp=(fiche.interlocuteurHA||'').split(/[+,&]| et /)[0].trim();
+      if(!resp){const cnt={};(F.entries||[]).forEach(e=>{if(e.cp)cnt[e.cp]=(cnt[e.cp]||0)+1;});resp=Object.entries(cnt).sort((a,b)=>b[1]-a[1]).map(x=>x[0])[0]||'';}
+      // Répartition par CRÉATRICE (maquette) : chaque influenceuse et son spend du mois.
+      // Le montant vient de la colonne « Budget » du calendrier Notion (à la main ou via copilote).
+      const byInf={};(F.entries||[]).forEach(e=>{if(!(Number(e.budget)>0))return;const k=e.nom||'(sans nom)';byInf[k]=(byInf[k]||0)+Number(e.budget);});
+      const infs=Object.entries(byInf).sort((a,b)=>b[1]-a[1]);
+      const mx=Math.max(1,...infs.map(x=>x[1]),0);
+      const clean=(s)=>String(s).replace(/^Démo\s*·\s*/i,'');
+      const prows=(BG_ALL?infs:infs.slice(0,7)).map(([k,v])=>{
+        const share=tot>0?Math.round(100*v/tot):0;
+        return `<div class="bgd-prow"><span class="bgd-pav" style="background:${bgdCol(k)}">${esc(bgdIni(clean(k)))}</span><span style="flex:1;min-width:80px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(clean(k))}</span><b style="flex:0 0 82px;text-align:right;white-space:nowrap">${esc(eur(v))}</b><span style="flex:0 0 44px;text-align:right;color:#5D6D74">${share} %</span><div class="bgd-bar" style="flex:0 0 30%"><div style="width:${Math.round(100*v/mx)}%"></div></div></div>`;
+      }).join('')+(infs.length>7?('<div class="bgd-prow bgshowall" style="cursor:pointer;color:#6D5AE0;font-weight:700">'+(BG_ALL?'▲ Réduire la liste':('▼ Tout dérouler · + '+(infs.length-7)+' autre(s) créatrice(s)'))+'</div>'):'');
+      featured=`<div class="bgd-card">
+        <div style="display:flex;align-items:center;gap:13px">
+          <div class="bgd-logo" style="background:${bgdCol(F.brand)}">${esc(bgdIni(F.brand))}</div>
+          <div style="flex:1;min-width:0"><div class="bgd-h" style="font-size:19px">${esc(F.brand)}</div>
+            <div style="margin-top:3px"><span class="bgd-badge" style="background:#E7F6EE;color:#16A34A">Active</span>${resp?(' <span class="fs">Responsable : '+esc(resp)+'</span>'):''}</div></div>
+          <a class="lk bgaddbtn" title="Ajouter un profil et son budget au calendrier" style="cursor:pointer;font-size:19px;font-weight:800;color:#6D5AE0;border:1px solid #E5EAEC;border-radius:10px;padding:2px 10px">＋</a>
+          <a class="lk bgfiche2" data-b="${esc(F.brand)}" title="Ouvrir la fiche marque" style="cursor:pointer;font-size:20px;color:#8A9AA0">⋮</a>
+        </div>
+        <div id="bgaddform" style="display:none;margin-top:12px;padding:12px;background:#F7F8FA;border-radius:12px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input class="bga_nom" placeholder="Nom du profil (ex. CurlyNaïa)" style="flex:2;min-width:150px">
+            <input class="bga_budget" type="number" min="0" placeholder="Budget €" style="flex:1;min-width:90px">
+            <input class="bga_date" type="date" value="${esc(month===new Date().toISOString().slice(0,7)?new Date().toISOString().slice(0,10):(month+'-15'))}" style="flex:1;min-width:120px">
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;white-space:nowrap"><input type="checkbox" class="bga_tbc" style="width:15px;height:15px">📅 date à confirmer</label>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+            <button class="lk primary bga_save">＋ Ajouter au calendrier</button>
+            <button class="lk bga_cancel">Annuler</button>
+            <span class="fichemsg bga_msg"></span>
+          </div>
+          <div class="fs" style="margin-top:4px">Ça crée la collab dans le calendrier Notion de ${esc(F.brand)}, avec toi en interlocutrice. Le budget compte immédiatement ici.</div>
+        </div>
+        <div style="display:flex;gap:26px;align-items:center;flex-wrap:wrap;margin-top:16px">
+          <svg viewBox="0 0 160 160" style="width:172px;height:172px;flex:0 0 172px">
+            <circle cx="80" cy="80" r="${R}" fill="none" stroke="#EEF1F6" stroke-width="19"/>
+            <circle cx="80" cy="80" r="${R}" fill="none" stroke="${col}" stroke-width="19" stroke-dasharray="${(CC*pct).toFixed(1)} ${CC.toFixed(1)}" stroke-linecap="round" transform="rotate(-125 80 80)"/>
+            <text x="80" y="78" text-anchor="middle" style="font-size:30px;font-weight:800;fill:${col}">${bm>0?Math.round(100*tot/bm):0}<tspan style="font-size:19px"> %</tspan></text>
+            <text x="80" y="99" text-anchor="middle" style="font-size:12px;fill:#5D6D74">utilisé</text>
+          </svg>
+          <div style="flex:1;min-width:170px">
+            <div class="bgd-leg"><span class="dot" style="background:#6D5AE0"></span>Budget mensuel</div><div class="bgd-legval">${bm>0?eur(bm):'à renseigner'}</div>
+            <div class="bgd-leg"><span class="dot" style="background:#C9BFF5"></span>Dépensé</div><div class="bgd-legval">${eur(tot)}</div>
+            <div class="bgd-leg" style="margin-left:17px">Restant</div><div class="bgd-legval" style="color:${rest<0?'#DC2626':'#17252B'}">${bm>0?eur(rest):'-'}</div>
+          </div>
+        </div>
+        <div style="margin-top:14px">${prows||'<div class="bgd-prow" style="color:#8A9AA0">Les créatrices du mois apparaissent ici avec leur spend dès qu\'un montant est mis dans la colonne « Budget » du calendrier Notion de la marque.</div>'}
+        ${(()=>{const ts=(F.entries||[]).filter(e=>e.tbc).reduce((s,e)=>s+(Number(e.budget)||0),0);return ts>0?('<div class="fs" style="margin-top:6px">📅 dont '+eur(ts)+' avec date à confirmer ('+(F.entries||[]).filter(e=>e.tbc).length+' collab(s), comptés ce mois-ci)</div>'):'';})()}</div>
+        <button class="bgd-btn bgex" data-b="${esc(F.brand)}">⬇️ &nbsp;Exporter le détail budget</button>
+      </div>`;
+    }
+    // ---- Évolution des dépenses (marque sélectionnée) avec axe des montants ----
+    const lastDay=new Date(+month.slice(0,4),+month.slice(5,7),0).getDate();
+    const byDay=Array(lastDay).fill(0);
+    if(F)(F.entries||[]).forEach(e=>{if(e.date&&e.date.slice(0,7)===month)byDay[+e.date.slice(8,10)-1]+=Number(e.budget)||0;});
+    const mxD=Math.max(...byDay,0);
+    const nice=(v)=>{if(v<=0)return 100;const p=Math.pow(10,Math.floor(Math.log10(v)));const m=v/p;return (m<=1?1:m<=2?2:m<=5?5:10)*p;};
+    const top=nice(mxD);
+    const yl=(v)=>Number(v).toLocaleString('fr-FR')+' €';
+    const bars=byDay.map((v,i)=>`<div title="${(i+1)} ${moisLbl} · ${eur(v)}" style="flex:1;display:flex;flex-direction:column;justify-content:flex-end"><div style="height:${Math.max(v>0?4:1.5,Math.round(100*v/top))}%;background:${v>0?'#8B7BE8':'#EDF0F5'};border-radius:3px 3px 0 0"></div></div>`).join('');
+    const grid='repeating-linear-gradient(to top,transparent 0,transparent calc(25% - 1px),#F1F4F6 calc(25% - 1px),#F1F4F6 25%)';
+    const evo=`<div class="bgd-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><div class="bgd-h">Évolution des dépenses</div><span class="bgd-badge" style="background:#F3F5F7;color:#5D6D74;border:1px solid #E5EAEC">${F?esc(F.brand):''} · par jour</span></div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <div style="display:flex;flex-direction:column;justify-content:space-between;height:150px;font-size:10.5px;color:#8A9AA0;text-align:right;flex:0 0 auto"><span>${yl(top)}</span><span>${yl(top*0.75)}</span><span>${yl(top*0.5)}</span><span>${yl(top*0.25)}</span><span>0 €</span></div>
+        <div style="flex:1;display:flex;gap:2px;align-items:stretch;height:150px;background:${grid}">${bars}</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10.5px;color:#8A9AA0;margin-top:5px;padding-left:44px"><span>1 ${moisLbl}</span><span>${Math.round(lastDay/4)} ${moisLbl}</span><span>${Math.round(lastDay/2)} ${moisLbl}</span><span>${Math.round(3*lastDay/4)} ${moisLbl}</span><span>${lastDay} ${moisLbl}</span></div></div>`;
+    // ---- Alertes & Statuts avec badges (maquette) ----
+    const al=[];
+    ds.forEach(d=>{const bm=d.budgetMensuel||0,tot=d.total||0;
+      if(bm>0&&tot>bm)al.push({ic:'⚠',ib:'#FDE8E8',ci:'#DC2626',t:'<b>'+esc(d.brand)+'</b> · Dépassement',badge:'Budget dépassé',bb:'#FDE8E8',bc:'#DC2626',right:eur(tot-bm)});
+      else if(bm>0&&tot>=0.8*bm)al.push({ic:'⚠',ib:'#FEF3E2',ci:'#D97706',t:'<b>'+esc(d.brand)+'</b> · Suivi budget',badge:'Budget bientôt dépassé',bb:'#FEF3E2',bc:'#D97706',right:Math.round(100*tot/bm)+' %'});
+      else if(bm>0)al.push({ic:'✓',ib:'#E7F6EE',ci:'#16A34A',t:'<b>'+esc(d.brand)+'</b> · Budget suivi',badge:'Dans les clous',bb:'#E7F6EE',bc:'#16A34A',right:Math.round(100*tot/Math.max(1,bm))+' %'});
+      if(bm===0&&tot>0)al.push({ic:'!',ib:'#FEF3E2',ci:'#D97706',t:'<b>'+esc(d.brand)+'</b> · '+eur(tot)+' engagés',badge:'Budget à renseigner',bb:'#E8F2FC',bc:'#2563EB',right:''});
+      else if(bm===0)al.push({ic:'i',ib:'#E8F2FC',ci:'#2563EB',t:'<b>'+esc(d.brand)+'</b> · Fiche marque',badge:'Budget à renseigner',bb:'#E8F2FC',bc:'#2563EB',right:''});
+    });
+    const alertsBox=`<div class="bgd-card"><div class="bgd-h" style="margin-bottom:4px">Alertes & Statuts</div>
+      ${al.length?al.slice(0,6).map(a=>'<div class="bgd-alert"><span class="bgd-aic" style="background:'+a.ib+';color:'+a.ci+';font-weight:800">'+a.ic+'</span><span style="flex:1;min-width:0">'+a.t+' <span class="bgd-badge" style="background:'+a.bb+';color:'+a.bc+'">'+a.badge+'</span></span><b style="white-space:nowrap">'+a.right+'</b><span style="color:#B7C2C6">›</span></div>').join(''):'<div class="state2" style="padding:8px">Tout est dans les clous ce mois-ci ✅</div>'}</div>`;
+    // ---- Mini-cartes des autres marques (maquette) ----
+    const C2=2*Math.PI*24;
+    const minis=ds.filter(x=>x!==F).map(d=>{
+      const bm=d.budgetMensuel||0,tot=d.total||0,pct=bm>0?Math.min(1,tot/bm):0;
+      const col=(bm>0&&tot>bm)?'#DC2626':(bm>0&&tot>=0.8*bm?'#F59E0B':'#16A34A');
+      const donut=bm>0?`<svg viewBox="0 0 60 60" style="width:64px;height:64px;flex:0 0 64px"><circle cx="30" cy="30" r="24" fill="none" stroke="#EEF1F6" stroke-width="7"/><circle cx="30" cy="30" r="24" fill="none" stroke="${col}" stroke-width="7" stroke-dasharray="${(C2*pct).toFixed(1)} ${C2.toFixed(1)}" stroke-linecap="round" transform="rotate(-90 30 30)"/><text x="30" y="35" text-anchor="middle" style="font-size:13px;font-weight:800;fill:${col}">${Math.round(100*pct)}<tspan style="font-size:9px">%</tspan></text></svg>`
+        :`<div style="width:64px;height:64px;flex:0 0 64px;border-radius:50%;border:7px solid #EEF1F6;display:flex;align-items:center;justify-content:center;font-size:9px;color:#8A9AA0;text-align:center;line-height:1.2;box-sizing:border-box">à<br>définir</div>`;
+      return `<div class="bgd-card bgd-mini bgmini" data-b="${esc(d.brand)}" title="Voir le détail budget de ${esc(d.brand)}">
+        <div class="bgd-logo" style="background:${bgdCol(d.brand)}">${esc(bgdIni(d.brand))}</div>
+        <div style="min-width:0;flex:0 0 auto"><div style="font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px">${esc(d.brand)}</div><span class="bgd-badge" style="background:#E7F6EE;color:#16A34A">Active</span></div>
+        ${donut}
+        <div style="flex:1;min-width:0"><div style="font-weight:800;font-size:15px">${bm>0?eur(bm):eur(tot)}</div>
+          <div class="bgd-ksub">${eur(tot)} dépensés</div>
+          ${bm>0?('<div style="font-size:12px;font-weight:700;color:'+((bm-tot)<0?'#DC2626':'#16A34A')+'">'+((bm-tot)<0?(eur(tot-bm)+' de dépassement'):(eur(bm-tot)+' restants'))+'</div>'):'<div class="bgd-ksub">budget à renseigner</div>'}</div>
+        <span style="color:#B7C2C6;font-size:20px">›</span></div>`;
+    }).join('');
+    // ---- Barre du haut : pastilles marques + mois ----
+    const chips='<div class="cpchips" style="flex:1">'+ds.map(d=>'<span class="chip bgchip'+(d===F?' on':'')+'" data-b="'+esc(d.brand)+'">'+esc(d.brand)+'</span>').join('')+'</div>';
+    box.innerHTML=`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">${chips}<span style="white-space:nowrap;background:#fff;border:1px solid #E5EAEC;border-radius:10px;padding:5px 10px"><label style="font-size:12px;font-weight:600;margin-right:6px">🗓️</label><input type="month" id="bgallmonth" value="${esc(month)}" style="width:auto;display:inline-block;font-size:12.5px;font-weight:600;padding:0;border:none;background:transparent"></span></div>`
+      +kpis
+      +'<div class="bgd-grid">'+(featured||'')+'<div style="display:flex;flex-direction:column;gap:14px">'+evo+alertsBox+'</div></div>'
+      +(minis?('<div class="bgd-minis">'+minis+'</div>'):'')
+      +((!ds.length)?'<div class="state">Aucune marque pour l\'instant : crée les fiches dans l\'onglet Marques.</div>':'');
+    const mi=$('bgallmonth'); if(mi)mi.onchange=()=>{BG_MONTH=mi.value;renderBudgetView();};
+    const selectBrand=(b)=>{BG_BRAND=b;try{localStorage.setItem('hc_bgbrand',b);}catch(e){}renderBudgetView();};
+    box.querySelectorAll('.bgchip').forEach(c=>c.onclick=()=>selectBrand(c.dataset.b));
+    const sa=box.querySelector('.bgshowall'); if(sa)sa.onclick=()=>{BG_ALL=!BG_ALL;renderBudgetView();};
+    box.querySelectorAll('.bgmini').forEach(el=>el.onclick=()=>selectBrand(el.dataset.b));
+    box.querySelectorAll('.bgfiche2').forEach(a=>a.onclick=(ev)=>{ev.stopPropagation();MQ_SELECTED=a.dataset.b;navToView('marques');});
+    // « + » : ajout rapide profil + budget dans le calendrier de la marque affichée
+    const ab=box.querySelector('.bgaddbtn'), af=box.querySelector('#bgaddform');
+    if(ab&&af){
+      ab.onclick=()=>{af.style.display=(af.style.display==='none')?'block':'none';const n=af.querySelector('.bga_nom');if(n&&af.style.display==='block')n.focus();};
+      const save=async()=>{
+        const nom=af.querySelector('.bga_nom').value.trim(); if(!nom){af.querySelector('.bga_msg').textContent='Il me faut le nom du profil 🙂';return;}
+        const b2=af.querySelector('.bga_save'); b2.textContent='⏳ Ajout…';
+        const r=await api('/api/budget/'+encodeURIComponent(F.brand)+'/add',{method:'POST',body:JSON.stringify({nom,budget:af.querySelector('.bga_budget').value,date:af.querySelector('.bga_date').value,tbc:af.querySelector('.bga_tbc').checked})});
+        const dd=await r.json().catch(()=>({}));
+        if(r.ok)renderBudgetView(); else{b2.textContent='＋ Ajouter au calendrier';af.querySelector('.bga_msg').textContent=dd.error||'Erreur, réessaie';}
+      };
+      af.querySelector('.bga_save').onclick=save;
+      af.querySelector('.bga_nom').onkeydown=e=>{if(e.key==='Enter')save();};
+      af.querySelector('.bga_cancel').onclick=()=>{af.style.display='none';};
+    }
+    box.querySelectorAll('.bgex').forEach(a=>{const d=ds.find(x=>x.brand===a.dataset.b);if(d)a.onclick=(ev)=>{ev.stopPropagation();bgExport(d,month)();};});
+  }catch(e){box.innerHTML='<div class="state">Erreur de chargement.</div>';}
 }
 // --- Onglet Process : la bibliothèque des documents de référence ------------
 async function renderProcess(){
@@ -793,8 +1034,17 @@ function showView(v){
     refreshCustomView();
     window.scrollTo({top:0,behavior:'smooth'}); return;
   }
-  if(isCockpit){ ALL_BLOCKS.forEach(id=>{const e=$(id);if(e)e.style.display='';}); }
-  else { const keep=VIEW_MAP[v]||[]; ALL_BLOCKS.forEach(id=>{const e=$(id);if(e)e.style.display=keep.includes(id)?'':'none';});
+  if(isCockpit){
+    const dm=(typeof dirigeantMode==='function'&&dirigeantMode());
+    const ceo=dm&&(typeof CEO_MODE!=='undefined'?CEO_MODE:false); // vue CEO plein écran (maquette Mélany)
+    document.body.classList.toggle('ceomode',!!ceo); // le CSS masque tout sauf ceopanel, même si un loader ré-affiche son bloc
+    ALL_BLOCKS.forEach(id=>{const e=$(id);if(!e)return;
+      let hide=false;
+      if(dm){ hide=ceo?(id!=='ceopanel'):DIRIGEANT_HIDE.includes(id); }
+      else hide=DIRIGEANT_ONLY.includes(id);
+      e.style.display=hide?'none':'';});
+  }
+  else { document.body.classList.remove('ceomode'); const keep=VIEW_MAP[v]||[]; ALL_BLOCKS.forEach(id=>{const e=$(id);if(e)e.style.display=keep.includes(id)?'':'none';});
     const anyVisible=keep.some(id=>{const e=$(id);return e&&!e.classList.contains('hidden');});
     if(sv){ if(!anyVisible){ sv.style.display=''; sv.querySelector('.sv-t').textContent=(v==='calendrier')?'Agenda non connecté 📅':'Rien à afficher pour le moment.'; sv.querySelector('.sv-s').textContent=(v==='calendrier')?'Connecte ton Google Agenda (bouton « Connecter mon Gmail » dans Messages) pour voir tes visios ici.':''; } else sv.style.display='none'; } }
   window.scrollTo({top:0,behavior:'smooth'});
@@ -962,7 +1212,14 @@ async function load(){
     }
     renderCpChips();
     show($('filterbar'),true);
+    if(CURRENT_VIEW==='cockpit')showView('cockpit'); // premier chargement : applique la vue dirigeante épurée si pastille « Moi »
   }else show($('filterbar'),false);
+  // Rôle « team » (ex. social media manager) : espace allégé, centré sur la to-do.
+  // On masque les outils créateurs (profils, mails, campagnes, marques, contacts, rapports).
+  if(VIEWER.role==='team'){
+    ['profils','campagnes','contenus','marques','contacts','messages','rapports','budget'].forEach(g=>{const a=document.querySelector('.sb-nav .nav[data-go="'+g+'"]');if(a)a.style.display='none';});
+    ['srcpanel','mailpanel','pipelinepanel','brandpanel','fillpanel','listpanel','statcards'].forEach(id=>{const e=$(id);if(e){e.classList.add('hidden');e.style.display='none';}});
+  }
   loadAlerts();          // remplissage des calendriers : visible par toutes les CP
   render();
   renderCalbar();
@@ -970,6 +1227,7 @@ async function load(){
   loadTodo();
   loadOnboarding();      // parcours d'arrivée (nouvelles) + suivi superviseures
   loadOverview();        // pipeline + vue par marque + indicateurs
+  if(isSup){loadDirigeant();loadWeeklyPanel();loadPersoPanel();loadCeoPanel();} // vue dirigeante : CEO + équipe + weekly + perso
   loadSourcing();
   loadMail();
   loadDrafts();
@@ -1059,11 +1317,12 @@ function updateStats(){
   const d=o.deltas||null;
   const delta=(k)=>{ if(!d) return ''; const v=d[k]; if(v>0) return '<div class="dl chg">▴ '+v+' vs hier</div>'; if(v<0) return '<div class="dl chg">▾ '+Math.abs(v)+' vs hier</div>'; return '<div class="dl eq">= stable</div>'; };
   const card=(ic,bg,col,lbl,num,dk,act)=>`<div class="scard" data-act="${act||''}" tabindex="0" role="button" title="Voir ${esc(lbl)}"><div class="sic" style="background:${bg};color:${col}">${ic}</div><div class="slbl">${lbl}</div><div class="snum">${num}</div>${delta(dk)}</div>`;
+  const dm=(typeof dirigeantMode==='function'&&dirigeantMode()); // dirigeante : chiffres de toute l'équipe
   $('statcards').innerHTML=
-    card('🗒️','#E4F0EA','#2C9087','À traiter aujourd\'hui',aTraiter,'aTraiter','todo')+
-    card('👥','#EDE7F5','#7A5AA8','Profils à contacter',aContacter,'aContacter','profils')+
-    card('⏱️','#FBEBDD','#C77F2A','Relances en attente',relances,'relances','relances')+
-    card('📄','#FCF3DC','#B98A12','Contenus validés',aValider,'aValider','contenus');
+    card('🗒️','#E4F0EA','#2C9087',dm?'À traiter (équipe)':'À traiter aujourd\'hui',aTraiter,'aTraiter','todo')+
+    card('👥','#EDE7F5','#7A5AA8',dm?'À contacter (équipe)':'Profils à contacter',aContacter,'aContacter','profils')+
+    card('⏱️','#FBEBDD','#C77F2A',dm?'Relances (équipe)':'Relances en attente',relances,'relances','relances')+
+    card('📄','#FCF3DC','#B98A12',dm?'Contenus validés (équipe)':'Contenus validés',aValider,'aValider','contenus');
   updateBell();
 }
 // --- Pipeline + vue par marque ------------------------------------------
@@ -1072,6 +1331,12 @@ let CPFILTER_INIT=false, CP_OTHERS=[];
 function nlow(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();}
 function cpSelParts(){ const v=($('cpfilter')&&$('cpfilter').value)||''; return (!v||v==='ALL')?[]:v.split('||').filter(Boolean); }
 function cpSingle(){ const p=cpSelParts(); return p.length===1?p[0]:null; }
+// Vue dirigeante : quand une superviseure regarde SA vue (pastille « Moi »), le cockpit
+// s'épure : stats, priorités et agenda seulement. Les blocs de travail CP (profils à
+// contacter, mails créateurs, pipeline…) réapparaissent dès qu'elle choisit une CP ou l'équipe.
+function dirigeantMode(){ if(!VIEWER||VIEWER.role!=='supervisor')return false; const p=cpSelParts(); return p.length===1&&nlow(p[0])===nlow(VIEWER.name); }
+const DIRIGEANT_HIDE=['srcpanel','mailpanel','pipelinepanel','brandpanel','listpanel'];
+const DIRIGEANT_ONLY=['ceopanel','dirpanel','weeklypanel','persopanel'];
 function renderCpChips(){
   const box=$('cpchips'); if(!box)return;
   const me=VIEWER.name, parts=cpSelParts();
@@ -1092,11 +1357,325 @@ function renderCpChips(){
     $('cpfilter').value=parts.length?parts.join('||'):'ALL';
     try{localStorage.setItem('hc_cpsel',$('cpfilter').value);}catch(e){}
     renderCpChips();
+    if(CURRENT_VIEW==='cockpit')showView('cockpit'); // ré-applique la vue épurée ou complète selon la pastille
     render();loadTodo();loadOverview();loadMail();loadVisios();
   });
 }
+// --- Vue dirigeante : « Mon équipe aujourd'hui » ---------------------------
+async function loadDirigeant(){
+  const p=$('dirpanel'); if(!p||!VIEWER||VIEWER.role!=='supervisor')return;
+  try{
+    const r=await api('/api/dirigeant'); if(!r.ok)return;
+    const d=await r.json();
+    const ini=n=>String(n||'?').slice(0,2).toUpperCase();
+    const actLbl={contacte:'a contacté',relance:'a relancé',sourcing:'a ajouté',compte:'compte créé :',
+      email:'a envoyé un mail à',brouillon:'a préparé un brouillon pour',programme:'a programmé un mail à',
+      brief:'a envoyé le brief à',etape:'a fait avancer',fiche:'a mis à jour la fiche de'};
+    const bg=(v,ic,t,warn)=>'<span title="'+esc(t)+'" style="font-size:12px;font-weight:700;padding:3px 8px;border-radius:12px;white-space:nowrap;background:'+((warn&&v>0)?'#F8E3DC':'#EFF4F4')+';color:'+((warn&&v>0)?'#C2553B':'#33475C')+'">'+ic+' '+v+'</span>';
+    $('dirbox').innerHTML=(d.members||[]).map(m=>{
+      const la=m.lastAct?((actLbl[m.lastAct.type]||m.lastAct.type)+' '+(m.lastAct.creator||'')+' · '+fnoteDate(m.lastAct.at)):'pas d\'action récente';
+      return '<div class="dirrow" data-n="'+esc(m.name)+'" title="Ouvrir la vue pilotage de '+esc(m.name)+'" style="display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid #EEF2F2;cursor:pointer">'
+        +'<div style="width:34px;height:34px;flex:0 0 34px;border-radius:50%;background:#E4F0EA;color:#2C9087;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">'+esc(ini(m.name))+'</div>'
+        +'<div style="flex:1;min-width:0"><div style="font-weight:700">'+esc(m.name)+(m.role==='team'?' <span style="font-weight:600;font-size:11px;color:#6A7A7A">· social média</span>':'')+'</div>'
+        +'<div style="font-size:12px;color:#6A7A7A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(la)+'</div></div>'
+        +bg(m.open,'🗒️','tâches ouvertes',false)+bg(m.late,'🔴','tâches en retard',true)+bg(m.mails,'✉️','mails créateurs en attente de décision',true)
+        +'</div>';
+    }).join('')||'<div class="state2" style="padding:10px">Personne dans l\'équipe pour l\'instant.</div>';
+    $('dirbox').querySelectorAll('.dirrow').forEach(el=>el.onclick=()=>{
+      $('cpfilter').value=el.dataset.n; try{localStorage.setItem('hc_cpsel',el.dataset.n);}catch(e){}
+      renderCpChips(); showView('cockpit'); render();loadTodo();loadOverview();loadMail();loadVisios();
+    });
+    show(p,true);
+  }catch(e){}
+}
+// --- Cockpit fondatrice (CEO view) : les widgets de la maquette de Mélany, dans
+// NOTRE charte (navy/teal/sable). Vue plein écran par défaut sur sa pastille « Moi »,
+// bouton « Ouvrir le cockpit complet » pour retrouver la vue détaillée.
+// Volontairement SANS le graphique santé financière.
+let CEO_MODE=true; try{CEO_MODE=localStorage.getItem('hc_ceo')!=='0';}catch(e){}
+function setCeoMode(v){CEO_MODE=!!v;try{localStorage.setItem('hc_ceo',v?'1':'0');}catch(e){}showView('cockpit');loadCeoPanel();window.scrollTo({top:0,behavior:'smooth'});}
+async function loadCeoPanel(){
+  const p=$('ceopanel'); if(!p||!VIEWER||VIEWER.role!=='supervisor')return;
+  if(!CEO_MODE){
+    p.innerHTML='<div class="bgd-card" style="display:flex;align-items:center;gap:10px;padding:10px 14px"><span>👑</span><b>Vue détaillée</b><span class="fs">tous les blocs du cockpit</span><button class="lk primary" id="ceoback" style="margin-left:auto">👑 Revenir à la vue CEO</button></div>';
+    const b=$('ceoback'); if(b)b.onclick=()=>setCeoMode(true);
+    show(p,true); return;
+  }
+  try{
+    const month=new Date().toISOString().slice(0,7);
+    const gj=async(u)=>{try{const r=await api(u);return r.ok?await r.json():null;}catch(e){return null;}};
+    const [dg,cb,ps,wk,td]=await Promise.all([gj('/api/dirigeant'),gj('/api/copilot/box'),gj('/api/perso'),gj('/api/weekly'),gj('/api/todos?view='+encodeURIComponent(VIEWER.name))]);
+    const brands=['In Haircare','Doucéa','Curls Matter','LIVA'];
+    const buds=(await Promise.all(brands.map(b=>gj('/api/budget/'+encodeURIComponent(b)+'?month='+month).then(d=>d?{brand:b,...d}:null)))).filter(Boolean);
+    const today=new Date().toISOString().slice(0,10);
+    const props=((cb&&cb.proposals)||[]);
+    const watch=[];buds.forEach(d=>{const bm=d.budgetMensuel||0,tot=d.total||0;
+      if(bm>0&&tot>bm)watch.push({brand:d.brand,label:'budget dépassé',urgent:true});
+      else if(bm>0&&tot>=0.8*bm)watch.push({brand:d.brand,label:'budget bientôt atteint',urgent:true});
+      else if(bm===0&&tot>0)watch.push({brand:d.brand,label:'budget à renseigner',urgent:false});
+      else if(bm>0)watch.push({brand:d.brand,label:'RAS',urgent:false,ras:true});});
+    const collabsMonth=buds.reduce((s,d)=>s+((d.entries||[]).length),0);
+    const mem=(dg&&dg.members)||[];
+    const late=mem.reduce((s,m)=>s+(m.late||0),0);
+    const mails=mem.reduce((s,m)=>s+(m.mails||0),0);
+    const opens=mem.map(m=>m.open||0);
+    const charge=opens.length?((Math.max(...opens)-Math.min(...opens))<=4?'équilibrée':('chargée · '+esc((mem.slice().sort((a,b)=>(b.open||0)-(a.open||0))[0]||{}).name||''))):'-';
+    const notes=((wk&&wk.notes)||[]).filter(n=>!n.done);
+    const posts=((ps&&ps.posts)||[]).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    const nextPost=posts.find(x=>x.statut!=='Posté');
+    const inWeek=posts.filter(x=>x.statut!=='Posté'&&x.date>=today&&(new Date(x.date)-new Date(today))<7*86400000).length;
+    const dJ=(dt)=>{const n=Math.round((new Date(dt)-new Date(today))/86400000);return n<0?(Math.abs(n)+' j de retard'):(n===0?"aujourd'hui":('dans '+n+' j'));};
+    const tasks=((td&&td.tasks)||[]).slice(0,3);
+    // ---- entête + 4 KPIs ----
+    const kpi=(ic,bg2,lbl,val,sub,go)=>`<div class="bgd-card ceok" data-go="${go||''}" style="display:flex;gap:13px;align-items:center;cursor:pointer"><div class="bgd-kic" style="background:${bg2};width:48px;height:48px;flex:0 0 48px;border-radius:50%;font-size:20px">${ic}</div><div style="min-width:0"><div class="bgd-klbl">${lbl}</div><div class="bgd-kval" style="font-size:23px">${val}</div>${sub?('<div class="bgd-ksub">'+sub+'</div>'):''}</div></div>`;
+    const urg=watch.filter(w=>w.urgent).length;
+    const kpis='<div class="bgd-kpis" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">'
+      +kpi('🗳️','#E4F0EA','Décisions en attente',String(props.length),props.length?(Math.min(props.length,5)+' à valider cette semaine'):'rien à trancher','messages')
+      +kpi('⚠️','#FBEBDD','Clients à surveiller',String(watch.filter(w=>!w.ras).length),urg?('<b style="color:#C77F2A">'+urg+' urgent aujourd\'hui</b>'):'rien d\'urgent','budget')
+      +kpi('⏰','#F8E3DC','Retards équipe',String(late),late?'tâches à relancer ou répartir':'tout est à l\'heure','__dir')
+      +kpi('📅','#EDE7F5','Collabs ce mois',String(collabsMonth),'tous calendriers confondus','calendrier')+'</div>';
+    // ---- vue d'ensemble de la semaine ----
+    const chip=(t,c,b2)=>'<span class="bgd-badge" style="background:'+b2+';color:'+c+'">'+t+'</span>';
+    const row=(ic,titre,detail,st,prochain,go)=>'<div class="ceor" data-go="'+(go||'')+'" style="display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid #F0F3F3;cursor:pointer">'
+      +'<div style="width:38px;height:38px;flex:0 0 38px;border-radius:11px;background:#F5F3EE;display:flex;align-items:center;justify-content:center;font-size:16px">'+ic+'</div>'
+      +'<div style="flex:1;min-width:0"><b>'+titre+'</b><div class="fs" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+detail+'</div></div>'+st
+      +'<div class="fs" style="flex:0 0 30%;text-align:right">Prochain : '+prochain+'</div><span style="color:#B7C2C6">›</span></div>';
+    const semaine='<div class="bgd-card"><div class="bgd-h" style="margin-bottom:2px">Vue d\'ensemble de la semaine</div>'
+      +row('🏷️','Clients',watch.filter(w=>!w.ras).length?esc(watch.filter(w=>!w.ras).map(w=>w.brand).slice(0,3).join(', ')):'RAS sur les budgets',watch.some(w=>w.urgent)?chip('À surveiller','#C77F2A','#FBEBDD'):chip('RAS','#2C9087','#E4F0EA'),watch.filter(w=>!w.ras).length?('point budget '+esc(watch.filter(w=>!w.ras)[0].brand)):'rien d\'urgent','budget')
+      +row('👥','Équipe',late+' retard(s) · '+mails+' mail(s) créateurs en attente · charge '+charge,late?chip('À traiter','#C2553B','#F8E3DC'):chip('En cours','#2C9087','#E4F0EA'),'weekly équipe lundi 10:00','__dir')
+      +row('🧠','Weekly',notes.length+' point(s) à aborder lundi',notes.length?chip('En cours','#C77F2A','#FBEBDD'):chip('RAS','#2C9087','#E4F0EA'),'lundi · le compte-rendu remplit les to-do','__weekly')
+      +row('📱','Personal brand',nextPost?('« '+esc(nextPost.titre)+' »'):'calendrier à jour',inWeek?chip(inWeek+' post cette semaine','#1C3A44','#E7F0F8'):chip('OK','#2C9087','#E4F0EA'),nextPost?(esc(nextPost.format)+' · '+esc(dJ(nextPost.date))):'-','__perso')
+      +'<button class="lk primary" id="ceofull" style="width:100%;margin-top:12px;padding:11px;border-radius:11px;font-size:13.5px">Ouvrir le cockpit complet →</button></div>';
+    // ---- mes 3 priorités ----
+    const plab=(t)=>{if(!t.echeance)return '<span class="fs">cette semaine</span>';if(t.echeance<today)return '<b style="color:#C2553B;font-size:12px">En retard</b>';if(t.echeance===today)return '<b style="color:#C77F2A;font-size:12px">Aujourd\'hui</b>';return '<span class="fs">'+esc(fmtDate(t.echeance))+'</span>';};
+    const prio='<div class="bgd-card"><div class="bgd-h" style="margin-bottom:4px">Mes 3 priorités</div>'
+      +(tasks.length?tasks.map(t=>'<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #F0F3F3"><input type="checkbox" class="ceodone" data-id="'+esc(t.id)+'" style="width:16px;height:16px;flex:0 0 16px"><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(t.task)+'</span>'+plab(t)+'</div>').join(''):'<div class="state2" style="padding:8px">To-do à jour ✨</div>')
+      +'</div>';
+    // ---- équipe & opérations ----
+    const mini=(ic,t,s,go)=>'<div class="bgd-card ceok" data-go="'+(go||'')+'" style="padding:12px;text-align:center;cursor:pointer;box-shadow:none;border:1px solid #EDF1F1"><div style="font-size:19px">'+ic+'</div><div style="font-weight:700;font-size:12.5px;margin-top:3px">'+t+'</div><div class="bgd-ksub">'+s+'</div></div>';
+    const ops='<div class="bgd-card"><div class="bgd-h" style="margin-bottom:8px">Équipe &amp; opérations</div>'
+      +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:9px">'
+      +mini('🗓️','Weekly équipe','lundi 10:00','__weekly')
+      +mini('⚖️','Charge équipe',esc(charge),'__dir')
+      +mini('✉️','Mails créateurs',mails+' en attente','messages')
+      +mini('👥','Équipe',mem.length+' personne(s)','__dir')+'</div></div>';
+    // ---- clients à surveiller + décisions à prendre ----
+    const cw='<div class="bgd-card"><div class="bgd-h" style="margin-bottom:4px">👥 Clients à surveiller</div>'
+      +(watch.length?watch.slice(0,4).map(w=>'<div class="ceor" data-go="budget" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #F0F3F3;cursor:pointer"><b style="flex:1">'+esc(w.brand)+'</b>'+(w.ras?chip('RAS','#2C9087','#E4F0EA'):chip(esc(w.label),w.urgent?'#C2553B':'#1C3A44',w.urgent?'#F8E3DC':'#E7F0F8'))+'<span style="color:#B7C2C6">›</span></div>').join(''):'<div class="state2" style="padding:8px">Rien à surveiller ✅</div>')
+      +'<a class="lk ceok" data-go="budget" style="display:inline-block;margin-top:8px;cursor:pointer">Voir tous les clients →</a></div>';
+    const dp='<div class="bgd-card"><div class="bgd-h" style="margin-bottom:4px">🗳️ Décisions à prendre '+(props.length?chip(props.length+' en attente','#C77F2A','#FBEBDD'):'')+'</div>'
+      +(props.length?props.slice(0,4).map(x=>'<div class="ceor" data-go="messages" style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid #F0F3F3;cursor:pointer"><span style="color:#2C9087">●</span><span style="flex:1;min-width:0">'+esc(String(x.question||x.resume||x.subject||'').slice(0,90))+'</span></div>').join(''):'<div class="state2" style="padding:8px">Aucune décision en attente ✅</div>')
+      +'<a class="lk ceok" data-go="messages" style="display:inline-block;margin-top:8px;cursor:pointer">Voir toutes les décisions →</a></div>';
+    // ---- bandeau personal brand ----
+    const pb=ps?('<div class="bgd-card ceok" data-go="__perso" style="display:flex;gap:16px;align-items:center;cursor:pointer;flex-wrap:wrap;margin-top:12px"><span style="font-size:19px">📱</span><b>Personal brand</b>'
+      +'<span class="fs">✍️ '+inWeek+' post prévu(s) cette semaine</span>'
+      +'<span class="fs">💡 '+posts.filter(x=>x.statut!=='Posté').length+' à venir au calendrier</span>'
+      +(nextPost?('<span class="fs">📌 prochain : « '+esc(nextPost.titre)+' » '+esc(dJ(nextPost.date))+'</span>'):'')
+      +'<span class="lk primary" style="margin-left:auto">Voir le contenu →</span></div>'):'';
+    p.innerHTML='<div style="margin-bottom:12px"><div style="font-weight:800;font-size:24px;color:#1C3A44">Cockpit fondatrice</div><div style="color:#2C9087;font-weight:700;font-size:12.5px;letter-spacing:1px">CEO VIEW · HYPED AGENCY</div></div>'
+      +kpis
+      +'<div class="bgd-grid" style="grid-template-columns:1.4fr 1fr;margin-bottom:12px">'+semaine+'<div style="display:flex;flex-direction:column;gap:12px">'+prio+ops+'</div></div>'
+      +'<div class="bgd-grid" style="grid-template-columns:1fr 1fr">'+cw+dp+'</div>'
+      +pb;
+    const go=(g)=>{
+      if(!g)return;
+      if(g==='__dir'||g==='__weekly'||g==='__perso'){setCeoMode(false);const id=g==='__dir'?'dirpanel':(g==='__weekly'?'weeklypanel':'persopanel');setTimeout(()=>{const e=$(id);if(e)e.scrollIntoView({behavior:'smooth',block:'start'});},300);return;}
+      navToView(g);
+    };
+    p.querySelectorAll('.ceok,.ceor').forEach(el=>el.onclick=(ev)=>{ev.stopPropagation();go(el.dataset.go);});
+    const cf=$('ceofull'); if(cf)cf.onclick=(ev)=>{ev.stopPropagation();setCeoMode(false);};
+    p.querySelectorAll('.ceodone').forEach(c=>c.onchange=async()=>{await api('/api/todos/'+encodeURIComponent(c.dataset.id)+'/done',{method:'POST'});loadCeoPanel();loadTodo();});
+    show(p,true);
+  }catch(e){show(p,false);}
+}
+// --- Perso branding de Mélany : calendrier éditorial Instagram ---------------
+async function loadPersoPanel(){
+  const p=$('persopanel'); if(!p)return;
+  try{
+    const r=await api('/api/perso'); if(!r.ok){show(p,false);return;} // 403 = pas la propriétaire
+    const d=await r.json();
+    const posts=(d.posts||[]).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    const today=new Date().toISOString().slice(0,10);
+    const next=posts.find(x=>x.statut!=='Posté');
+    const jours=(dt)=>{const n=Math.round((new Date(dt)-new Date(today))/86400000);return n<0?(Math.abs(n)+' j de retard ⚠️'):(n===0?"aujourd'hui !":('dans '+n+' j'));};
+    const SC={'A faire':['#EFF2F2','#56666D','À faire'],'Préparé':['#FBEBDD','#C77F2A','🎬 Préparé'],'Posté':['#E4F0EA','#2C9087','✅ Posté']};
+    const hero=next?('<div style="background:#F5F3EE;border:1px solid #E4E0D5;border-radius:12px;padding:12px;margin-bottom:10px"><div class="fs">PROCHAINE PUBLICATION · '+esc(jours(next.date))+'</div>'
+      +'<div style="font-weight:800;font-size:15px;margin-top:2px">'+esc(next.titre)+'</div>'
+      +'<div class="fs" style="margin-top:2px">'+esc(fmtDate(next.date))+' · '+esc(next.format)+' · cover '+esc(next.cover||'?')+'</div></div>'):'<div class="state2" style="padding:8px">Tout est posté, calendrier à jour ✨</div>';
+    const rows=posts.map(x=>{const s=SC[x.statut]||SC['A faire'];
+      return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #EEF2F2'+(x.statut==='Posté'?';opacity:.55':'')+'">'
+        +'<span style="flex:0 0 58px;font-weight:700;font-size:12px">'+esc(fmtDate(x.date))+'</span>'
+        +'<span class="fs" style="flex:0 0 78px">'+esc(x.format)+'</span>'
+        +'<span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(x.titre)+'</span>'
+        +'<button class="lk pstat" data-id="'+esc(x.id)+'" title="Clique pour changer : À faire → Préparé → Posté" style="background:'+s[0]+';color:'+s[1]+';border:none;border-radius:10px;font-weight:700;font-size:11.5px;padding:3px 9px">'+s[2]+'</button></div>';
+    }).join('');
+    p.querySelector('#persobox').innerHTML=hero+rows
+      +'<div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap"><button class="lk pimp">📥 Importer un nouveau calendrier (Excel)</button><span class="fichemsg pimsg"></span></div>'
+      +'<div class="fs" style="margin-top:4px">Rappels automatiques dans ta to-do : 🎬 Préparer à J-2, 📱 Poster le jour J. Clique le statut pour le faire avancer.</div>';
+    p.querySelectorAll('.pstat').forEach(b=>b.onclick=async()=>{await api('/api/perso/'+encodeURIComponent(b.dataset.id)+'/statut',{method:'POST',body:'{}'});loadPersoPanel();});
+    const pi=p.querySelector('.pimp');
+    if(pi)pi.onclick=()=>{
+      const fi=document.createElement('input');fi.type='file';fi.accept='.xlsx,.xls';
+      fi.onchange=()=>{const f=fi.files&&fi.files[0];if(!f)return;
+        const rd=new FileReader();
+        rd.onload=async()=>{try{
+          await ensureXLSX();
+          const wb=XLSX.read(rd.result,{type:'array'});const ws=wb.Sheets[wb.SheetNames[0]];
+          const rows2=XLSX.utils.sheet_to_json(ws,{header:1,raw:false});
+          const hi=rows2.findIndex(r2=>(r2||[]).some(c=>/date sugg/i.test(String(c||''))));
+          if(hi<0){p.querySelector('.pimsg').textContent='Colonnes introuvables (il faut « Date suggeree », « Format », « Publication »…)';return;}
+          const H=rows2[hi].map(c=>String(c||'').toLowerCase());
+          const col=(re)=>H.findIndex(h=>re.test(h));
+          const ci={date:col(/date/),format:col(/format/),titre:col(/publication/),cover:col(/cover/),statut:col(/statut/)};
+          const posts2=rows2.slice(hi+1).map(r2=>({date:String(r2[ci.date]||'').slice(0,10),format:String(r2[ci.format]||''),titre:String(r2[ci.titre]||''),cover:String(r2[ci.cover]||''),statut:String(r2[ci.statut]||'A faire')})).filter(x=>/^\d{4}-\d{2}-\d{2}/.test(x.date)&&x.titre);
+          if(!posts2.length){p.querySelector('.pimsg').textContent='Aucune ligne de post lisible dans ce fichier';return;}
+          const r3=await api('/api/perso/set',{method:'POST',body:JSON.stringify({posts:posts2})});
+          if(r3.ok){loadPersoPanel();}else{p.querySelector('.pimsg').textContent='Erreur à l\'import, réessaie';}
+        }catch(e){p.querySelector('.pimsg').textContent='Fichier illisible, réessaie';}};
+        rd.readAsArrayBuffer(f);
+      };
+      fi.click();
+    };
+    show(p,true);
+  }catch(e){show(p,false);}
+}
+// --- Pense-bête weekly : vider sa tête entre deux réunions ------------------
+let WK_EDIT=null; // note en cours de modification (bouton ✎)
+async function loadWeeklyPanel(){
+  const p=$('weeklypanel'); if(!p||!VIEWER||VIEWER.role!=='supervisor')return;
+  try{
+    const r=await api('/api/weekly'); if(!r.ok)return;
+    const d=await r.json();
+    // Tâches extraites de la weekly en attente de validation (rien n'est créé sans relecture)
+    let PK=null; try{const rp=await api('/api/kickoff/pending'); if(rp.ok)PK=(await rp.json()).pending||null;}catch(e){}
+    const review=PK?('<div style="border:1px solid #E8DCA6;background:#FDF8E7;border-radius:12px;padding:12px;margin-bottom:12px">'
+      +'<div style="font-weight:800">📋 '+PK.taches.length+' tâche(s) extraites de « '+esc(PK.subject)+' »</div>'
+      +'<div class="fs" style="margin:2px 0 6px">Rien n\'est encore dans les to-do : relis, décoche ce qui ne va pas, puis valide.</div>'
+      +PK.taches.map((t,i)=>'<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid #F0E9CF"><input type="checkbox" class="kfk" data-i="'+i+'" checked style="width:16px;height:16px;flex:0 0 16px;margin-top:2px"><div style="flex:1;min-width:0">'+esc(t.tache)+' <b>→ '+esc(t.responsable||'?')+'</b>'+(t.marque?(' <span class="fs">· '+esc(t.marque)+'</span>'):'')+(t.echeance?(' <span class="fs">· 📅 '+esc(t.echeance)+'</span>'):'')+'</div></div>').join('')
+      +'<div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap"><button class="lk primary kfok">✅ Créer les tâches cochées dans les to-do</button><button class="lk kfno">🗑️ Tout ignorer</button><span class="fichemsg kfmsg"></span></div></div>'):'';
+    const items=(d.notes||[]).map(n=>'<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 2px;border-bottom:1px solid #EEF2F2">'
+      +'<input type="checkbox" class="wkdone" data-id="'+esc(n.id)+'" '+(n.done?'checked':'')+' style="width:16px;height:16px;flex:0 0 16px;margin-top:2px">'
+      +'<div style="flex:1;min-width:0'+(n.done?';text-decoration:line-through;color:#9AAAAA':'')+'">'+(n.who?'<b>'+esc(n.who)+'</b> · ':'')+esc(n.text)+' <span style="font-size:11px;color:#9AAAAA">'+esc(fnoteDate(n.at))+'</span>'
+      +((n.files&&n.files.length)||(n.links&&n.links.length)?('<div style="margin-top:3px">'
+        +(n.files||[]).map(f=>'<a class="lk" style="text-decoration:none" target="_blank" rel="noopener" href="/api/weekly/file/'+esc(f.id)+'" title="Ouvrir pour projeter pendant la weekly">📎 '+esc(f.filename)+' ↗</a>').join(' ')+' '
+        +(n.links||[]).map(l=>'<a class="lk" style="text-decoration:none" target="_blank" rel="noopener" href="'+esc(l.url)+'" title="'+esc(l.url)+'">🔗 '+esc(l.label||l.url.replace(/^https?:\/\/(www\.)?/,'').slice(0,40))+' ↗</a>').join(' ')
+        +'</div>'):'')
+      +'</div>'
+      +'<button class="lk wkatt" data-id="'+esc(n.id)+'" title="Joindre un fichier (visuel, export…) à projeter pendant la weekly">📎</button>'
+      +'<button class="lk wklink" data-id="'+esc(n.id)+'" title="Attacher un lien (drive, Notion, TikTok…)">🔗</button>'
+      +'<button class="lk wkedit" data-id="'+esc(n.id)+'" title="Modifier (texte ou destinataire)">✎</button>'
+      +'<button class="lk wkdel" data-id="'+esc(n.id)+'" title="Supprimer" style="color:#C2553B">✕</button></div>').join('');
+    p.querySelector('#weeklybox').innerHTML=review+(items||'<div class="state2" style="padding:8px">Un truc à dire lundi ? Note-le ici dès que ça te passe par la tête, et coche pendant la réunion. 🧠</div>')
+      +'<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap"><input id="wkwho" list="wkteam" placeholder="Pour qui ? (optionnel)" style="flex:0 0 130px"><datalist id="wkteam">'+(TEAM||[]).map(t=>'<option value="'+esc(t)+'">').join('')+'</datalist>'
+      +'<input id="wktext" placeholder="À dire à la weekly… (Entrée pour ajouter)" style="flex:1;min-width:160px"><button class="lk primary" id="wkadd">+ Noter</button></div>'
+      +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px;border-top:1px solid #EEF2F2;padding-top:9px"><button class="lk wkimport">📥 Importer le compte-rendu weekly (PDF) → tâches auto</button><span class="fichemsg wkimpmsg"></span></div>';
+    const add=async()=>{
+      const t=$('wktext').value.trim(); if(!t)return;
+      if(WK_EDIT) await api('/api/weekly/'+encodeURIComponent(WK_EDIT)+'/edit',{method:'POST',body:JSON.stringify({text:t,who:$('wkwho').value.trim()})});
+      else await api('/api/weekly',{method:'POST',body:JSON.stringify({text:t,who:$('wkwho').value.trim()})});
+      WK_EDIT=null; loadWeeklyPanel();
+    };
+    $('wkadd').onclick=add;
+    $('wktext').onkeydown=e=>{if(e.key==='Enter')add();};
+    // 📎 : joindre un fichier à une note (projeté en un clic pendant la weekly)
+    p.querySelectorAll('.wkatt').forEach(b=>b.onclick=()=>{
+      const fi=document.createElement('input'); fi.type='file';
+      fi.onchange=()=>{
+        const f=fi.files&&fi.files[0]; if(!f)return;
+        if(f.size>15*1024*1024){alert('Fichier trop lourd (15 Mo max)');return;}
+        b.textContent='⏳';
+        const rd=new FileReader();
+        rd.onload=async()=>{
+          const r=await api('/api/weekly/'+encodeURIComponent(b.dataset.id)+'/file',{method:'POST',body:JSON.stringify({filename:f.name,data:rd.result})});
+          if(r.ok)loadWeeklyPanel(); else{const dd=await r.json().catch(()=>({}));alert(dd.error||'Envoi impossible, réessaie');b.textContent='📎';}
+        };
+        rd.readAsDataURL(f);
+      };
+      fi.click();
+    });
+    // Validation des tâches extraites : créer les cochées / tout ignorer
+    const ko=p.querySelector('.kfok');
+    if(ko)ko.onclick=async()=>{
+      const keep=[...p.querySelectorAll('.kfk')].filter(c=>c.checked).map(c=>Number(c.dataset.i));
+      ko.textContent='⏳ Création…';
+      const r2=await api('/api/kickoff/confirm',{method:'POST',body:JSON.stringify({keep})});
+      const dd=await r2.json().catch(()=>({}));
+      if(r2.ok){loadWeeklyPanel();loadTodo();loadDirigeant();alert('✅ '+dd.created+' tâche(s) créée(s) dans les to-do'+(dd.skipped?(' · '+dd.skipped+' déjà présente(s), ignorée(s)'):'')+((dd.orphans||[]).length?(' · '+dd.orphans.length+' sans responsable (détail Slack)'):''));}
+      else{ko.textContent='✅ Créer les tâches cochées dans les to-do';p.querySelector('.kfmsg').textContent=dd.error||'Erreur, réessaie';}
+    };
+    const kn=p.querySelector('.kfno');
+    if(kn)kn.onclick=async()=>{if(!confirm('Ignorer toutes ces tâches extraites ?'))return;await api('/api/kickoff/discard',{method:'POST',body:'{}'});loadWeeklyPanel();};
+    // 📥 : importer le PDF de transcription Sembly → l'IA propose les tâches à valider
+    const wi=p.querySelector('.wkimport');
+    if(wi)wi.onclick=()=>{
+      const fi=document.createElement('input'); fi.type='file'; fi.accept='.pdf,application/pdf'; fi.id='wkimpfile';
+      fi.style.display='none'; document.body.appendChild(fi);
+      fi.onchange=()=>{
+        const f=fi.files&&fi.files[0]; if(!f)return;
+        if(f.size>15*1024*1024){alert('PDF trop lourd (15 Mo max)');return;}
+        wi.textContent='⏳ Lecture de la transcription et création des tâches…';
+        const rd=new FileReader();
+        rd.onload=async()=>{
+          try{
+            const r=await api('/api/kickoff/upload',{method:'POST',body:JSON.stringify({filename:f.name,data:rd.result})});
+            const dd=await r.json().catch(()=>({}));
+            if(r.ok){p.querySelector('.wkimpmsg').textContent='📋 Transcription lue : '+(dd.pending||0)+' tâche(s) à relire ci-dessus avant création';loadWeeklyPanel();}
+            else p.querySelector('.wkimpmsg').textContent=dd.error||'Erreur, réessaie';
+          }catch(e){p.querySelector('.wkimpmsg').textContent='Erreur réseau, réessaie';}
+          wi.textContent='📥 Importer le compte-rendu weekly (PDF) → tâches auto';
+          fi.remove();
+        };
+        rd.readAsDataURL(f);
+      };
+      fi.click();
+    };
+    // 🔗 : attacher un lien à une note (aussi projetable que la pièce jointe)
+    p.querySelectorAll('.wklink').forEach(b=>b.onclick=async()=>{
+      const url=prompt('Le lien à attacher (drive, Notion, TikTok…) :'); if(!url||!url.trim())return;
+      const label=prompt('Un petit nom pour ce lien ? (optionnel)')||'';
+      const r=await api('/api/weekly/'+encodeURIComponent(b.dataset.id)+'/link',{method:'POST',body:JSON.stringify({url:url.trim(),label:label.trim()})});
+      if(r.ok)loadWeeklyPanel(); else{const dd=await r.json().catch(()=>({}));alert(dd.error||'Lien invalide, réessaie');}
+    });
+    // ✎ : recharge la note dans les champs pour la corriger (ajouter le « pour qui » après coup, etc.)
+    p.querySelectorAll('.wkedit').forEach(b=>b.onclick=()=>{
+      const n=(d.notes||[]).find(x=>x.id===b.dataset.id); if(!n)return;
+      WK_EDIT=n.id; $('wkwho').value=n.who||''; $('wktext').value=n.text||'';
+      $('wkadd').textContent='✔ Enregistrer'; $('wktext').focus();
+    });
+    // Cocher = fait. Si la note a un « Pour qui ? », on propose de l'envoyer direct
+    // dans la to-do de la ou des personnes (« Rozenn et Najem » = une tâche chacun).
+    p.querySelectorAll('.wkdone').forEach(c=>c.onchange=async()=>{
+      const n=(d.notes||[]).find(x=>x.id===c.dataset.id);
+      // Note avec un « pour qui » : deux choix clairs, en ligne (pas de popup)
+      if(c.checked&&n&&!n.tasked&&(n.who||'').trim()){
+        const row=c.closest('div');
+        if(row.querySelector('.wkchoice'))return;
+        row.style.flexWrap='wrap';
+        const ch=document.createElement('div'); ch.className='wkchoice';
+        ch.style.cssText='flex-basis:100%;width:100%;display:flex;gap:8px;margin-top:7px;flex-wrap:wrap;align-items:center';
+        ch.innerHTML='<button class="lk primary wk_todo">📌 Mettre dans la to-do de '+esc(n.who)+'</button>'
+          +'<button class="lk wk_done">✅ C\'est dit, elle est informée</button>'
+          +'<span class="fichemsg wk_msg"></span>';
+        row.appendChild(ch);
+        ch.querySelector('.wk_todo').onclick=async()=>{
+          ch.querySelector('.wk_todo').textContent='⏳ …';
+          const r=await api('/api/weekly/'+encodeURIComponent(n.id)+'/totask',{method:'POST',body:'{}'});
+          const dd=await r.json().catch(()=>({}));
+          if(!r.ok){ch.querySelector('.wk_todo').textContent='📌 Mettre dans la to-do de '+n.who;ch.querySelector('.wk_msg').textContent=dd.error||'Erreur, réessaie';return;}
+          loadWeeklyPanel();loadDirigeant();
+        };
+        ch.querySelector('.wk_done').onclick=async()=>{await api('/api/weekly/'+encodeURIComponent(n.id)+'/done',{method:'POST',body:'{}'});loadWeeklyPanel();};
+        return; // on attend le choix
+      }
+      await api('/api/weekly/'+encodeURIComponent(c.dataset.id)+'/done',{method:'POST',body:'{}'});loadWeeklyPanel();
+    });
+    p.querySelectorAll('.wkdel').forEach(b=>b.onclick=async()=>{await api('/api/weekly/'+encodeURIComponent(b.dataset.id)+'/del',{method:'POST',body:'{}'});loadWeeklyPanel();});
+    show(p,true);
+  }catch(e){}
+}
 function overviewParam(){
   const isSup=VIEWER&&VIEWER.role==='supervisor';
+  if(isSup&&dirigeantMode()) return ''; // vue dirigeante : stats de TOUTE l'équipe (avec deltas vs hier)
   const v=isSup?cpSingle():null;
   if(isSup&&v) return '?view='+encodeURIComponent(v); // pilote → cale l'overview sur la personne choisie
   return tparam();
@@ -1159,6 +1738,7 @@ const FICHE_FIELDS=[
   ['objectifs','🎯 Objectifs en cours','Les objectifs de la collaboration en ce moment',1],
   ['iaNotes','🤖 Consignes pour l\'IA','Détails que l\'IA doit respecter dans ses réponses pour cette marque : ton, choses à ne jamais dire, spécificités produits, règles de dates, code promo à mentionner…',1],
   ['facturation','💶 Informations de facturation','ex. « Facture à adresser à Hyped Agency SAS, 12 rue…, TVA FR12… » ou « Facturer directement à la marque : compta@marque.com, Marque SAS, adresse… ». L\'IA recopie EXACTEMENT ces infos quand un créateur demande.',1],
+  ['budgetMensuel','📊 Budget mensuel (€)','ex. 3000 : alimente le suivi budget affiché sous la fiche',0],
   ['clientDepuis','🤝 Client depuis','ex. mars 2025',0],
   ['clientJusqua','⏳ Collaboration jusqu\'à','ex. déc. 2026, renouvellement à discuter',0],
   ['reunions','📅 Réunions régulières','ex. weekly jeudi 15h',0],
@@ -1289,8 +1869,47 @@ async function renderBrandDetail(brand,target){
   const fi=await getFiches();
   const f=(fi.brands||{})[brand]||{};
   det.innerHTML=ficheHTML(brand,f,fi.canEditBase)
+    +'<div id="budgetbox"></div>'
     +`<h4>🏷️ ${esc(brand)} · progression du pôle</h4><div class="bcgrid2"><div><div class="bcsub">À contacter (${profs.length})</div>${colA}</div><div><div class="bcsub">Contenus (${cols.length})</div>${colB}</div></div>`;
   wireFiche(det,brand,()=>renderBrandDetail(brand,target));
+  loadBudgetBox(brand,det);
+}
+// --- Suivi budget mensuel : camembert engagé/restant + export Excel client -----
+async function loadBudgetBox(brand,det,month){
+  const box=det.querySelector('#budgetbox'); if(!box)return;
+  box.innerHTML='<div class="state2" style="padding:8px">Chargement du suivi budget…</div>';
+  try{
+    const r=await api('/api/budget/'+encodeURIComponent(brand)+(month?('?month='+month):'')); const d=await r.json();
+    if(!r.ok){box.innerHTML='';return;}
+    const eur=(n)=>Number(n||0).toLocaleString('fr-FR')+' €';
+    const bm=d.budgetMensuel||0, tot=d.total||0, rest=bm-tot;
+    const pct=bm>0?Math.min(1,tot/bm):0;
+    const C=2*Math.PI*44;
+    const col=(bm>0&&tot>bm)?'#C2553B':'#2C9087';
+    const donut=bm>0?`<svg viewBox="0 0 110 110" style="width:118px;height:118px;flex:0 0 118px"><circle cx="55" cy="55" r="44" fill="none" stroke="#E8EEEE" stroke-width="14"/><circle cx="55" cy="55" r="44" fill="none" stroke="${col}" stroke-width="14" stroke-dasharray="${(C*pct).toFixed(1)} ${C.toFixed(1)}" stroke-linecap="round" transform="rotate(-90 55 55)"/><text x="55" y="52" text-anchor="middle" style="font-size:15px;font-weight:800;fill:#1C3A44">${Math.round(100*tot/bm)}%</text><text x="55" y="68" text-anchor="middle" style="font-size:9px;fill:#6A7A7A">engagé</text></svg>`:'';
+    box.innerHTML=`<div class="bcsub">📊 Suivi budget · <input type="month" id="bgmonth" value="${esc(d.month)}" style="width:auto;display:inline-block;font-size:12px;padding:2px 6px"> <button class="lk" id="bgexport" style="float:right">⬇️ Exporter en Excel (reporting client)</button></div>
+      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;padding:6px 0 12px">${donut}
+      <div style="flex:1;min-width:220px">
+        ${bm>0?`<div><b>${eur(tot)}</b> engagés sur <b>${eur(bm)}</b> de budget mensuel</div>
+        <div style="color:${rest<0?'#C2553B':'#2C9087'};font-weight:700;margin-top:2px">${rest<0?('⚠️ Dépassement de '+eur(-rest)):('Il reste '+eur(rest))}</div>`
+        :`<div><b>${eur(tot)}</b> engagés ce mois-ci.</div><div class="fs">Renseigne « 📊 Budget mensuel » dans la fiche (✏️ Modifier la fiche) pour voir le camembert et le restant.</div>`}
+        <div class="fs" style="margin-top:5px">${(d.entries||[]).length} collab(s) au calendrier ce mois-ci${d.noCal?' · <b>calendrier non branché pour cette marque</b>':''}. Les montants validés par mail sont inscrits automatiquement au calendrier par le copilote ; les ajouts à la main comptent pareil.</div>
+      </div></div>`;
+    const mi=box.querySelector('#bgmonth'); if(mi)mi.onchange=()=>loadBudgetBox(brand,det,mi.value);
+    const ex=box.querySelector('#bgexport'); if(ex)ex.onclick=async()=>{
+      ex.textContent='⏳ Préparation…';
+      try{
+        await ensureXLSX();
+        const rows=[['Créatrice / contenu','Date','Statut','Budget (€)']].concat((d.entries||[]).map(e=>[e.nom,e.date||'',e.statut||'',Number(e.budget)||0]));
+        rows.push([]);rows.push(['Total engagé','','',tot]);
+        if(bm>0){rows.push(['Budget mensuel','','',bm]);rows.push(['Restant','','',rest]);}
+        const ws=XLSX.utils.aoa_to_sheet(rows); ws['!cols']=[{wch:36},{wch:12},{wch:20},{wch:12}];
+        const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,('Budget '+d.month).slice(0,31));
+        XLSX.writeFile(wb,'Budget '+brand+' '+d.month+'.xlsx');
+      }catch(e){alert('Export impossible, réessaie.');}
+      ex.textContent='⬇️ Exporter en Excel (reporting client)';
+    };
+  }catch(e){box.innerHTML='';}
 }
 // ===== Vue Marques (menu latéral) : liste à gauche, fiche à droite =====
 let MQ_SELECTED=null;
@@ -1471,7 +2090,7 @@ async function loadCopilotBox(who){
         const who2=esc(disp), br=p.brand?(' · '+esc(p.brand)):'';
         const mailTag=(p.to&&nlow(p.to)!==nlow(disp))?(' <span class="cpmail">'+esc(p.to)+'</span>'):'';
         const quiTag=(p.creator||p.fromLabel)?(' · <a class="cpqui" data-qui="'+esc(disp)+'">👤 Qui c\'est ?</a>'):'';
-        const boxTag=p.cpName?(' · <span class="cptag">boîte '+esc(p.cpName)+'</span>'):'';
+        const boxTag=p.cpName?(' · <span class="cptag">'+(p.via&&p.via!==p.cpName?('🔁 suivi par '+esc(p.cpName)+' · via boîte '+esc(p.via)):('boîte '+esc(p.cpName)))+'</span>'):'';
         const head='<div class="cpwho"><b>'+who2+'</b>'+mailTag+br+boxTag+(p.categorie==='interne'?' · <span class="cptag">interne</span>':'')+quiTag+' · <a class="cpqui cpthread" data-id="'+esc(p.id)+'">📖 Voir le fil</a></div>'
           +(p.subject?('<div class="cpsubj">'+esc(p.subject)+'</div>'):'')
           +'<div class="cpthreadbox" style="display:none"></div>';
@@ -1994,15 +2613,38 @@ function renderTodo(tasks, showOwner, addFor){
     const chip=prio?'<span class="tchip prioc">Priorité</span>':'<span class="tchip todoc">À faire</span>';
     const own=(showOwner&&t.responsable)?`<span class="owner">${esc(t.responsable)}</span>`:'';
     const msg=/^contacter\s/i.test(t.task)?`<button class="lk todomsg" data-inf="${esc(infOf(t.task))}" data-brand="${esc(t.projet||'')}">✉️ Contacter</button>`:'';
+    const hasDet=(t.commentaire||'').trim();
     return `<div class="todo" data-id="${t.id}"><button class="tcheck" title="Cliquer = terminé ✓"></button>
-      <div class="info"><div class="t"><span class="ti-emoji">${taskIcon(t)}</span>${linkify(t.task)}</div><div class="s" style="${isLate?'color:#C2553B':''}">${meta.join(' · ')||'-'}</div></div>${msg}${own}${chip}</div>`;
+      <div class="info" title="Cliquer pour ajouter détails et échéance" style="cursor:pointer"><div class="t"><span class="ti-emoji">${taskIcon(t)}</span>${linkify(t.task)}${hasDet?' <span title="Cette tâche a des détails, clique pour les voir">📝</span>':''}</div><div class="s" style="${isLate?'color:#C2553B':''}">${meta.join(' · ')||'-'}</div></div>${msg}${own}${chip}</div>`;
   }).join('');
   $('todobox').innerHTML=add+rows;
+  window.TODO_BYID={}; tasks.forEach(t=>{TODO_BYID[t.id]=t;});
   NOTIF.late=late; NOTIF.lateItems=lateItems; updateBell();
   $('todobtn').onclick=addTask;
   $('todoinput').onkeydown=(e)=>{if(e.key==='Enter')addTask();};
   document.querySelectorAll('#todobox .tcheck').forEach(b=>b.onclick=()=>doneTask(b));
+  document.querySelectorAll('#todobox .todo .info').forEach(el=>el.onclick=()=>openTaskEdit(el.closest('.todo')));
   document.querySelectorAll('#todobox .todomsg').forEach(b=>b.onclick=(ev)=>{ev.stopPropagation();openCompose(b.closest('.todo'),{inf:b.dataset.inf,brand:b.dataset.brand,cp:(VIEWER&&VIEWER.name)||''});});
+}
+// Clic sur une tâche : petit éditeur inline pour les détails et la deadline
+function openTaskEdit(row){
+  const t=(window.TODO_BYID||{})[row.dataset.id]; if(!t)return;
+  const old=row.querySelector('.tedit'); if(old){old.remove();return;} // re-clic = referme
+  row.style.flexWrap='wrap';
+  const div=document.createElement('div'); div.className='tedit'; div.style.cssText='flex-basis:100%;width:100%;padding:8px 0 2px';
+  div.innerHTML='<textarea class="ted" placeholder="Détails, contexte, liens utiles…" style="min-height:56px;width:100%">'+esc(t.commentaire||'')+'</textarea>'
+    +'<div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap"><label style="font-size:12px;font-weight:600">📅 Échéance</label><input type="date" class="tdd" value="'+esc(t.echeance||'')+'" style="width:auto">'
+    +'<button class="lk primary tsave">✔ Enregistrer</button><button class="lk tcancel">Annuler</button>'
+    +(t.url?'<a class="lk" href="'+esc(t.url)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">Ouvrir dans Notion ↗</a>':'')+'</div>';
+  row.appendChild(div);
+  div.onclick=(e)=>e.stopPropagation();
+  div.querySelector('.tcancel').onclick=(e)=>{e.stopPropagation();div.remove();};
+  div.querySelector('.tsave').onclick=async(e)=>{
+    e.stopPropagation();
+    const b=div.querySelector('.tsave'); b.textContent='⏳ …';
+    const r=await api('/api/todos/'+encodeURIComponent(row.dataset.id)+'/edit',{method:'POST',body:JSON.stringify({details:div.querySelector('.ted').value,echeance:div.querySelector('.tdd').value})});
+    if(r.ok)loadTodo(); else b.textContent='Erreur, réessaie';
+  };
 }
 async function addTask(){
   const v=$('todoinput').value.trim(); if(!v)return;
@@ -2159,11 +2801,18 @@ function renderSourcing(profils){
     return `<div class="row" data-id="${p.id}"><span class="rdot" style="background:#C77F2A"></span>
       <div class="info"><div class="t">${linkify(p.task)}</div><div class="s">${sub}</div></div>
       ${p.projet?`<span class="brand">${esc(p.projet)}</span>`:''}${who}${link}
-      <button class="lk primary srcmsg">✍️ Message</button><button class="lk srcdone">Marquer comme contacté</button></div>`;
+      <button class="lk primary srcmsg">✍️ Message</button><button class="lk srcdone">Marquer comme contacté</button><button class="lk srcdel" title="Supprimer ce profil de la liste (corbeille Notion)" style="color:#C2553B">✕</button></div>`;
   }).join('');
   $('srcbox').innerHTML=add+rows;
   $('srcbtn').onclick=addProfil;
   $('srcprofil').onkeydown=(e)=>{if(e.key==='Enter')addProfil();};
+  document.querySelectorAll('#srcbox .srcdel').forEach(b=>b.onclick=async()=>{
+    const row=b.closest('.row');
+    if(!confirm('Supprimer ce profil de la liste « à contacter » ?'))return;
+    b.textContent='⏳';
+    const r=await api('/api/sourcing/'+encodeURIComponent(row.dataset.id)+'/delete',{method:'POST'});
+    if(r.ok){row.remove();}else{b.textContent='✕';alert('Suppression impossible, réessaie.');}
+  });
   document.querySelectorAll('#srcbox .srcdone').forEach(b=>b.onclick=()=>markContacted(b));
   document.querySelectorAll('#srcbox .srcmsg').forEach(b=>b.onclick=()=>openMessage(b));
   const si2=$('srcimport'); if(si2)si2.onclick=()=>$('srcfile').click();
