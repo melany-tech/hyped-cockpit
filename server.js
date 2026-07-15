@@ -2747,6 +2747,54 @@ app.post("/api/kickoff/upload", auth, async (req, res) => {
 function nrmName(s) { return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim(); }
 setInterval(kickoffTick, 15 * 60 * 1000); // toutes les 15 min : le récap tombe peu après la fin de la réunion
 setTimeout(kickoffTick, 30 * 1000);
+// ===== Perso branding de Mélany : calendrier éditorial Instagram ==============
+// Son calendrier de posts vit sur le disque privé ; les rappels tombent tout
+// seuls dans sa to-do : « Préparer » à J-2, « Poster » le jour J.
+const PERSO_STORE = path.join(DATA_DIR, "persoIG.json");
+const PERSO_OWNER = (process.env.PERSO_OWNER || "melany@hyped-agency.fr").toLowerCase();
+function loadPerso() { try { return JSON.parse(fs.readFileSync(PERSO_STORE, "utf8")); } catch (e) { return { posts: [] }; } }
+function savePerso(o) { try { fs.writeFileSync(PERSO_STORE, JSON.stringify(o, null, 2)); } catch (e) {} }
+function persoOnly(req, res) { if (String(req.user.email || "").toLowerCase() !== PERSO_OWNER) { res.status(403).json({ error: "réservé à la propriétaire du compte" }); return false; } return true; }
+app.get("/api/perso", auth, (req, res) => { if (!persoOnly(req, res)) return; res.json(loadPerso()); });
+app.post("/api/perso/set", auth, (req, res) => {
+  if (!persoOnly(req, res)) return;
+  const posts = Array.isArray(req.body?.posts) ? req.body.posts.slice(0, 100) : null;
+  if (!posts) return res.status(400).json({ error: "posts manquants" });
+  const o = loadPerso();
+  o.posts = posts.map((p) => ({
+    id: String(p.id || crypto.randomBytes(4).toString("hex")),
+    date: String(p.date || "").slice(0, 10), format: String(p.format || "").slice(0, 40),
+    titre: String(p.titre || "").slice(0, 140), cover: String(p.cover || "").slice(0, 30),
+    statut: ["A faire", "Préparé", "Posté"].includes(p.statut) ? p.statut : "A faire",
+    prepTask: !!p.prepTask, postTask: !!p.postTask,
+  })).filter((p) => p.date && p.titre);
+  savePerso(o); res.json({ ok: true, n: o.posts.length });
+});
+app.post("/api/perso/:id/statut", auth, (req, res) => {
+  if (!persoOnly(req, res)) return;
+  const o = loadPerso(); const p = (o.posts || []).find((x) => x.id === req.params.id);
+  if (!p) return res.status(404).json({ error: "post introuvable" });
+  const cycle = ["A faire", "Préparé", "Posté"];
+  p.statut = cycle[(cycle.indexOf(p.statut) + 1) % cycle.length];
+  savePerso(o); res.json({ ok: true, statut: p.statut });
+});
+async function persoTick() {
+  try {
+    if (!notion || DEMO) return;
+    const o = loadPerso(); let changed = false;
+    const today = new Date().toISOString().slice(0, 10);
+    const j2 = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
+    for (const p of o.posts || []) {
+      if (!p.date || p.statut === "Posté") continue;
+      const mk = async (title, due) => { await notion.pages.create({ parent: { database_id: TASKS_DB }, properties: { "Tâche": { title: [{ text: { content: title.slice(0, 200) } }] }, "Type": { select: { name: "Autre" } }, "Statut": { select: { name: "À faire" } }, "Responsable": { select: { name: "Mélany" } }, "Échéance": { date: { start: due } } } }); };
+      if (!p.prepTask && p.date <= j2) { await mk("🎬 Préparer le post IG « " + p.titre + " » (" + p.format + ", cover " + (p.cover || "?") + ")", today); p.prepTask = true; changed = true; }
+      if (!p.postTask && p.date <= today) { await mk("📱 Poster sur Instagram : « " + p.titre + " »", p.date); p.postTask = true; changed = true; }
+    }
+    if (changed) { savePerso(o); invalidateTasksCache(); }
+  } catch (e) { try { console.error("[perso]", e.message); } catch (e2) {} }
+}
+setInterval(persoTick, 60 * 60 * 1000);
+setTimeout(persoTick, 45 * 1000);
 // --- Hypedbot en direct : envoie un lien en DM Slack, la tâche est créée -------
 // Remplace le chatbot Make. Analyse DÉTERMINISTE (lien + nom de marque + prénom de CP
 // tels quels, aucune devinette IA) et confirmation explicite. S'il manque une info,

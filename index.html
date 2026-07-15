@@ -687,6 +687,11 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
       <p class="pt"><span class="pi">🧠</span> À dire à la weekly</p>
       <div id="weeklybox"></div>
     </section>
+    <!-- Perso branding de Mélany : calendrier éditorial Instagram (visible par elle seule) -->
+    <section class="panel hidden" id="persopanel">
+      <p class="pt"><span class="pi">📱</span> Mon perso branding · Instagram</p>
+      <div id="persobox"></div>
+    </section>
     <section class="panel" id="fillpanel">
       <p class="pt"><span class="pi">📊</span> Remplissage des calendriers</p>
       <div id="alertsbox"></div>
@@ -767,7 +772,7 @@ function setupChrome(){
   showView('cockpit');
 }
 const VIEW_MAP={ profils:['srcpanel','brandpanel'], contenus:['listpanel','brandpanel','fillpanel'], messages:['mailpanel'] };
-const ALL_BLOCKS=['onbpanel','statcards','agendapanel','todopanel','pipelinepanel','dirpanel','brandpanel','weeklypanel','fillpanel','srcpanel','listpanel','mailpanel'];
+const ALL_BLOCKS=['onbpanel','statcards','agendapanel','todopanel','pipelinepanel','dirpanel','brandpanel','weeklypanel','persopanel','fillpanel','srcpanel','listpanel','mailpanel'];
 function navGo(a){ document.querySelectorAll('.sb-nav .nav').forEach(x=>x.classList.toggle('on',x===a)); showView(a.dataset.go); }
 function navToView(v){ const a=[...document.querySelectorAll('.sb-nav .nav')].find(x=>x.dataset.go===v); if(a)navGo(a); else showView(v); }
 function statCardGo(act){
@@ -1205,7 +1210,7 @@ async function load(){
   loadTodo();
   loadOnboarding();      // parcours d'arrivée (nouvelles) + suivi superviseures
   loadOverview();        // pipeline + vue par marque + indicateurs
-  if(isSup){loadDirigeant();loadWeeklyPanel();} // vue dirigeante : équipe + pense-bête weekly
+  if(isSup){loadDirigeant();loadWeeklyPanel();loadPersoPanel();} // vue dirigeante : équipe + weekly + perso branding
   loadSourcing();
   loadMail();
   loadDrafts();
@@ -1314,7 +1319,7 @@ function cpSingle(){ const p=cpSelParts(); return p.length===1?p[0]:null; }
 // contacter, mails créateurs, pipeline…) réapparaissent dès qu'elle choisit une CP ou l'équipe.
 function dirigeantMode(){ if(!VIEWER||VIEWER.role!=='supervisor')return false; const p=cpSelParts(); return p.length===1&&nlow(p[0])===nlow(VIEWER.name); }
 const DIRIGEANT_HIDE=['srcpanel','mailpanel','pipelinepanel','brandpanel','listpanel'];
-const DIRIGEANT_ONLY=['dirpanel','weeklypanel'];
+const DIRIGEANT_ONLY=['dirpanel','weeklypanel','persopanel'];
 function renderCpChips(){
   const box=$('cpchips'); if(!box)return;
   const me=VIEWER.name, parts=cpSelParts();
@@ -1365,6 +1370,57 @@ async function loadDirigeant(){
     });
     show(p,true);
   }catch(e){}
+}
+// --- Perso branding de Mélany : calendrier éditorial Instagram ---------------
+async function loadPersoPanel(){
+  const p=$('persopanel'); if(!p)return;
+  try{
+    const r=await api('/api/perso'); if(!r.ok){show(p,false);return;} // 403 = pas la propriétaire
+    const d=await r.json();
+    const posts=(d.posts||[]).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    const today=new Date().toISOString().slice(0,10);
+    const next=posts.find(x=>x.statut!=='Posté');
+    const jours=(dt)=>{const n=Math.round((new Date(dt)-new Date(today))/86400000);return n<0?(Math.abs(n)+' j de retard ⚠️'):(n===0?"aujourd'hui !":('dans '+n+' j'));};
+    const SC={'A faire':['#EFF2F2','#56666D','À faire'],'Préparé':['#FBEBDD','#C77F2A','🎬 Préparé'],'Posté':['#E4F0EA','#2C9087','✅ Posté']};
+    const hero=next?('<div style="background:#F5F3EE;border:1px solid #E4E0D5;border-radius:12px;padding:12px;margin-bottom:10px"><div class="fs">PROCHAINE PUBLICATION · '+esc(jours(next.date))+'</div>'
+      +'<div style="font-weight:800;font-size:15px;margin-top:2px">'+esc(next.titre)+'</div>'
+      +'<div class="fs" style="margin-top:2px">'+esc(fmtDate(next.date))+' · '+esc(next.format)+' · cover '+esc(next.cover||'?')+'</div></div>'):'<div class="state2" style="padding:8px">Tout est posté, calendrier à jour ✨</div>';
+    const rows=posts.map(x=>{const s=SC[x.statut]||SC['A faire'];
+      return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #EEF2F2'+(x.statut==='Posté'?';opacity:.55':'')+'">'
+        +'<span style="flex:0 0 58px;font-weight:700;font-size:12px">'+esc(fmtDate(x.date))+'</span>'
+        +'<span class="fs" style="flex:0 0 78px">'+esc(x.format)+'</span>'
+        +'<span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(x.titre)+'</span>'
+        +'<button class="lk pstat" data-id="'+esc(x.id)+'" title="Clique pour changer : À faire → Préparé → Posté" style="background:'+s[0]+';color:'+s[1]+';border:none;border-radius:10px;font-weight:700;font-size:11.5px;padding:3px 9px">'+s[2]+'</button></div>';
+    }).join('');
+    p.querySelector('#persobox').innerHTML=hero+rows
+      +'<div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap"><button class="lk pimp">📥 Importer un nouveau calendrier (Excel)</button><span class="fichemsg pimsg"></span></div>'
+      +'<div class="fs" style="margin-top:4px">Rappels automatiques dans ta to-do : 🎬 Préparer à J-2, 📱 Poster le jour J. Clique le statut pour le faire avancer.</div>';
+    p.querySelectorAll('.pstat').forEach(b=>b.onclick=async()=>{await api('/api/perso/'+encodeURIComponent(b.dataset.id)+'/statut',{method:'POST',body:'{}'});loadPersoPanel();});
+    const pi=p.querySelector('.pimp');
+    if(pi)pi.onclick=()=>{
+      const fi=document.createElement('input');fi.type='file';fi.accept='.xlsx,.xls';
+      fi.onchange=()=>{const f=fi.files&&fi.files[0];if(!f)return;
+        const rd=new FileReader();
+        rd.onload=async()=>{try{
+          await ensureXLSX();
+          const wb=XLSX.read(rd.result,{type:'array'});const ws=wb.Sheets[wb.SheetNames[0]];
+          const rows2=XLSX.utils.sheet_to_json(ws,{header:1,raw:false});
+          const hi=rows2.findIndex(r2=>(r2||[]).some(c=>/date sugg/i.test(String(c||''))));
+          if(hi<0){p.querySelector('.pimsg').textContent='Colonnes introuvables (il faut « Date suggeree », « Format », « Publication »…)';return;}
+          const H=rows2[hi].map(c=>String(c||'').toLowerCase());
+          const col=(re)=>H.findIndex(h=>re.test(h));
+          const ci={date:col(/date/),format:col(/format/),titre:col(/publication/),cover:col(/cover/),statut:col(/statut/)};
+          const posts2=rows2.slice(hi+1).map(r2=>({date:String(r2[ci.date]||'').slice(0,10),format:String(r2[ci.format]||''),titre:String(r2[ci.titre]||''),cover:String(r2[ci.cover]||''),statut:String(r2[ci.statut]||'A faire')})).filter(x=>/^\d{4}-\d{2}-\d{2}/.test(x.date)&&x.titre);
+          if(!posts2.length){p.querySelector('.pimsg').textContent='Aucune ligne de post lisible dans ce fichier';return;}
+          const r3=await api('/api/perso/set',{method:'POST',body:JSON.stringify({posts:posts2})});
+          if(r3.ok){loadPersoPanel();}else{p.querySelector('.pimsg').textContent='Erreur à l\'import, réessaie';}
+        }catch(e){p.querySelector('.pimsg').textContent='Fichier illisible, réessaie';}};
+        rd.readAsArrayBuffer(f);
+      };
+      fi.click();
+    };
+    show(p,true);
+  }catch(e){show(p,false);}
 }
 // --- Pense-bête weekly : vider sa tête entre deux réunions ------------------
 let WK_EDIT=null; // note en cours de modification (bouton ✎)
