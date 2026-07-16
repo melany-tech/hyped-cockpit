@@ -2347,6 +2347,23 @@ app.get("/api/quickmeta", auth, (req, res) => {
   const cps = USERS.map((u) => u.name);
   res.json({ brands, cps, me: req.user.name });
 });
+// Import en masse : une seule notif Slack récapitulative par CP (90 s après le dernier ajout),
+// pour éviter 30 pings d'affilée quand Mélany importe une shortlist entière.
+const SRC_DIGEST = {};
+function queueSourcingDigest(cpName, brand, byName) {
+  const k = normName(cpName);
+  const d = (SRC_DIGEST[k] = SRC_DIGEST[k] || { count: 0, brands: new Set(), timer: null });
+  d.count++; d.brands.add(brand); d.by = byName; d.cpName = cpName;
+  if (d.timer) clearTimeout(d.timer);
+  d.timer = setTimeout(async () => {
+    delete SRC_DIGEST[k];
+    try {
+      const cpEmail = emailOf(d.cpName);
+      const su = cpEmail ? (COPILOT.slackIds[cpEmail] || "") : "";
+      if (su) await copilotNotify({ slackUser: su, text: "🔎 " + d.count + " nouveau(x) profil(s) à contacter pour *" + [...d.brands].join(", ") + "* (ajoutés par " + d.by + "). Ils sont dans ton onglet Profils, messages d'approche prêts." });
+    } catch (e) {}
+  }, 90 * 1000);
+}
 app.post("/api/sourcing", auth, async (req, res) => {
   if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
   const profil = String(req.body?.profil || "").trim();
@@ -2378,12 +2395,19 @@ app.post("/api/sourcing", auth, async (req, res) => {
       }
     } catch (e) { console.warn("auto-draft", e.message); }
     logActivity({ type: "profil_ajoute", creator: String(profil).replace(/^contacter\s+/i, "").trim(), brand: req.body?.marque || null, cp: resp || null });
-    // notify=true (ajout express) : on prévient la CP assignée sur Slack, en direct (0 crédit Make)
+    // Notif Slack : par DEFAUT on prévient la CP dès qu'un profil est ajouté pour quelqu'un d'autre
+    // (cockpit, ajout express, peu importe). Ajout unitaire = notif immédiate ;
+    // import en masse (noDraft) = une seule notif récapitulative via queueSourcingDigest.
     try {
-      if (req.body?.notify && resp) {
-        const cpEmail2 = emailOf(resp);
-        const su = cpEmail2 ? (COPILOT.slackIds[cpEmail2] || "") : "";
-        if (su) await copilotNotify({ slackUser: su, text: "🔎 Nouveau profil à contacter pour *" + (req.body?.marque || "?") + "* : " + profil + " (ajouté par " + req.user.name + "). Il est dans ton onglet Profils, message d'approche prêt." });
+      const forOther = resp && normName(resp) !== normName(req.user.name);
+      const explicit = req.body?.notify;
+      if (resp && (explicit === true || (explicit === undefined && forOther))) {
+        if (req.body?.noDraft) queueSourcingDigest(resp, req.body?.marque || "?", req.user.name);
+        else {
+          const cpEmail2 = emailOf(resp);
+          const su = cpEmail2 ? (COPILOT.slackIds[cpEmail2] || "") : "";
+          if (su) await copilotNotify({ slackUser: su, text: "🔎 Nouveau profil à contacter pour *" + (req.body?.marque || "?") + "* : " + profil + " (ajouté par " + req.user.name + "). Il est dans ton onglet Profils, message d'approche prêt." });
+        }
       }
     } catch (e) {}
     res.json({ ok: true, id: pg.id, draft });
