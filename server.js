@@ -1740,6 +1740,8 @@ async function copilotTick() {
           // Purge des fausses décisions « interne » créées sur des fils de collab (bug corrigé) : on classe sans bruit.
           // Et une question interne qui attend plus de 12 h est périmée de toute façon : on classe aussi.
           if (w.categorie === "interne" && (w.brand || (Date.now() - w.at) > 12 * 3600 * 1000)) { w.status = "handled"; w.decidedAt = Date.now(); continue; }
+          // Cartes créées par erreur sur des notifications automatiques (Notion...) : on les classe
+          if (/@mail\.notion\.so|no-?reply|notifications?@|calendar-notification|@slack\.com/.test(String(w.to || "").toLowerCase())) { w.status = "handled"; w.decidedAt = Date.now(); continue; }
           if (tt[w.threadId]) { w.status = "handled"; w.decidedAt = Date.now(); continue; } // traité dans le cockpit : on classe sans bruit
           const own = await gm.lastReplyFromMe(email, w.threadId);
           if (own && own > w.at) {
@@ -1753,6 +1755,15 @@ async function copilotTick() {
       }
       for (const m of (r && r.creatorReplies) || []) {
         if (!m.threadId) continue;
+        // Robots (Notion, no-reply, agendas, Slack...) : on ne répond JAMAIS à une notification automatique
+        const fromL = String(m.from || "").toLowerCase();
+        if (/@mail\.notion\.so|no-?reply|notifications?@|mailer-daemon|calendar-notification|@docs\.google\.com|@slack\.com|drive-shares/.test(fromL)) {
+          const dupN = store.proposals.find((x) => x.cpEmail === email && x.threadId === m.threadId && (x.status === "pending" || x.status === "ready" || x.status === "proposed"));
+          if (dupN) { dupN.status = "handled"; dupN.decision = "notification automatique : rien à répondre"; }
+          continue;
+        }
+        // Réaction emoji Gmail (« X a réagi depuis Gmail ») : pas un vrai message, rien à répondre
+        if (/a r[ée]agi depuis gmail|reacted (to|with)/i.test(String(m.snippet || ""))) continue;
         // Doublon de boîte (voir isOtherCpMail) : la conversation appartient à une autre CP.
         if (isOtherCpMail(email, m)) {
           const dup = store.proposals.find((x) => x.cpEmail === email && x.threadId === m.threadId && (x.status === "pending" || x.status === "ready"));
