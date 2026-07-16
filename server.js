@@ -836,6 +836,25 @@ const CP_VOICE = {
     "Belle journée,",
     "Prunelle",
   ].join("\n"),
+  rozenn: [
+    "Hello Chloé 🤍",
+    "Et avant toute chose, toutes mes excuses pour mon précédent mail, j'ai mélangé mes échanges et je me suis trompée de prénom. 🙈",
+    "Merci encore pour l'envoi ! On a fait un dernier tour du contenu et on aurait juste quelques petits ajustements :",
+    "Sur la story, il faudrait retirer la partie où tu mentionnes l'eczéma. D'un point de vue réglementaire (DGCCRF), il n'est malheureusement pas possible de faire le lien entre le produit et l'eczéma, car cela pourrait être considéré comme une allégation non autorisée. On préfère donc supprimer cette partie pour éviter tout risque.",
+    "Dans la caption, pourrais-tu ajouter le tag de @Doucéa ?",
+    "Est-ce que tu pourrais également nous partager la cover prévue pour le Reel ?",
+    "Une fois ces petits points ajustés, ce sera tout bon de notre côté. 🤍",
+    "Merci beaucoup ✨",
+    "",
+    "--- Autre exemple réel de Rozenn (passation du fil à une collègue) ---",
+    "Hello Eva 🤍",
+    "Merci beaucoup pour l'envoi de la caption, et encore merci pour ta réactivité ! ✨",
+    "Je reviens vers toi dans la journée avec une confirmation sur l'ensemble du contenu. 😊",
+    "Ensuite, je te passerai entre les mains Amena, notre super cheffe de projet, qui est de retour. Elle prendra le relais pour la suite de la campagne et t'accompagnera jusqu'à la mise en ligne.",
+    "Et bien sûr, je ne disparais pas pour autant ! Je reste en backup si tu as la moindre question ou le moindre besoin, ce sera toujours un plaisir d'échanger avec toi. 🤍",
+    "À très vite, et encore merci !",
+    "Rozenn",
+  ].join("\n"),
 };
 function cpVoiceFor(cp) { return CP_VOICE[normName(cp || "").split(" ")[0]] || ""; }
 async function claudeReply({ cp, creator, brand, category, received, subject, transcript, directive, planning, brandNotes, brandInfo, profileNote, draft, rework }) {
