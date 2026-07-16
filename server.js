@@ -820,7 +820,25 @@ async function profileNoteFor(creator) {
     return hit && hit.commentaire ? String(hit.commentaire).slice(0, 500) : "";
   } catch (e) { return ""; }
 }
-async function claudeReply({ cp, creator, brand, category, received, subject, transcript, directive, planning, brandNotes, brandInfo, profileNote }) {
+// Voix personnelle de chaque CP : un mail réel jugé « parfait » par l'équipe, que l'IA
+// imite en PRIORITÉ quand elle écrit au nom de cette CP (par-dessus la voix Kendia générique).
+const CP_VOICE = {
+  prunelle: [
+    "Hello ! 🤍",
+    "J'espère que tu vas bien !",
+    "Je me présente, je suis Prunelle, cheffe de projet chez Hyped Agency.",
+    "Je me permets de te contacter au sujet d'In Haircare, une marque française spécialisée dans le soin des cheveux texturés. Depuis 2019, elle accompagne les cheveux bouclés, frisés et crépus avec des produits fabriqués en France, pensés pour révéler la beauté naturelle de chaque texture. ✨",
+    "J'adore ton univers et l'énergie que tu transmets à ta communauté. Je trouve qu'ils résonnent parfaitement avec les valeurs de la marque, c'est pourquoi j'ai tout de suite pensé à toi pour cette campagne.",
+    "Ce que nous recherchons avant tout, c'est un contenu authentique qui te ressemble : partager ton expérience, montrer comment tu intègres la routine dans ton quotidien, raconter ton ressenti et laisser parler ta créativité. L'objectif n'est pas de réciter un script, mais de créer un contenu naturel auquel ta communauté pourra s'identifier.",
+    "Dans l'idéal, nous aimerions réaliser un Reel Instagram/TikTok, accompagné d'un set de stories. Nous restons bien entendu ouverts à tes idées créatives pour que le contenu reflète pleinement ton univers.",
+    "Nous partons principalement sur une approche en gifting, avec l'envoi de la routine complète afin que tu puisses réellement la tester. Si tu fonctionnes uniquement sur des collaborations rémunérées, n'hésite pas à me partager tes modalités et tes tarifs afin que nous puissions en discuter ensemble.",
+    "J'espère que cette collaboration te plaira et j'ai hâte d'avoir ton retour ! 🤍",
+    "Belle journée,",
+    "Prunelle",
+  ].join("\n"),
+};
+function cpVoiceFor(cp) { return CP_VOICE[normName(cp || "").split(" ")[0]] || ""; }
+async function claudeReply({ cp, creator, brand, category, received, subject, transcript, directive, planning, brandNotes, brandInfo, profileNote, draft, rework }) {
   const hasOpenAI = !!process.env.OPENAI_API_KEY, hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
   if (!hasOpenAI && !hasAnthropic) return { ok: false, reason: "nokey" };
   // On s'adresse aux créateurs par leur PRÉNOM, jamais par leur nom complet / pseudo (« Juliette », pas « Juliette DTR »)
@@ -874,6 +892,7 @@ async function claudeReply({ cp, creator, brand, category, received, subject, tr
     "[Reçu] preview (vidéo + photos) → [Kendia] 'Hello [prénom],\\nJ'ai bien reçu ta preview, merci beaucoup pour l'envoi ! La vidéo est vraiment très chouette 🥰\\nDeux petits ajustements : pour les photos avant/après, penses-tu pouvoir me les renvoyer avec une meilleure luminosité et en faisant le focus uniquement sur le produit ? Et on essaie d'éviter les formats trop \"unboxing\", on préfère un angle avant/après plus centré sur l'effet 🤍\\nDis-moi ce que tu en penses, je reste dispo 😊\\nTrès belle journée,\\n[prénom CP]'",
     "[Reçu] caption + photo de couverture proposées → [Kendia] 'Hello [prénom] 😊\\nDe notre côté tout est validé pour la vidéo, merciii beaucoup à toi 🫶 Pour la caption c'est OK aussi : peux-tu juste ajouter le hashtag #[marque] et le @[compte agence] à la fin, et identifier la marque au moment où tu en parles ? Ensuite tu peux poster ✨\\nMerci beaucoup et très bonne journée,\\n[prénom CP]'",
     "Note : face à un créateur qui pousse / n'est pas d'accord, reste comme Kendia : 'Je comprends totalement ton point de vue', on valide en interne et on revient avec un retour. Jamais de bras de fer.",
+    (() => { const v = cpVoiceFor(cp); return v ? ("\nEXEMPLE RÉEL d'un mail écrit par " + cp + " ELLE-MÊME, jugé parfait par l'équipe : quand tu écris en son nom, imite en PRIORITÉ sa voix, ses tournures et sa structure (par-dessus la voix Kendia) :\n\"\"\"\n" + v + "\n\"\"\"") : ""; })(),
     "",
     "CAS PARTICULIERS :",
     "• CAMPAGNE TikTok + WHITELISTING : après publication, on demande le code pub. Étapes à donner : 'Ouvre TikTok → la vidéo → les trois petits points ••• → \"Activer les autorisations de pub\" → choisis une durée de 3 mois → copie le code whitelisting et envoie-le-moi 🫶'. Quand le créateur envoie le code : 'Merci beaucoup pour le code, bien reçu 😊'. Si l'identification de l'agence apparaît sur la vidéo et n'est pas nécessaire : 'est-ce que tu pourrais enlever l'identification de l'agence sur la vidéo ? Ce n'est pas nécessaire vu le format de la collab :)'.",
@@ -902,6 +921,8 @@ async function claudeReply({ cp, creator, brand, category, received, subject, tr
     planning ? ("PLANNING de la marque (publications déjà calées sur les prochaines semaines) :\n" + planning) : "",
     planning ? "RÈGLE DATES : si le mail concerne une date de publication (caler, décaler, confirmer), privilégie un MARDI, MERCREDI ou JEUDI, dans une semaine où moins de 3 jours sont déjà couverts (objectif : au moins 3 jours différents remplis par semaine). Si la date proposée par le créateur respecte déjà ces règles, valide-la simplement. Sinon, reste souple : accepte le principe mais suggère la meilleure date proche ('est-ce que le jeudi 23 t'irait ?'), sans jamais imposer ni mentionner l'existence d'un planning interne." : "",
     directive ? ("DIRECTIVE DE LA CHEFFE DE PROJET (décision prise, à appliquer absolument, avec tact et dans la voix Hyped) : " + directive) : "",
+    draft ? ("BROUILLON PRÉCÉDENT (celui que la CP veut retravailler) :\n\"\"\"\n" + String(draft).slice(0, 3000) + "\n\"\"\"") : "",
+    rework ? ("CONSIGNE DE REFORMULATION DE LA CHEFFE DE PROJET (PRIORITÉ ABSOLUE : applique-la VRAIMENT et intégralement, quitte à changer le ton, la longueur ou la structure ; le résultat doit être sensiblement différent du brouillon, ne rends JAMAIS le même texte) : " + rework) : "",
     "Rédige la réponse de " + (cp || "la CP") + ".",
   ].filter(Boolean).join("\n");
   // priorité au fournisseur explicite (REPLY_PROVIDER), sinon OpenAI si présent, sinon Anthropic
@@ -1980,6 +2001,19 @@ async function copilotExecute(id, action, text) {
       } catch (e) {}
       return { code: 200, title: "C'est fait ! 🎉", msg: "La réponse est partie chez " + (p.creator || p.to) + ", depuis la boîte de " + p.cpName + ", signature comprise. Le mail est marqué traité dans le cockpit." };
     }
+    if (action === "rework") {
+      // 🪄 La CP dit COMMENT reformuler (« plus court », « moins d'emojis », « propose un appel »...)
+      const consigne = String(text || "").trim().slice(0, 1000);
+      if (!consigne) return { code: 400, title: "Consigne vide ✍️", msg: "Dis-moi comment reformuler (ex. « plus court et moins d'emojis », « propose plutôt un appel »)." };
+      if (!p.reply) return { code: 400, title: "Pas de brouillon", msg: "Il n'y a pas encore de réponse rédigée à reformuler sur ce fil." };
+      let transcript2 = "";
+      try { const full2 = await gm.fetchThreadText(p.cpEmail, p.threadId); if (full2 && full2.ok) transcript2 = full2.transcript || full2.text || ""; } catch (e) {}
+      let planning2 = ""; try { planning2 = planningForBrand(await fetchRows(), p.brand); } catch (e) {}
+      const rep2 = await claudeReply({ cp: p.cpName, creator: p.creator, brand: p.brand, category: "réponse", received: p.resume, subject: p.subject, transcript: transcript2, planning: planning2, brandNotes: brandNotesFor(p.brand), brandInfo: brandInfoFor(p.brand), profileNote: await profileNoteFor(p.creator), draft: p.reply, rework: consigne });
+      if (!rep2 || !rep2.ok) return { code: 500, title: "IA indisponible 💤", msg: "Impossible de reformuler là tout de suite, réessaie dans un instant." };
+      p.reply = rep2.body; p.reworkedAt = Date.now(); saveCopilot(store);
+      return { code: 200, title: "Reformulé ✨", msg: "Réponse réécrite selon ta consigne. Relis, redemande une retouche si besoin, et envoie quand c'est bon." };
+    }
     if (action === "accept" || action === "refuse" || action === "directive") {
       let directive;
       if (action === "directive") {
@@ -2060,7 +2094,7 @@ app.get("/api/copilot/thread", auth, async (req, res) => {
 app.post("/api/copilot/act", auth, async (req, res) => {
   if (!COPILOT.enabled) return res.status(400).json({ error: "copilote désactivé" });
   const { id, action, text } = req.body || {};
-  if (!id || !["send", "accept", "refuse", "self", "directive", "seen"].includes(String(action))) return res.status(400).json({ error: "action inconnue" });
+  if (!id || !["send", "accept", "refuse", "self", "directive", "seen", "rework"].includes(String(action))) return res.status(400).json({ error: "action inconnue" });
   const store = loadCopilot();
   const p = (store.proposals || []).find((x) => x.id === String(id));
   if (!p) return res.status(404).json({ error: "proposition introuvable" });
