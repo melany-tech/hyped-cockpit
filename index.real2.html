@@ -1861,7 +1861,7 @@ async function loadCeoPanel(){
     const fcol=(lbl,n,c)=>'<div style="flex:1;min-width:0;text-align:center;padding:9px 4px;border-right:1px solid #F0F1F6"><div class="fs" style="font-size:10.5px">'+lbl+'</div><div style="font-weight:800;font-size:21px;color:'+c+'">'+n+'</div></div>';
     const crmH='<div class="bgd-card" style="height:100%"><div class="bgd-h">🧭 Suivi commercial <span class="cpsub" style="float:right">ce mois</span></div>'
       +'<div style="display:flex;border:1px solid #F0F1F6;border-radius:12px;margin:8px 0;overflow:hidden">'+fcol('Leads entrants',nLead,'#2E9E6B')+fcol('Propositions',nProp,'#4C3BB8')+fcol('Négociation',nNego,'#C77F2A')+fcol('Closing',nClose,'#2E9E6B').replace('border-right:1px solid #F0F1F6','')+'</div>'
-      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">'
+      +'<div style="width:100%;display:grid;grid-template-columns:1fr 1fr;gap:9px">'
       +'<div style="border:1px solid #F0F1F6;border-radius:12px;padding:10px"><div class="fs" style="font-size:11px">Chiffre d\'affaires prévisionnel</div><div style="font-weight:800;font-size:18px">'+eur(crmStats.pipeline)+'</div><div class="fs">pipeline actif</div></div>'
       +'<div style="border:1px solid #F0F1F6;border-radius:12px;padding:10px"><div class="fs" style="font-size:11px">Actions à relancer</div><div style="font-weight:800;font-size:18px">'+nRel+'</div><div class="fs">prochaine(s) action(s) notée(s)</div></div>'
       +'</div>'
@@ -1876,7 +1876,7 @@ async function loadCeoPanel(){
     const CELL='padding:9px 0;border-bottom:1px solid #F0F1F6;display:flex;align-items:center;min-width:0';
     const HCELL='padding:7px 0;border-bottom:1px solid #F0F1F6';
     const pjH='<div class="bgd-card" style="height:100%"><div class="bgd-h">📋 Suivi projets équipe</div>'
-      +'<div style="display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr) max-content max-content 14px;column-gap:9px;align-items:center">'
+      +'<div style="width:100%;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr) max-content max-content 14px;column-gap:9px;align-items:center">'
       +'<span class="fs" style="'+HCELL+'">Projet / Client</span><span class="fs" style="'+HCELL+'">Responsable</span><span class="fs" style="'+HCELL+'">Statut</span><span class="fs" style="'+HCELL+'">Échéance</span><span style="'+HCELL+'"></span>'
       +buds.map(d=>{const s=stB2(d);const nd=nextDate(d);
         return '<span class="ceogo" data-go="projets" style="'+CELL+';cursor:pointer"><b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(d.brand)+'</b></span>'
@@ -1890,11 +1890,11 @@ async function loadCeoPanel(){
     const AVC=['#6D5AE0','#E8865D','#2C9087','#B98A12','#4A7FB5'];
     const chCol=(c)=>c>100?'#D4483B':(c>=85?'#C77F2A':(c>=70?'#B98A12':'#2E9E6B'));
     const rhH='<div class="bgd-card" style="height:100%"><div class="bgd-h">👥 RH & équipe <a class="lk ceogo" data-go="rh" style="float:right">Voir la fiche équipe complète →</a></div>'
-      +'<div style="display:grid;grid-template-columns:1fr 1.4fr;gap:9px;margin:8px 0">'
+      +'<div style="width:100%;display:grid;grid-template-columns:1fr 1.4fr;gap:9px;margin:8px 0">'
       +'<div style="border:1px solid #F0F1F6;border-radius:12px;padding:10px"><div class="fs" style="font-size:11px">Effectif</div><div style="font-weight:800;font-size:20px">'+((dg&&dg.members)?dg.members.length+1:'·')+'</div><div class="fs">toi comprise</div></div>'
       +'<div style="border:1px solid #F0F1F6;border-radius:12px;padding:10px"><div class="fs" style="font-size:11px">Capacité restante équipe</div><div style="font-weight:800;font-size:20px">'+band+' %</div><div class="ceobar" style="margin-top:5px"><div style="width:'+(100-band)+'%;background:'+chCol(100-band)+'"></div></div></div>'
       +'</div>'
-      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:8px">'
+      +'<div style="width:100%;display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:8px">'
       +'<div class="ceogo" data-go="rh" style="border:1px solid #F0F1F6;border-radius:12px;padding:10px;cursor:pointer"><div class="fs" style="font-size:11px">🏖️ Congés en attente</div><div style="font-weight:800;font-size:18px">'+absP.length+'</div><div class="fs">demande(s)</div></div>'
       +'<div class="ceogo" data-go="projets" style="border:1px solid #F0F1F6;border-radius:12px;padding:10px;cursor:pointer"><div class="fs" style="font-size:11px">⚠️ À risque surcharge</div><div style="font-weight:800;font-size:18px">'+surcharge+'</div><div class="fs">collaborateur(s)</div></div>'
       +'</div>'
@@ -1909,7 +1909,7 @@ async function loadCeoPanel(){
       +'<a class="lk ceogo" data-go="messages" style="border:none;background:none;padding:8px 0 0;color:'+V+';font-weight:700;font-size:12.5px">Voir toutes les décisions →</a></div>';
     const consoP=(d)=>{const bm=d.budgetMensuel||0,tot=d.total||0;return bm?Math.min(100,Math.round(100*tot/bm)):null;};
     const mkH='<div class="bgd-card" style="height:100%"><div class="bgd-h">🏷️ Marques & comptes <a class="lk ceogo" data-go="budget" style="float:right">Voir tout →</a></div>'
-      +'<div style="display:grid;grid-template-columns:minmax(0,1.15fr) max-content minmax(84px,1fr);column-gap:12px;align-items:center">'
+      +'<div style="width:100%;display:grid;grid-template-columns:minmax(0,1.15fr) max-content minmax(84px,1fr);column-gap:12px;align-items:center">'
       +'<span class="fs" style="'+HCELL+'">Marque</span><span class="fs" style="'+HCELL+';text-align:right">Budget restant</span><span class="fs" style="'+HCELL+'">Conso.</span>'
       +buds.map(d=>{const pc=consoP(d);const bm=d.budgetMensuel||0;const col=pc===null?'#C9CED4':(pc>=90?'#D4483B':(pc>=80?'#E8933A':'#2E9E6B'));
         return '<span class="ceogo" data-go="budget" style="'+CELL+';cursor:pointer"><b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(d.brand)+'</b></span>'
@@ -1939,7 +1939,7 @@ async function loadCeoPanel(){
       +(lastPaid.length?lastPaid.map(x=>'<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #F0F1F6"><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px">'+esc(x.nom)+'</span><span class="fs">'+dmy(x.date).slice(0,5)+'</span><b style="white-space:nowrap">'+eur(x.montant)+'</b></div>').join(''):'<div class="fs" style="padding:8px 0">visibles dès que Pennylane est branché</div>')
       +'<a class="lk ceogo" data-go="budget" style="border:none;background:none;padding:8px 0 0;color:'+V+';font-weight:700;font-size:12.5px">Voir le détail →</a></div>';
     const caCard='<div class="bgd-card" style="margin-bottom:14px"><div class="bgd-h">📈 Évolution du CA encaissé <span class="cpsub">12 derniers mois · factures payées (HT)</span></div>'
-      +'<div style="display:grid;grid-template-columns:minmax(0,2.2fr) minmax(220px,1fr);gap:18px;align-items:start;margin-top:6px">'+ '<div style="min-width:0">'+chartH+'</div>'+encH+'</div></div>';
+      +'<div style="width:100%;display:grid;grid-template-columns:minmax(0,2.2fr) minmax(220px,1fr);gap:18px;align-items:start;margin-top:6px">'+ '<div style="min-width:0">'+chartH+'</div>'+encH+'</div></div>';
     // ---------- assistant IA (conservé : c'est ta barre d'action) ----------
     window.CEO_CHAT=window.CEO_CHAT||[];
     const iaH='<div class="bgd-card" id="ceobriefcard" style="margin-bottom:14px"><div class="bgd-h">🤖 Assistant IA données réelles <span class="cpsub">· clique une recommandation pour ouvrir sa source</span></div>'
