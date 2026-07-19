@@ -560,7 +560,7 @@ function rhLeave(o, name) { // congés payés VALIDÉS de l'année en cours (cli
     const du = a.du > y0 ? a.du : y0, au = a.au < y1 ? a.au : y1;
     if (au >= du) taken += rhWorkDays(du, au);
   });
-  const quota = Number(((o.quotas || {})[normName(name)])) || RH_DEFAULT_QUOTA;
+  const quota = Number(((o.quotas || {})[normName(name)])) || Number((o.quotas || {}).__default) || RH_DEFAULT_QUOTA;
   return { quota, taken, left: quota - taken };
 }
 app.get("/api/rh", auth, (req, res) => {
@@ -575,6 +575,9 @@ app.get("/api/rh", auth, (req, res) => {
     absences: abs.slice().sort((a, b) => String(b.du).localeCompare(String(a.du))),
     docs: docs.slice().sort((a, b) => (b.at || 0) - (a.at || 0)),
     leave, year: new Date().getFullYear(),
+    quotaDefault: Number((o.quotas || {}).__default) || RH_DEFAULT_QUOTA,
+    teamCount: USERS.filter((u) => !COPILOT.departed.includes(String(u.email).toLowerCase()) && normName(u.name) !== "kendia").length,
+    members: USERS.filter((u) => !COPILOT.departed.includes(String(u.email).toLowerCase()) && normName(u.name) !== "kendia").map((u) => u.name),
     team: sup ? USERS.filter((u) => u.role !== "supervisor").map((u) => u.name) : [] });
 });
 app.post("/api/rh/absence", auth, async (req, res) => {
@@ -616,7 +619,7 @@ app.post("/api/rh/quota", auth, (req, res) => {
   if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
   const who = String(req.body?.who || ""); const days = Number(req.body?.days);
   if (!who || !(days >= 0 && days <= 60)) return res.status(400).json({ error: "quota invalide (0 à 60 jours)" });
-  const o = loadRh(); o.quotas = o.quotas || {}; o.quotas[normName(who)] = days; saveRh(o);
+  const o = loadRh(); o.quotas = o.quotas || {}; o.quotas[who === "__default" ? "__default" : normName(who)] = days; saveRh(o);
   res.json({ ok: true });
 });
 app.post("/api/rh/doc", auth, async (req, res) => {
