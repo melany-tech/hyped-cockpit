@@ -657,6 +657,134 @@ app.post("/api/rh/doc/:fid/del", auth, (req, res) => {
   try { fs.unlinkSync(path.join(RH_DIR, String(req.params.fid).replace(/[^a-f0-9]/g, ""))); } catch (e) {}
   res.json({ ok: true });
 });
+// --- Cockpit CEO : finances saisies (v1), roadmap annuelle, arbitrages, brief IA ---
+// V1 du brief produit de Mélany (19/07). Les chiffres financiers sont SAISIS À LA MAIN
+// et datés (jamais inventés) ; Pennylane arrivera en V2. Stocké sur le disque persistant.
+const CEO_STORE = path.join(DATA_DIR, "ceo.json");
+function loadCeo() { try { return JSON.parse(fs.readFileSync(CEO_STORE, "utf8")); } catch (e) { return { treso: null, ca: null, roadmap: [], arbitrages: [] }; } }
+function saveCeo(o) { try { fs.writeFileSync(CEO_STORE, JSON.stringify(o, null, 2)); } catch (e) {} }
+const ARB_TYPES = ["Validation", "Budget", "Prestataire", "Recrutement", "Client sensible", "Autre"];
+const RM_AXES = ["Offre & positionnement", "Croissance & acquisition", "Excellence opérationnelle", "Équipe & recrutement", "Rentabilité & finance", "Marque & contenu"];
+const RM_STATUTS = ["À venir", "En cours", "À risque", "Bloqué", "Terminé"];
+app.get("/api/ceo", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  const o = loadCeo();
+  res.json({ ok: true, treso: o.treso || null, ca: o.ca || null,
+    roadmap: o.roadmap || [], axes: RM_AXES, rmStatuts: RM_STATUTS, arbTypes: ARB_TYPES,
+    arbitrages: (o.arbitrages || []).filter((a) => a.statut === "en attente").sort((a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999")) });
+});
+app.post("/api/ceo/config", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  const o = loadCeo();
+  if (req.body?.treso !== undefined) {
+    const v = Number(req.body.treso);
+    if (!(v >= -10000000 && v < 100000000)) return res.status(400).json({ error: "montant invalide" });
+    o.treso = { amount: v, at: Date.now(), by: req.user.name, source: "saisie manuelle" };
+  }
+  if (req.body?.ca !== undefined || req.body?.objectif !== undefined) {
+    const prev = o.ca || {};
+    const enc = req.body?.ca !== undefined ? Number(req.body.ca) : prev.encaisse;
+    const obj = req.body?.objectif !== undefined ? Number(req.body.objectif) : prev.objectif;
+    if (!(enc >= 0) || !(obj >= 0)) return res.status(400).json({ error: "montants invalides" });
+    o.ca = { encaisse: enc, objectif: obj, periode: String(req.body?.periode || prev.periode || "année"), at: Date.now(), by: req.user.name, source: "saisie manuelle (encaissé uniquement)" };
+  }
+  saveCeo(o); res.json({ ok: true });
+});
+// Roadmap annuelle : initiatives par trimestre et par axe, gérées par la direction
+app.post("/api/ceo/roadmap", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  const o = loadCeo(); o.roadmap = o.roadmap || [];
+  const b = req.body || {};
+  if (b.del) { o.roadmap = o.roadmap.filter((x) => x.id !== String(b.del)); saveCeo(o); return res.json({ ok: true }); }
+  if (b.id) { // mise à jour (statut, progression…)
+    const it = o.roadmap.find((x) => x.id === String(b.id));
+    if (!it) return res.status(404).json({ error: "initiative introuvable" });
+    if (b.statut && RM_STATUTS.includes(b.statut)) it.statut = b.statut;
+    if (b.progression !== undefined) it.progression = Math.max(0, Math.min(100, Number(b.progression) || 0));
+    if (b.nom) it.nom = String(b.nom).slice(0, 140);
+    if (b.next !== undefined) it.next = String(b.next || "").slice(0, 200);
+    saveCeo(o); return res.json({ ok: true });
+  }
+  const nom = String(b.nom || "").trim();
+  if (!nom) return res.status(400).json({ error: "nom manquant" });
+  const it = { id: crypto.randomBytes(6).toString("hex"), q: ["Q1", "Q2", "Q3", "Q4"].includes(b.q) ? b.q : "Q3",
+    axe: RM_AXES.includes(b.axe) ? b.axe : RM_AXES[0], nom: nom.slice(0, 140),
+    resp: String(b.resp || req.user.name).slice(0, 40), cible: String(b.cible || "").slice(0, 20),
+    statut: RM_STATUTS.includes(b.statut) ? b.statut : "À venir", progression: 0, next: String(b.next || "").slice(0, 200), at: Date.now() };
+  o.roadmap.push(it); saveCeo(o); res.json({ ok: true, id: it.id });
+});
+// Arbitrages CEO : TOUTE l'équipe peut escalader une décision à la direction
+app.post("/api/ceo/arbitrage", auth, async (req, res) => {
+  const sujet = String(req.body?.sujet || "").trim();
+  if (!sujet) return res.status(400).json({ error: "sujet manquant" });
+  const o = loadCeo(); o.arbitrages = o.arbitrages || [];
+  const a = { id: crypto.randomBytes(6).toString("hex"), type: ARB_TYPES.includes(req.body?.type) ? req.body.type : "Autre",
+    sujet: sujet.slice(0, 200), projet: String(req.body?.projet || "").slice(0, 80),
+    montant: Number(req.body?.montant) || 0, deadline: /^\d{4}-\d{2}-\d{2}$/.test(String(req.body?.deadline || "")) ? req.body.deadline : "",
+    impact: String(req.body?.impact || "").slice(0, 300), par: req.user.name, parEmail: req.user.email, statut: "en attente", at: Date.now() };
+  o.arbitrages.push(a); saveCeo(o);
+  try {
+    for (const u of USERS.filter((x) => x.role === "supervisor")) {
+      const su = rhSlackTo(u.email);
+      if (su && normName(u.name) !== normName(req.user.name)) await copilotNotify({ slackUser: su, text: "⚖️ Arbitrage demandé par *" + a.par + "* (" + a.type + (a.projet ? " · " + a.projet : "") + ") : " + a.sujet + (a.montant ? " · " + a.montant + " €" : "") + (a.deadline ? " · pour le " + dmyFr(a.deadline) : "") + ". À trancher dans le Cockpit CEO." });
+    }
+  } catch (e) {}
+  res.json({ ok: true, id: a.id });
+});
+app.post("/api/ceo/arbitrage/:id/decide", auth, async (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  const o = loadCeo(); const a = (o.arbitrages || []).find((x) => x.id === req.params.id);
+  if (!a) return res.status(404).json({ error: "introuvable" });
+  const d = String(req.body?.decision || "");
+  if (!["valide", "refuse", "precisions"].includes(d)) return res.status(400).json({ error: "décision inconnue" });
+  if (d === "precisions") {
+    const q = String(req.body?.comment || "").slice(0, 300);
+    try { const su = rhSlackTo(a.parEmail); if (su) await copilotNotify({ slackUser: su, text: "💬 " + req.user.name + " a besoin de précisions sur ton arbitrage « " + a.sujet + " »" + (q ? " : " + q : "") + ". Réponds-lui puis renvoie la demande si besoin." }); } catch (e) {}
+    return res.json({ ok: true });
+  }
+  a.statut = d === "valide" ? "validé" : "refusé"; a.decidedBy = req.user.name; a.decidedAt = Date.now();
+  if (req.body?.comment) a.comment = String(req.body.comment).slice(0, 300);
+  saveCeo(o);
+  try { const su = rhSlackTo(a.parEmail); if (su) await copilotNotify({ slackUser: su, text: (d === "valide" ? "✅ Arbitrage validé" : "❌ Arbitrage refusé") + " par " + req.user.name + " : « " + a.sujet + " »" + (a.comment ? " · " + a.comment : "") + "." }); } catch (e) {}
+  res.json({ ok: true });
+});
+// Brief IA quotidien : synthèse des DONNÉES EXISTANTES uniquement, avec cache 1 h
+let CEO_BRIEF_CACHE = { at: 0, text: "" };
+app.get("/api/ceo/brief", auth, async (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  if (Date.now() - CEO_BRIEF_CACHE.at < 3600000 && CEO_BRIEF_CACHE.text && !req.query.force) return res.json({ ok: true, text: CEO_BRIEF_CACHE.text, at: CEO_BRIEF_CACHE.at });
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const o = loadCeo(); const rhO = loadRh(); const cop = loadCopilot();
+    const tasks = DEMO ? [] : await fetchAllTasks();
+    const faits = [];
+    const arb = (o.arbitrages || []).filter((a) => a.statut === "en attente");
+    if (arb.length) faits.push(arb.length + " arbitrage(s) en attente : " + arb.map((a) => a.sujet + (a.montant ? " (" + a.montant + " €)" : "")).slice(0, 5).join(" ; "));
+    const dec = (cop.proposals || []).filter((p) => p.categorie === "decision" && p.status === "pending");
+    if (dec.length) faits.push(dec.length + " décision(s) copilote en attente : " + dec.map((p) => p.question || p.resume).slice(0, 4).join(" ; "));
+    const absP = (rhO.absences || []).filter((a) => a.statut === "en attente");
+    if (absP.length) faits.push(absP.length + " demande(s) de congés à valider : " + absP.map((a) => a.who + " du " + dmyFr(a.du) + " au " + dmyFr(a.au)).join(" ; "));
+    for (const u of USERS.filter((x) => !COPILOT.departed.includes(String(x.email).toLowerCase()) && normName(x.name) !== "kendia")) {
+      const mine = tasks.filter((t) => t.statut !== "Fait" && normName(t.responsable) === normName(u.name));
+      const late = mine.filter((t) => t.echeance && t.echeance < today);
+      if (late.length >= 3) faits.push(u.name + " a " + late.length + " tâches en retard (" + late.slice(0, 3).map((t) => t.task).join(" ; ") + ")");
+      const absNow = (rhO.absences || []).find((x) => x.statut === "validée" && normName(x.who) === normName(u.name) && x.du <= today && today <= x.au);
+      if (absNow) faits.push(u.name + " est absente (" + absNow.type + ") jusqu'au " + dmyFr(absNow.au));
+    }
+    try {
+      for (const b of ["In Haircare", "Doucéa", "Curls Matter", "LIVA"]) {
+        const bd = await budgetForBrand(b, new Date().toISOString().slice(0, 7));
+        if (bd && bd.budgetMensuel > 0 && bd.total >= 0.8 * bd.budgetMensuel) faits.push(b + " a consommé " + Math.round(100 * bd.total / bd.budgetMensuel) + " % de son budget mensuel (" + bd.total + " € / " + bd.budgetMensuel + " €)");
+      }
+    } catch (e) {}
+    if (!faits.length) { CEO_BRIEF_CACHE = { at: Date.now(), text: "Rien d'urgent aujourd'hui : pas d'arbitrage ni de décision en attente, pas de retard critique, budgets sous contrôle. Profites-en pour avancer sur la roadmap ✨" }; return res.json({ ok: true, text: CEO_BRIEF_CACHE.text, at: CEO_BRIEF_CACHE.at }); }
+    const sys = "Tu es l'assistante de direction de Mélany (agence Hyped). À partir des FAITS fournis (et RIEN d'autre : n'invente aucun chiffre), écris un brief matinal en français : 3 à 6 phrases courtes, priorités d'abord, ton direct et chaleureux, sans tiret quadratin, sans liste à puces.";
+    const out = process.env.OPENAI_API_KEY ? await callOpenAI(sys, faits.join("\n"), 600) : (process.env.ANTHROPIC_API_KEY ? await callAnthropic(sys, faits.join("\n"), 600) : null);
+    const text = (out && out.ok) ? out.body : ("À traiter aujourd'hui : " + faits.slice(0, 5).join(" · "));
+    CEO_BRIEF_CACHE = { at: Date.now(), text };
+    res.json({ ok: true, text, at: CEO_BRIEF_CACHE.at, faits });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 app.get("/api/alerts", auth, async (req, res) => {
   // Remplissage des calendriers : visible par TOUTES les CP (plus seulement le pilote).
   if (DEMO) return res.json({ monthLabel: "juillet 2026", minDays: MIN_DAYS, fill: [
@@ -1374,6 +1502,34 @@ app.post("/api/budget/:brand/add", auth, async (req, res) => {
     res.json({ ok: true, id: pg.id });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// Instantané budget d'une marque (total engagé du mois, TBC inclus) : sert au brief IA CEO
+async function budgetForBrand(brand, month) {
+  const fiche = (loadBrandFiches() || {})[brand] || {};
+  const budgetMensuel = parseFloat(String(fiche.budgetMensuel || "").replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
+  const cfg = BUDGET_CALS[nrmName(brand)];
+  if (!notion || DEMO || !cfg) return { budgetMensuel, total: 0 };
+  const lastDay = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
+  let total = 0, cursor;
+  do {
+    const r = await notion.databases.query({ database_id: cfg.dbId, start_cursor: cursor, page_size: 100,
+      filter: { and: [
+        { property: cfg.dateProp, date: { on_or_after: month + "-01" } },
+        { property: cfg.dateProp, date: { on_or_before: month + "-" + String(lastDay).padStart(2, "0") } },
+      ] } });
+    r.results.forEach((pg) => { total += Number((pg.properties || {})["Budget"]?.number || 0); });
+    cursor = r.has_more ? r.next_cursor : null;
+  } while (cursor);
+  if (month === new Date().toISOString().slice(0, 7)) {
+    let cursor2;
+    do {
+      const r2 = await notion.databases.query({ database_id: cfg.dbId, start_cursor: cursor2, page_size: 100,
+        filter: { property: cfg.dateProp, date: { is_empty: true } } });
+      r2.results.forEach((pg) => { total += Number((pg.properties || {})["Budget"]?.number || 0); });
+      cursor2 = r2.has_more ? r2.next_cursor : null;
+    } while (cursor2);
+  }
+  return { budgetMensuel, total };
+}
 app.get("/api/budget/:brand", auth, async (req, res) => {
   try {
     const brand = String(req.params.brand || "").trim();
