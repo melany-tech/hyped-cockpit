@@ -1004,7 +1004,7 @@ app.get("/api/rh/fiches", auth, (req, res) => {
       const today = new Date().toISOString().slice(0, 10);
       const absNow = (o.absences || []).find((a) => a.statut === "validée" && normName(a.who) === normName(u.name) && a.du <= today && today <= a.au) || null;
       return { name: u.name, role: u.role === "supervisor" ? "direction" : (u.role === "team" ? "social média" : "cheffe de projet"),
-        email: u.email, tel: pr.tel || "", iban: pr.iban || "", notes: pr.notes || "",
+        email: u.email, tel: pr.tel || "", iban: pr.iban || "", notes: pr.notes || "", arrivee: pr.arrivee || "",
         conges: lv, docs: (o.docs || []).filter((x) => normName(x.who) === normName(u.name)).length,
         absence: absNow ? { type: absNow.type, au: absNow.au } : null };
     });
@@ -1019,6 +1019,7 @@ app.post("/api/rh/profil", auth, (req, res) => {
   if (req.body?.tel !== undefined) pr.tel = String(req.body.tel).slice(0, 30);
   if (req.body?.iban !== undefined) pr.iban = String(req.body.iban).replace(/[^A-Za-z0-9 ]/g, "").slice(0, 40);
   if (req.body?.notes !== undefined) pr.notes = String(req.body.notes).slice(0, 500);
+  if (req.body?.arrivee !== undefined) pr.arrivee = String(req.body.arrivee).slice(0, 20);
   saveRh(o); res.json({ ok: true });
 });
 app.get("/api/alerts", auth, async (req, res) => {

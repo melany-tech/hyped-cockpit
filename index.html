@@ -871,7 +871,7 @@ async function renderFinanceView(){
       const nomsM=['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
       const xl=moisKeys.map((k,i)=>(i%2===0)?('<text x="'+(padL+i*st2).toFixed(1)+'" y="'+(h-6)+'" font-size="10" fill="#9AA3AC" text-anchor="middle">'+nomsM[Number(k.slice(5,7))-1]+'</text>'):'').join('');
       const yl=[0,0.5,1].map(f=>'<text x="'+(padL-8)+'" y="'+(padT+ih-f*ih+3).toFixed(1)+'" font-size="10" fill="#9AA3AC" text-anchor="end">'+(Math.round(mx*f/1000))+' k€</text><line x1="'+padL+'" y1="'+(padT+ih-f*ih).toFixed(1)+'" x2="'+(padL+iw)+'" y2="'+(padT+ih-f*ih).toFixed(1)+'" stroke="#F0F1F6"/>').join('');
-      chartH='<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto;display:block">'+yl+'<path d="'+area+'" fill="#EEEBFB" opacity="0.6"/><polyline points="'+pts+'" fill="none" stroke="'+V+'" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>'+serie.map((v,i)=>{const q=P(v,i);return '<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="3" fill="'+V+'"/>';}).join('')+xl+'</svg>';
+      chartH='<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto;display:block">'+yl+'<path d="'+area+'" fill="#EEEBFB" opacity="0.6"/><polyline points="'+pts+'" fill="none" stroke="'+V+'" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>'+serie.map((v,i)=>{const q=P(v,i);const nm=nomsM[Number(moisKeys[i].slice(5,7))-1]+' '+moisKeys[i].slice(2,4);return '<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="3" fill="'+V+'"/><circle class="pltip" data-tip="'+nm+' : '+eur(v)+'" cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="15" fill="transparent" style="cursor:pointer"/>';}).join('')+xl+'</svg>';
     } else {
       chartH='<div style="text-align:center;padding:30px 10px"><div style="font-size:36px">📈</div><div style="font-weight:700;margin-top:8px">La courbe du CA s\'affichera dès la connexion Pennylane</div><div class="fs" style="margin-top:6px">12 derniers mois, factures clients réellement payées (HT).</div></div>';
     }
@@ -889,6 +889,15 @@ async function renderFinanceView(){
       +'<div id="plkeymsg" style="margin-top:8px"></div>'
       +'<div class="fs" style="margin-top:8px">🛡️ Ta clé est stockée uniquement sur le disque sécurisé du serveur : jamais dans le code, jamais réaffichée ici. Pour la générer : Pennylane → Paramètres → Connectivité → Développeurs → « Générer un Token API ».</div></div>';
     bx.innerHTML=kpis+caCard+connH;
+    const tipOn=(root)=>{
+      let tb=document.getElementById('pltipbox');
+      if(!tb){tb=document.createElement('div');tb.id='pltipbox';tb.style.cssText='position:fixed;z-index:120;pointer-events:none;background:#1F2430;color:#fff;font-size:12.5px;font-weight:700;font-family:inherit;padding:7px 11px;border-radius:9px;box-shadow:0 4px 14px rgba(0,0,0,.28);display:none;white-space:nowrap';document.body.appendChild(tb);}
+      root.querySelectorAll('.pltip').forEach(el=>{
+        el.addEventListener('mousemove',(e)=>{tb.textContent=el.dataset.tip;tb.style.display='block';tb.style.left=(e.clientX+14)+'px';tb.style.top=(e.clientY-34)+'px';});
+        el.addEventListener('mouseleave',()=>{tb.style.display='none';});
+      });
+    };
+    tipOn(bx);
     const bg=$('plkeygo'); if(bg)bg.onclick=async()=>{
       const inp=$('plkeyin'); const k=inp?inp.value.trim():''; if(!k){if(inp)inp.focus();return;}
       bg.disabled=true; bg.textContent='Connexion…';
@@ -1177,18 +1186,32 @@ async function renderRhView(){
     basH='<div class="bgd-grid" style="grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);margin-top:14px">'+chargeH+rhBloc+'</div>';
   }
   const fiches=(fi&&fi.fiches)||[];
-  const fichesH=fiches.length?('<div class="bgd-card" style="margin-top:14px"><div class="bgd-h">🗂️ '+(sup?'Fiches équipe':'Ma fiche')+' <span class="cpsub">coordonnées, RIB, congés · stockées sur le disque sécurisé du cockpit</span></div>'
-    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:8px">'
-    +fiches.map((f,i)=>'<div style="border:1px solid #EDF0F2;border-radius:14px;padding:13px">'
-      +'<div style="display:flex;align-items:center;gap:9px">'+avatar(f.name,i)+'<div style="min-width:0"><b>'+esc(f.name)+'</b><div class="fs">'+esc(f.role)+'</div></div>'
-      +(f.absence?('<span class="bgd-badge" style="margin-left:auto;background:#F5EFE2;color:#B98A12">🏖️ → '+dmy(f.absence.au)+'</span>'):'')
-      +'<a class="lk" data-rhfedit="'+esc(f.name)+'" style="margin-left:'+(f.absence?'6px':'auto')+'">✎</a></div>'
-      +'<div class="fs" style="margin-top:8px">✉️ '+esc(f.email)+'</div>'
-      +'<div class="fs">📞 '+(f.tel?esc(f.tel):'<span style="opacity:.5">à renseigner</span>')+'</div>'
-      +'<div class="fs">🏦 '+(f.iban?esc(f.iban):'<span style="opacity:.5">RIB à renseigner</span>')+'</div>'
-      +'<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'+badge('congés : '+f.conges.left+' / '+f.conges.quota,'#E7F5EC','#1F8A5D')+badge(f.docs+' document(s)','#EDE9FC','#4C3BB8')+'</div>'
-      +(f.notes?('<div class="fs" style="margin-top:7px">📝 '+esc(f.notes)+'</div>'):'')
-      +'</div>').join('')+'</div></div>'):'';
+  window.RH_FICHE_SEL=window.RH_FICHE_SEL||'';
+  if(!fiches.some(f=>f.name===window.RH_FICHE_SEL))window.RH_FICHE_SEL=(fiches[0]&&fiches[0].name)||'';
+  const fsel=fiches.find(f=>f.name===window.RH_FICHE_SEL)||null;
+  const dureeTxt=(d)=>{ if(!d)return ''; const t2=new Date(d); if(isNaN(t2))return ''; const m=Math.max(0,Math.round((Date.now()-t2.getTime())/2592000000)); return m>=12?('il y a '+Math.floor(m/12)+' an(s)'+(m%12?' et '+(m%12)+' mois':'')):('il y a '+m+' mois'); };
+  const infoCard=(ic,lbl,val,sub)=>'<div style="border:1px solid #EDF0F2;border-radius:14px;padding:12px;min-width:0"><div class="fs" style="font-size:11px">'+ic+' '+lbl+'</div><div style="font-weight:700;margin-top:3px;word-break:break-word">'+val+'</div>'+(sub?('<div class="fs" style="margin-top:2px">'+sub+'</div>'):'')+'</div>';
+  let fdetH='<div class="fs" style="padding:20px">Sélectionne un nom à gauche.</div>';
+  if(fsel){const i0=Math.max(0,fiches.findIndex(f=>f.name===fsel.name));
+    fdetH='<div style="min-width:0">'
+      +'<div style="display:flex;align-items:center;gap:11px;margin-bottom:11px;flex-wrap:wrap">'+avatar(fsel.name,i0)+'<div style="min-width:0"><b style="font-size:16px">'+esc(fsel.name)+'</b><div class="fs">'+esc(fsel.role)+(fsel.arrivee?(' · chez Hyped depuis '+dmy(fsel.arrivee)):'')+'</div></div>'
+      +(fsel.absence?('<span class="bgd-badge" style="background:#F5EFE2;color:#B98A12">🏖️ absente → '+dmy(fsel.absence.au)+'</span>'):'')
+      +'<button class="lk" data-rhfedit="'+esc(fsel.name)+'" style="margin-left:auto;background:#6D5AE0;color:#fff;border-color:#6D5AE0">✎ Modifier la fiche</button></div>'
+      +'<div style="width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:10px">'
+      +infoCard('✉️','EMAIL',esc(fsel.email))
+      +infoCard('📞','TÉLÉPHONE',fsel.tel?esc(fsel.tel):'<span style="opacity:.5">à renseigner</span>')
+      +infoCard('🏦','RIB / IBAN',fsel.iban?esc(fsel.iban):'<span style="opacity:.5">à renseigner</span>','stocké sur le disque sécurisé du cockpit')
+      +infoCard('📅','CHEZ HYPED DEPUIS',fsel.arrivee?dmy(fsel.arrivee):'<span style="opacity:.5">à renseigner</span>',fsel.arrivee?dureeTxt(fsel.arrivee):'')
+      +infoCard('🏖️','CONGÉS',fsel.conges.left+' / '+fsel.conges.quota+' jour(s)','restants cette année')
+      +infoCard('📄','DOCUMENTS',String(fsel.docs)+' déposé(s)','paie / factures · carte Documents ci-dessus')
+      +'</div>'
+      +'<div style="border:1px solid #EDF0F2;border-radius:14px;padding:12px;margin-top:10px"><div class="fs" style="font-size:11px">📝 NOTES RH</div><div style="margin-top:4px;'+(fsel.notes?'':'opacity:.55')+'">'+(fsel.notes?esc(fsel.notes):'contrat, particularités, points d&#39;attention… (✎ Modifier la fiche pour compléter)')+'</div></div>'
+      +'</div>';
+  }
+  const fichesH=fiches.length?('<div class="bgd-card" style="margin-top:14px"><div class="bgd-h">🗂️ '+(sup?'Fiches équipe':'Ma fiche')+' <span class="cpsub">clique un nom pour ouvrir sa fiche · stockées sur le disque sécurisé du cockpit</span></div>'
+    +'<div style="width:100%;display:grid;grid-template-columns:205px minmax(0,1fr);gap:16px;margin-top:8px;align-items:start">'
+    +'<div style="display:flex;flex-direction:column;gap:7px">'+fiches.map((f,i)=>'<button class="lk rhfsel" data-n="'+esc(f.name)+'" style="display:flex;align-items:center;gap:8px;text-align:left;border-radius:12px;padding:8px 11px;'+(f.name===window.RH_FICHE_SEL?'background:#EEEBFB;border-color:#D9D2F6;color:#4C3BB8;font-weight:700':'')+'">'+avatar(f.name,i)+'<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(f.name)+'</span>'+(f.absence?'<span style="margin-left:auto">🏖️</span>':'')+'</button>').join('')+'</div>'
+    +fdetH+'</div></div>'):'';
   box.innerHTML=kpis
     +'<div class="bgd-grid" style="grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);margin-bottom:14px">'+congesH+formH+'</div>'
     +'<div class="bgd-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">'+demH+docH+rapH+'</div>'
@@ -1238,12 +1261,14 @@ async function renderRhView(){
     rd.readAsDataURL(f);
   };
   box.querySelectorAll('.rhtdone').forEach(c=>c.onchange=async()=>{ await api('/api/todos/'+encodeURIComponent(c.dataset.id)+'/done',{method:'POST'}); renderRhView(); });
+  box.querySelectorAll('.rhfsel').forEach(b2=>b2.onclick=()=>{window.RH_FICHE_SEL=b2.dataset.n;renderRhView();});
   box.querySelectorAll('[data-rhfedit]').forEach(a2=>a2.onclick=async()=>{
     const f=((fi&&fi.fiches)||[]).find(x=>x.name===a2.dataset.rhfedit); if(!f)return;
     const tel=prompt('Téléphone de '+f.name+' :',f.tel||''); if(tel===null)return;
     const iban=prompt('IBAN / RIB de '+f.name+' (stocké uniquement sur le disque sécurisé du cockpit) :',f.iban||''); if(iban===null)return;
-    const notes=prompt('Notes RH (contrat, date d\'arrivée…) :',f.notes||''); if(notes===null)return;
-    const r=await api('/api/rh/profil',{method:'POST',body:JSON.stringify({who:f.name,tel,iban,notes})});
+    const arrivee=prompt('Date d\'arrivée chez Hyped (AAAA-MM-JJ, ex : 2024-07-01) :',f.arrivee||''); if(arrivee===null)return;
+    const notes=prompt('Notes RH (contrat, particularités…) :',f.notes||''); if(notes===null)return;
+    const r=await api('/api/rh/profil',{method:'POST',body:JSON.stringify({who:f.name,tel,iban,notes,arrivee})});
     if(!r.ok){const dd=await r.json().catch(()=>({}));alert(dd.error||'Erreur');} renderRhView();
   });
   box.querySelectorAll('.ceogo2').forEach(el=>el.onclick=()=>navToView(el.dataset.go));
@@ -2002,7 +2027,7 @@ async function loadCeoPanel(){
       const xlbl=moisKeys.map((k,i)=>(i%2===0)?('<text x="'+(padL+i*st).toFixed(1)+'" y="'+(h-6)+'" font-size="10" fill="#9AA3AC" text-anchor="middle">'+nomsM[Number(k.slice(5,7))-1]+'</text>'):'').join('');
       const ylbl=[0,0.5,1].map(f=>'<text x="'+(padL-8)+'" y="'+(padT+ih-f*ih+3).toFixed(1)+'" font-size="10" fill="#9AA3AC" text-anchor="end">'+(Math.round(mx*f/1000))+' k€</text><line x1="'+padL+'" y1="'+(padT+ih-f*ih).toFixed(1)+'" x2="'+(padL+iw)+'" y2="'+(padT+ih-f*ih).toFixed(1)+'" stroke="#F0F1F6"/>').join('');
       const li=caSerie.length-1;const lp=P(caSerie[li],li);
-      chartH='<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto;display:block">'+ylbl+'<path d="'+area+'" fill="#EEEBFB" opacity="0.6"/><polyline points="'+pts+'" fill="none" stroke="'+V+'" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>'+caSerie.map((v,i)=>{const q=P(v,i);return '<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="3" fill="'+V+'"/>';}).join('')+'<rect x="'+(lp[0]-42).toFixed(1)+'" y="'+(lp[1]-26).toFixed(1)+'" width="84" height="18" rx="9" fill="'+V+'"/><text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]-13).toFixed(1)+'" font-size="10.5" fill="#fff" text-anchor="middle" font-weight="700">'+eur(caSerie[li])+'</text>'+xlbl+'</svg>';
+      chartH='<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto;display:block">'+ylbl+'<path d="'+area+'" fill="#EEEBFB" opacity="0.6"/><polyline points="'+pts+'" fill="none" stroke="'+V+'" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>'+caSerie.map((v,i)=>{const q=P(v,i);const nm=nomsM[Number(moisKeys[i].slice(5,7))-1]+' '+moisKeys[i].slice(2,4);return '<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="3" fill="'+V+'"/><circle class="pltip" data-tip="'+nm+' : '+eur(v)+'" cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="15" fill="transparent" style="cursor:pointer"/>';}).join('')+'<rect x="'+(lp[0]-42).toFixed(1)+'" y="'+(lp[1]-26).toFixed(1)+'" width="84" height="18" rx="9" fill="'+V+'"/><text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]-13).toFixed(1)+'" font-size="10.5" fill="#fff" text-anchor="middle" font-weight="700">'+eur(caSerie[li])+'</text>'+xlbl+'</svg>';
     } else {
       chartH='<div style="text-align:center;padding:34px 10px"><div style="font-size:38px">📈</div><div style="font-weight:700;margin-top:8px">La courbe s\'affichera avec Pennylane</div><div class="fs" style="margin-top:6px">Génère la clé API (Paramètres → Connectivité → Développeurs) et colle-la dans Render (PENNYLANE_API_KEY) : le CA encaissé des 12 derniers mois apparaîtra ici automatiquement.</div></div>';
     }
@@ -2025,6 +2050,15 @@ async function loadCeoPanel(){
       +caCard
       +iaH
       +'<button id="ceofull" style="width:100%;padding:13px;border-radius:14px;font-size:14px;font-weight:700;font-family:inherit;border:none;background:'+V+';color:#fff;cursor:pointer">▦ Ouvrir le cockpit complet →</button>';
+    const tipOn=(root)=>{
+      let tb=document.getElementById('pltipbox');
+      if(!tb){tb=document.createElement('div');tb.id='pltipbox';tb.style.cssText='position:fixed;z-index:120;pointer-events:none;background:#1F2430;color:#fff;font-size:12.5px;font-weight:700;font-family:inherit;padding:7px 11px;border-radius:9px;box-shadow:0 4px 14px rgba(0,0,0,.28);display:none;white-space:nowrap';document.body.appendChild(tb);}
+      root.querySelectorAll('.pltip').forEach(el=>{
+        el.addEventListener('mousemove',(e)=>{tb.textContent=el.dataset.tip;tb.style.display='block';tb.style.left=(e.clientX+14)+'px';tb.style.top=(e.clientY-34)+'px';});
+        el.addEventListener('mouseleave',()=>{tb.style.display='none';});
+      });
+    };
+    tipOn(p);
     // ---------- interactions ----------
     const goDec=()=>{const e2=document.getElementById('ceocard-dec');if(e2){e2.scrollIntoView({behavior:'smooth',block:'center'});e2.style.boxShadow='0 0 0 3px '+V;setTimeout(()=>{e2.style.boxShadow='';},1500);}};
     p.querySelectorAll('.ceogo').forEach(el=>el.onclick=(ev)=>{ev.stopPropagation();if(el.dataset.go==='__dec'){goDec();return;}navToView(el.dataset.go);});
