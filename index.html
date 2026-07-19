@@ -1812,7 +1812,7 @@ async function loadCeoPanel(){
     const hist=(ceo&&ceo.tresoHist)||[];
     // ---------- helpers graphiques ----------
     const spark=(pts,color)=>{
-      if(!pts||pts.length<2)return '<div style="height:34px;display:flex;align-items:center" class="fs">graphique dès 2 jours de données</div>';
+      if(!pts||pts.length<2)return '<div style="height:30px;display:flex;align-items:center;font-size:11px;color:#9AA3AC">courbe dès 2 jours de données</div>';
       const w=210,h=34,mn=Math.min(...pts),mx=Math.max(...pts),rg=(mx-mn)||1,st=w/(pts.length-1);
       const pp=pts.map((v,i)=>(i*st).toFixed(1)+','+(h-3-((v-mn)/rg)*(h-6)).toFixed(1)).join(' ');
       return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" style="display:block;margin-top:6px;max-width:100%"><polyline points="'+pp+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="'+((pts.length-1)*st).toFixed(1)+'" cy="'+(h-3-((pts[pts.length-1]-mn)/rg)*(h-6)).toFixed(1)+'" r="3" fill="'+color+'"/></svg>';
@@ -1840,7 +1840,7 @@ async function loadCeoPanel(){
     // ---------- ligne 1 : 5 KPIs avec sparklines ----------
     const kpi=(ic,bgc,lbl,val,sub,extra,link,go,lc)=>'<div class="bgd-card" style="min-width:0;display:flex;flex-direction:column;gap:2px"><div style="display:flex;gap:12px;align-items:flex-start"><div style="width:48px;height:48px;flex:0 0 48px;border-radius:50%;background:'+bgc+';display:flex;align-items:center;justify-content:center;font-size:20px">'+ic+'</div><div style="min-width:0;flex:1"><div class="bgd-klbl">'+lbl+'</div><div class="bgd-kval" style="font-size:23px">'+val+'</div><div class="bgd-ksub">'+sub+'</div></div></div>'+(extra||'')+'<a class="lk ceogo" data-go="'+go+'" style="border:none;background:none;padding:4px 0 0;color:'+lc+';font-weight:700;font-size:12.5px">'+link+' →</a></div>';
     const kpis='<div class="bgd-kpis" style="grid-template-columns:repeat(auto-fit,minmax(225px,1fr));margin-bottom:14px">'
-      +kpi('💼','#E7F5EC','Trésorerie restante'+(plOn?'':' <a class="lk" id="ceotreso" title="Saisir">✎</a>'),tresoVal!==null?eur(tresoVal):'à renseigner',tresoVal!==null?('vs mois dernier '+(tresoPct!==null?pctTxt(tresoPct):'· n/d')+(plOn?' · 🟢 Pennylane':'')):'✎ ou branche Pennylane',spark(hist.slice(-30).map(x=>x.v),'#2E9E6B'),'Voir le détail finance','budget','#2E9E6B')
+      +kpi('💼','#E7F5EC','Trésorerie restante'+(plOn?'':' <a class="lk" id="ceotreso" title="Saisir">✎</a>'),tresoVal!==null?eur(tresoVal):'<span style="font-size:15px">à renseigner</span>',tresoVal!==null?('vs mois dernier '+(tresoPct!==null?pctTxt(tresoPct):'· n/d')+(plOn?' · 🟢 Pennylane':'')):'✎ ou branche Pennylane',spark(hist.slice(-30).map(x=>x.v),'#2E9E6B'),'Voir le détail finance','budget','#2E9E6B')
       +kpi('📈','#EEEBFB','CA encaissé ce mois',caMois!==null?eur(caMois):'à venir',caMois!==null?('vs mois dernier '+(caPct!==null?pctTxt(caPct):'· n/d')):'branche Pennylane pour le réel',spark(caSerie.some(v=>v>0)?caSerie:null,'#7C5CFA'),'Voir le détail finance','budget','#7C5CFA')
       +kpi('🔽','#E7F0FA','Pipeline commercial',eur(crmStats.pipeline),'prévisionnel en cours','<div style="margin-top:6px"><span style="color:'+V+';font-weight:700;font-size:12.5px">'+crmStats.actifs+' opportunité(s) active(s)</span></div>','Voir le pipeline','commercial','#2F6DB5')
       +kpi('🗳️','#FDF0E0','Projets à arbitrer',String(nDec),'décision(s) requise(s)','','Voir les décisions','__dec','#C77F2A')
@@ -1873,10 +1873,18 @@ async function loadCeoPanel(){
       return ['En cours','#E7F0FA','#2F6DB5','#2E9E6B'];};
     const nextDate=(d)=>{const ds=(d.entries||[]).map(e=>e.date).filter(x=>x&&x>=today).sort();return ds[0]||null;};
     const respOf=(d)=>{const c={};(d.entries||[]).forEach(e=>{if(e.cp)c[e.cp]=(c[e.cp]||0)+1;});const top=Object.entries(c).sort((a,b)=>b[1]-a[1])[0];return top?top[0]:'à assigner';};
+    const CELL='padding:9px 0;border-bottom:1px solid #F0F1F6;display:flex;align-items:center;min-width:0';
+    const HCELL='padding:7px 0;border-bottom:1px solid #F0F1F6';
     const pjH='<div class="bgd-card" style="height:100%"><div class="bgd-h">📋 Suivi projets équipe</div>'
-      +'<div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) max-content max-content 14px;gap:8px;padding:7px 0;border-bottom:1px solid #F0F1F6" class="fs"><span>Projet / Client</span><span>Responsable</span><span>Statut</span><span>Échéance</span><span></span></div>'
+      +'<div style="display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr) max-content max-content 14px;column-gap:9px;align-items:center">'
+      +'<span class="fs" style="'+HCELL+'">Projet / Client</span><span class="fs" style="'+HCELL+'">Responsable</span><span class="fs" style="'+HCELL+'">Statut</span><span class="fs" style="'+HCELL+'">Échéance</span><span style="'+HCELL+'"></span>'
       +buds.map(d=>{const s=stB2(d);const nd=nextDate(d);
-        return '<div class="ceogo" data-go="projets" style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) max-content max-content 14px;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid #F0F1F6;cursor:pointer"><b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(d.brand)+'</b><span class="fs" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(respOf(d))+'</span><span class="bgd-badge" style="background:'+s[1]+';color:'+s[2]+';font-size:10.5px">'+s[0]+'</span><span class="fs" style="white-space:nowrap">'+(nd?dmy(nd).slice(0,5):'·')+'</span><span style="width:9px;height:9px;border-radius:50%;background:'+s[3]+'"></span></div>';}).join('')
+        return '<span class="ceogo" data-go="projets" style="'+CELL+';cursor:pointer"><b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(d.brand)+'</b></span>'
+        +'<span class="ceogo" data-go="projets" style="'+CELL+';cursor:pointer"><span class="fs" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(respOf(d))+'</span></span>'
+        +'<span class="ceogo" data-go="projets" style="'+CELL+';cursor:pointer"><span class="bgd-badge" style="background:'+s[1]+';color:'+s[2]+';font-size:10.5px">'+s[0]+'</span></span>'
+        +'<span class="ceogo" data-go="projets" style="'+CELL+';cursor:pointer"><span class="fs" style="white-space:nowrap">'+(nd?dmy(nd).slice(0,5):'·')+'</span></span>'
+        +'<span class="ceogo" data-go="projets" style="'+CELL+';cursor:pointer"><span style="width:9px;height:9px;border-radius:50%;background:'+s[3]+'"></span></span>';}).join('')
+      +'</div>'
       +'<a class="lk ceogo" data-go="projets" style="border:none;background:none;padding:8px 0 0;color:'+V+';font-weight:700;font-size:12.5px">Voir tous les projets →</a></div>';
     // ---------- ligne 3 ----------
     const AVC=['#6D5AE0','#E8865D','#2C9087','#B98A12','#4A7FB5'];
@@ -1901,9 +1909,13 @@ async function loadCeoPanel(){
       +'<a class="lk ceogo" data-go="messages" style="border:none;background:none;padding:8px 0 0;color:'+V+';font-weight:700;font-size:12.5px">Voir toutes les décisions →</a></div>';
     const consoP=(d)=>{const bm=d.budgetMensuel||0,tot=d.total||0;return bm?Math.min(100,Math.round(100*tot/bm)):null;};
     const mkH='<div class="bgd-card" style="height:100%"><div class="bgd-h">🏷️ Marques & comptes <a class="lk ceogo" data-go="budget" style="float:right">Voir tout →</a></div>'
-      +'<div style="display:grid;grid-template-columns:minmax(0,1fr) max-content minmax(90px,110px);gap:10px;padding:7px 0;border-bottom:1px solid #F0F1F6" class="fs"><span>Marque</span><span>Budget restant</span><span>Conso.</span></div>'
+      +'<div style="display:grid;grid-template-columns:minmax(0,1.15fr) max-content minmax(84px,1fr);column-gap:12px;align-items:center">'
+      +'<span class="fs" style="'+HCELL+'">Marque</span><span class="fs" style="'+HCELL+';text-align:right">Budget restant</span><span class="fs" style="'+HCELL+'">Conso.</span>'
       +buds.map(d=>{const pc=consoP(d);const bm=d.budgetMensuel||0;const col=pc===null?'#C9CED4':(pc>=90?'#D4483B':(pc>=80?'#E8933A':'#2E9E6B'));
-        return '<div class="ceogo" data-go="budget" style="display:grid;grid-template-columns:minmax(0,1fr) max-content minmax(90px,110px);gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid #F0F1F6;cursor:pointer"><b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(d.brand)+'</b><span class="fs" style="text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap">'+(bm?eur(bm-(d.total||0)):'à définir')+'</span>'+(pc!==null?('<span style="display:flex;align-items:center;gap:6px"><b style="font-size:11.5px;color:'+col+'">'+pc+' %</b><div class="ceobar" style="flex:1"><div style="width:'+pc+'%;background:'+col+'"></div></div></span>'):'<span class="fs">·</span>')+'</div>';}).join('')
+        return '<span class="ceogo" data-go="budget" style="'+CELL+';cursor:pointer"><b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(d.brand)+'</b></span>'
+        +'<span class="ceogo" data-go="budget" style="'+CELL+';cursor:pointer;justify-content:flex-end"><span class="fs" style="font-variant-numeric:tabular-nums;white-space:nowrap">'+(bm?eur(bm-(d.total||0)):'à définir')+'</span></span>'
+        +'<span class="ceogo" data-go="budget" style="'+CELL+';cursor:pointer;gap:6px">'+(pc!==null?('<b style="font-size:11.5px;color:'+col+'">'+pc+' %</b><div class="ceobar" style="flex:1"><div style="width:'+pc+'%;background:'+col+'"></div></div>'):'<span class="fs">·</span>')+'</span>';}).join('')
+      +'</div>'
       +'<div style="margin-top:8px;padding:8px 11px;border-radius:10px;background:#F4F2FB;font-size:12px;color:#4C3BB8">📊 Les budgets détaillés sont disponibles dans l\'onglet Budget.</div></div>';
     // ---------- ligne 4 : évolution du CA + derniers encaissements ----------
     let chartH='';
