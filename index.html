@@ -1078,6 +1078,51 @@ async function renderProjetsView(){
       +kpi('📄','#E7F5EC','Livrables à valider',String(livAval),'internes & clients')
       +kpi('⚠️','#FDF0E0','Missions à risque',String(risque.length),risque.length?'nécessitent attention':'tout va bien',risque.length?'#D4483B':'')
       +'</div>';
+    // ---------- formulaire mission (création / édition, façon fiche marque) ----------
+    if(window.PJ_FORM!==undefined&&window.PJ_FORM!==null){
+      const fm=window.PJ_FORM==='new'?null:ms.find(m=>m.id===window.PJ_FORM);
+      const v=(x)=>esc(x==null?'':String(x));
+      const fld=(lbl,id2,val,ph,type)=>'<div style="min-width:0"><div class="fs" style="font-size:11px;margin-bottom:4px">'+lbl+'</div><input id="'+id2+'" type="'+(type||'text')+'" class="rhin" style="width:100%;box-sizing:border-box;border-radius:11px;padding:11px 12px" value="'+v(val)+'" placeholder="'+(ph||'')+'"></div>';
+      const selF=(lbl,id2,opts,val)=>'<div style="min-width:0"><div class="fs" style="font-size:11px;margin-bottom:4px">'+lbl+'</div><select id="'+id2+'" class="rhin" style="width:100%;box-sizing:border-box;border-radius:11px;padding:11px 12px">'+opts.map(o2=>'<option'+(o2===val?' selected':'')+'>'+o2+'</option>').join('')+'</select></div>';
+      host.innerHTML='<button class="lk" id="pjfback" style="margin-bottom:12px">← Retour au suivi projets</button>'
+        +'<div class="bgd-card"><div class="bgd-h">'+(fm?'✎ Modifier la mission':'＋ Nouvelle mission')+' <span class="cpsub">une mission = une prestation vendue</span></div>'
+        +'<div style="width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px">'
+        +fld('CLIENT *','pjf_client',fm?fm.client:'','ex : Evocore')
+        +fld('INTITULÉ DE LA MISSION','pjf_nom',fm?fm.nom:'','ex : Storytelling de marque')
+        +selF('OFFRE','pjf_offre',['Storytelling','Influence','Social Media','360°'],fm?fm.offre:'Influence')
+        +selF('RÉCURRENCE','pjf_rec',['One-shot','Mensuelle','Trimestrielle','Annuelle'],(fm&&fm.recurrence)||'One-shot')
+        +fld('MONTANT (€ HT)','pjf_montant',fm&&fm.montant?fm.montant:'','ex : 8000','number')
+        +fld('DÉBUT','pjf_debut',fm?fm.debut:'','','date')
+        +fld('FIN','pjf_fin',fm?fm.fin:'','','date')
+        +fld('PHASE ACTUELLE','pjf_phase',fm?fm.phase:'','ex : Rédaction')
+        +selF('SANTÉ','pjf_sante',['vert','orange','rouge'],fm?fm.sante:'vert')
+        +fld('TON RÔLE CEO','pjf_role',fm?fm.roleCeo:'','ex : Autrice / Lead stratégique')
+        +fld('PROCHAINE ACTION','pjf_next',fm?fm.next:'','ex : Valider le plan Q3')
+        +fld('ÉCHÉANCE','pjf_ech',fm?fm.echeance:'','','date')
+        +'</div>'
+        +'<div class="bgd-h" style="margin-top:16px;font-size:14px">👥 Équipe</div>'
+        +'<div style="width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:8px">'
+        +fld('LEAD STRATÉGIQUE','pjf_ls',(fm&&fm.equipe&&fm.equipe.leadStrat)||'','ex : Mélany')
+        +fld('LEAD OPÉRATIONNEL','pjf_lo',(fm&&fm.equipe&&fm.equipe.leadOps)||'','ex : Amena')
+        +fld('CONTRIBUTEURS','pjf_co',(fm&&fm.equipe&&fm.equipe.contrib)||'','ex : Najem, Prunelle')
+        +fld('VALIDATEUR FINAL','pjf_va',(fm&&fm.equipe&&fm.equipe.valid)||'','ex : Mélany')
+        +'</div>'
+        +'<div class="bgd-h" style="margin-top:16px;font-size:14px">📖 Contexte</div>'
+        +'<textarea id="pjf_ctx" class="rhin" style="width:100%;box-sizing:border-box;margin-top:8px;min-height:120px;resize:vertical;font-family:inherit;border-radius:11px;padding:12px" placeholder="Contexte de la mission : historique client, enjeux, périmètre, points d\'attention…">'+v(fm?fm.contexte:'')+'</textarea>'
+        +'<div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap"><button id="pjfsave" style="flex:1;min-width:200px;font-family:inherit;font-size:14px;font-weight:700;padding:13px;border-radius:13px;border:none;background:#7C5CFA;color:#fff;cursor:pointer">'+(fm?'Enregistrer les modifications':'Créer la mission')+'</button><button class="lk" id="pjfcancel" style="padding:13px 22px;border-radius:13px">Annuler</button></div>'
+        +'</div>';
+      const gv=(id2)=>{const e2=$(id2);return e2?e2.value.trim():'';};
+      const back=()=>{window.PJ_FORM=undefined;renderProjetsView();};
+      $('pjfback').onclick=back; $('pjfcancel').onclick=back;
+      $('pjfsave').onclick=async()=>{
+        const client=gv('pjf_client'); if(!client){alert('Le client est requis 🙂');return;}
+        const body={op:fm?'update':'create',id:fm?fm.id:undefined,client,nom:gv('pjf_nom'),offre:gv('pjf_offre'),recurrence:gv('pjf_rec'),montant:gv('pjf_montant'),debut:gv('pjf_debut'),fin:gv('pjf_fin'),phase:gv('pjf_phase'),sante:gv('pjf_sante'),roleCeo:gv('pjf_role'),next:gv('pjf_next'),echeance:gv('pjf_ech'),contexte:($('pjf_ctx')?$('pjf_ctx').value:''),equipe:{leadStrat:gv('pjf_ls'),leadOps:gv('pjf_lo'),contrib:gv('pjf_co'),valid:gv('pjf_va')}};
+        const r2=await api('/api/missions',{method:'POST',body:JSON.stringify(body)});
+        if(!r2.ok){const dd=await r2.json().catch(()=>({}));alert(dd.error||'Erreur');return;}
+        window.PJ_FORM=undefined; renderProjetsView();
+      };
+      return;
+    }
     // ---------- fiche détaillée ----------
     const sel=ms.find(m=>m.id===window.PJ_SEL);
     if(sel){
@@ -1090,7 +1135,7 @@ async function renderProjetsView(){
       host.innerHTML='<button class="lk" id="pjback" style="margin-bottom:12px">← Retour au suivi projets</button>'
         +'<div class="bgd-card" style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b style="font-size:18px">'+esc(sel.client)+' · '+esc(sel.nom||sel.offre)+'</b>'+ofB(sel.offre)+sDot(sel.sante)+'<span style="margin-left:auto;display:flex;gap:6px"><button class="lk" id="pjedit">✎ Modifier</button><button class="lk" id="pjdone">'+(sel.statut==='terminée'?'Rouvrir':'Terminer ✓')+'</button><button class="lk" id="pjdel">🗑</button></span></div>'
         +'<div style="width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin-top:12px">'
-        +ovCard('MONTANT',sel.montant?eur(sel.montant):'·')+ovCard('DÉBUT → FIN',(sel.debut?dmy(sel.debut):'·')+' → '+(sel.fin?dmy(sel.fin):'·'))+ovCard('PHASE',esc(sel.phase||'·'))+ovCard('PROCHAINE ACTION',esc(sel.next||'·'))+ovCard('ÉCHÉANCE',sel.echeance?dmy(sel.echeance):'·')+'</div></div>'
+        +ovCard('MONTANT',sel.montant?eur(sel.montant):'·')+ovCard('RÉCURRENCE',esc(sel.recurrence||'·'))+ovCard('DÉBUT → FIN',(sel.debut?dmy(sel.debut):'·')+' → '+(sel.fin?dmy(sel.fin):'·'))+ovCard('PHASE',esc(sel.phase||'·'))+ovCard('PROCHAINE ACTION',esc(sel.next||'·'))+ovCard('ÉCHÉANCE',sel.echeance?dmy(sel.echeance):'·')+'</div>'+(sel.contexte?('<div class="fs" style="margin-top:12px;white-space:pre-wrap;line-height:1.55">📖 '+esc(sel.contexte)+'</div>'):'')+'</div>'
         +'<div class="bgd-grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr);margin-bottom:14px">'
         +'<div class="bgd-card"><div class="bgd-h">👥 Équipe & responsabilités <a class="lk" id="pjeq" style="float:right">✎</a></div><div style="width:100%;display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:8px">'+eqCard('LEAD STRATÉGIQUE','leadStrat')+eqCard('LEAD OPÉRATIONNEL','leadOps')+eqCard('CONTRIBUTEURS','contrib')+eqCard('VALIDATEUR FINAL','valid')+'</div>'
         +'<div class="bgd-h" style="margin-top:14px;font-size:14px">👤 Rôle CEO</div><div style="margin-top:4px">'+esc(sel.roleCeo||'·')+'</div></div>'
@@ -1101,7 +1146,7 @@ async function renderProjetsView(){
       $('pjback').onclick=()=>{window.PJ_SEL=null;renderProjetsView();};
       $('pjdel').onclick=async()=>{if(!confirm('Supprimer cette mission ?'))return;await api('/api/missions',{method:'POST',body:JSON.stringify({op:'del',id:sel.id})});window.PJ_SEL=null;renderProjetsView();};
       $('pjdone').onclick=()=>save({statut:sel.statut==='terminée'?'en cours':'terminée'});
-      $('pjedit').onclick=()=>{const c2=prompt('Client :',sel.client);if(c2===null)return;const n2=prompt('Intitulé de la mission :',sel.nom||'');if(n2===null)return;const o2=prompt('Offre (Storytelling / Influence / Social Media / 360°) :',sel.offre);if(o2===null)return;const rc=prompt('Rôle CEO :',sel.roleCeo||'');if(rc===null)return;const nx=prompt('Prochaine action :',sel.next||'');if(nx===null)return;const ec=prompt('Échéance (AAAA-MM-JJ) :',sel.echeance||'');if(ec===null)return;const sa=prompt('Santé (vert / orange / rouge) :',sel.sante);if(sa===null)return;const mo=prompt('Montant (€) :',sel.montant||'');if(mo===null)return;const ph=prompt('Phase actuelle :',sel.phase||'');if(ph===null)return;save({client:c2,nom:n2,offre:o2,roleCeo:rc,next:nx,echeance:ec,sante:sa,montant:mo,phase:ph});};
+      $('pjedit').onclick=()=>{window.PJ_FORM=sel.id;renderProjetsView();};
       $('pjeq').onclick=()=>{const a2=prompt('Lead stratégique :',(sel.equipe||{}).leadStrat||'');if(a2===null)return;const b2=prompt('Lead opérationnel :',(sel.equipe||{}).leadOps||'');if(b2===null)return;const c2=prompt('Contributeurs :',(sel.equipe||{}).contrib||'');if(c2===null)return;const d2=prompt('Validateur final :',(sel.equipe||{}).valid||'');if(d2===null)return;save({equipe:{leadStrat:a2,leadOps:b2,contrib:c2,valid:d2}});};
       $('pjetadd').onclick=()=>{const n2=prompt('Nom de l\'étape (ex : Interviews, Rédaction, Sourcing…) :');if(!n2)return;save({etapes:[...(sel.etapes||[]),{nom:n2,done:false}]});};
       host.querySelectorAll('.pjet').forEach(e2=>e2.onclick=()=>{const et=[...(sel.etapes||[])];et[Number(e2.dataset.i)].done=!et[Number(e2.dataset.i)].done;save({etapes:et});});
@@ -1156,16 +1201,7 @@ async function renderProjetsView(){
       +'<div class="bgd-grid" style="grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)">'+intervH+echH+'</div>';
     host.querySelectorAll('.pjtab').forEach(b2=>b2.onclick=()=>{window.PJ_TAB=b2.dataset.t;renderProjetsView();});
     host.querySelectorAll('.pjopen').forEach(el=>el.onclick=()=>{window.PJ_SEL=el.dataset.id;renderProjetsView();});
-    const ad=$('pjadd'); if(ad)ad.onclick=async()=>{
-      const c2=prompt('Client (ex : Evocore) :');if(!c2)return;
-      const n2=prompt('Intitulé de la mission (ex : Storytelling de marque) :')||'';
-      const o2=prompt('Offre (Storytelling / Influence / Social Media / 360°) :','Influence')||'Influence';
-      const rc=prompt('Ton rôle CEO (ex : Autrice / Lead stratégique · vide si aucun) :')||'';
-      const nx=prompt('Prochaine action concrète :')||'';
-      const ec=prompt('Échéance de la prochaine étape (AAAA-MM-JJ) :')||'';
-      await api('/api/missions',{method:'POST',body:JSON.stringify({op:'create',client:c2,nom:n2,offre:o2,roleCeo:rc,next:nx,echeance:ec})});
-      renderProjetsView();
-    };
+    const ad=$('pjadd'); if(ad)ad.onclick=()=>{window.PJ_FORM='new';renderProjetsView();};
   }catch(e){host.innerHTML='<div class="state">Erreur de chargement.</div>';}
 }
 // ===== Vue RH : dashboard absences + documents (mock-up de Mélany du 19/07) ==

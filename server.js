@@ -827,11 +827,13 @@ app.post("/api/missions", auth, (req, res) => {
     o.missions.push({ id: "M" + Date.now().toString(36), at: Date.now(), client: S(b.client, 60), nom: S(b.nom, 90), offre: S(b.offre, 40) || "Influence",
       roleCeo: S(b.roleCeo, 70), next: S(b.next, 140), echeance: S(b.echeance, 10), sante: S(b.sante, 10) || "vert", statut: "en cours",
       montant: Number(b.montant) || 0, debut: S(b.debut, 10), fin: S(b.fin, 10), phase: S(b.phase, 50),
+      contexte: S(b.contexte, 2000), recurrence: S(b.recurrence, 30),
       equipe: {}, etapes: [], livrables: [], blocages: [] });
   } else if (b.op === "update") {
     const m = o.missions.find((x) => x.id === b.id); if (!m) return res.status(404).json({ error: "mission introuvable" });
-    ["client","nom","offre","roleCeo","next","echeance","sante","statut","debut","fin","phase"].forEach((k) => { if (b[k] !== undefined) m[k] = S(b[k], 140); });
+    ["client","nom","offre","roleCeo","next","echeance","sante","statut","debut","fin","phase","recurrence"].forEach((k) => { if (b[k] !== undefined) m[k] = S(b[k], 140); });
     if (b.montant !== undefined) m.montant = Number(b.montant) || 0;
+    if (b.contexte !== undefined) m.contexte = S(b.contexte, 2000);
     if (b.equipe && typeof b.equipe === "object") m.equipe = { ...(m.equipe || {}), ...b.equipe };
     ["etapes","livrables","blocages"].forEach((k) => { if (Array.isArray(b[k])) m[k] = b[k].slice(0, 40); });
   } else return res.status(400).json({ error: "op inconnue" });
