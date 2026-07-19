@@ -781,6 +781,24 @@ app.post("/api/ceo/pennylane", auth, async (req, res) => {
   if (!okc) { try { fs.unlinkSync(PL_KEY_FILE); } catch (e) {} PL_CACHE = { at: 0, treso: null, ca: null, error: null }; }
   res.json({ ok: true, connected: okc, error: okc ? null : ((snap && snap.error) || "clé refusée par Pennylane") });
 });
+// Diagnostic Pennylane (direction) : champs bruts des dernières factures, pour comprendre facturé vs encaissé
+app.get("/api/ceo/pennylane/raw", auth, async (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  if (!PL_KEY()) return res.json({ ok: false, error: "pas de clé" });
+  try {
+    const d = await plGet("/customer_invoices?limit=6&sort=-date");
+    const items = (d.items || []).map((iv) => {
+      const o = {};
+      for (const [k, v] of Object.entries(iv)) {
+        if (v === null || ["string", "number", "boolean"].includes(typeof v)) o[k] = v;
+      }
+      if (iv.customer && iv.customer.name) o.customer_name = iv.customer.name;
+      if (Array.isArray(iv.matched_transactions)) o.matched_transactions_n = iv.matched_transactions.length;
+      return o;
+    });
+    res.json({ ok: true, items });
+  } catch (e) { res.json({ ok: false, error: String((e && e.message) || e).slice(0, 200) }); }
+});
 // Roadmap annuelle : initiatives par trimestre et par axe, gérées par la direction
 app.post("/api/ceo/roadmap", auth, (req, res) => {
   if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
