@@ -1091,6 +1091,7 @@ async function renderProjetsView(){
         +fld('INTITULÉ DE LA MISSION','pjf_nom',fm?fm.nom:'','ex : Storytelling de marque')
         +selF('OFFRE','pjf_offre',['Storytelling','Influence','Social Media','360°'],fm?fm.offre:'Influence')
         +selF('RÉCURRENCE','pjf_rec',['One-shot','Mensuelle','Trimestrielle','Annuelle'],(fm&&fm.recurrence)||'One-shot')
+        +selF('MARQUE LIÉE (campagnes)','pjf_marque',['aucune','In Haircare','Doucéa','Curls Matter','LIVA'],(fm&&fm.marque)||'aucune')
         +fld('MONTANT (€ HT)','pjf_montant',fm&&fm.montant?fm.montant:'','ex : 8000','number')
         +fld('DÉBUT','pjf_debut',fm?fm.debut:'','','date')
         +fld('FIN','pjf_fin',fm?fm.fin:'','','date')
@@ -1116,7 +1117,7 @@ async function renderProjetsView(){
       $('pjfback').onclick=back; $('pjfcancel').onclick=back;
       $('pjfsave').onclick=async()=>{
         const client=gv('pjf_client'); if(!client){alert('Le client est requis 🙂');return;}
-        const body={op:fm?'update':'create',id:fm?fm.id:undefined,client,nom:gv('pjf_nom'),offre:gv('pjf_offre'),recurrence:gv('pjf_rec'),montant:gv('pjf_montant'),debut:gv('pjf_debut'),fin:gv('pjf_fin'),phase:gv('pjf_phase'),sante:gv('pjf_sante'),roleCeo:gv('pjf_role'),next:gv('pjf_next'),echeance:gv('pjf_ech'),contexte:($('pjf_ctx')?$('pjf_ctx').value:''),equipe:{leadStrat:gv('pjf_ls'),leadOps:gv('pjf_lo'),contrib:gv('pjf_co'),valid:gv('pjf_va')}};
+        const body={op:fm?'update':'create',id:fm?fm.id:undefined,client,nom:gv('pjf_nom'),offre:gv('pjf_offre'),recurrence:gv('pjf_rec'),marque:(gv('pjf_marque')==='aucune'?'':gv('pjf_marque')),montant:gv('pjf_montant'),debut:gv('pjf_debut'),fin:gv('pjf_fin'),phase:gv('pjf_phase'),sante:gv('pjf_sante'),roleCeo:gv('pjf_role'),next:gv('pjf_next'),echeance:gv('pjf_ech'),contexte:($('pjf_ctx')?$('pjf_ctx').value:''),equipe:{leadStrat:gv('pjf_ls'),leadOps:gv('pjf_lo'),contrib:gv('pjf_co'),valid:gv('pjf_va')}};
         const r2=await api('/api/missions',{method:'POST',body:JSON.stringify(body)});
         if(!r2.ok){const dd=await r2.json().catch(()=>({}));alert(dd.error||'Erreur');return;}
         window.PJ_FORM=undefined; renderProjetsView();
@@ -1126,6 +1127,8 @@ async function renderProjetsView(){
     // ---------- fiche détaillée ----------
     const sel=ms.find(m=>m.id===window.PJ_SEL);
     if(sel){
+      let camp=null;
+      if(sel.marque){try{const rb=await api('/api/budget/'+encodeURIComponent(sel.marque)+'?month='+new Date().toISOString().slice(0,7));if(rb.ok)camp=await rb.json();}catch(e){}}
       const eq=sel.equipe||{};
       const eqCard=(lbl,k)=>'<div style="border:1px solid #EDF0F2;border-radius:12px;padding:10px;min-width:0"><div class="fs" style="font-size:10.5px">'+lbl+'</div><div style="font-weight:700;margin-top:2px">'+(eq[k]?esc(eq[k]):'<span style="opacity:.5">·</span>')+'</div></div>';
       const ovCard=(lbl,val)=>'<div style="border:1px solid #EDF0F2;border-radius:12px;padding:10px;min-width:0"><div class="fs" style="font-size:10.5px">'+lbl+'</div><div style="font-weight:700;margin-top:2px">'+val+'</div></div>';
@@ -1136,6 +1139,15 @@ async function renderProjetsView(){
         +'<div class="bgd-card" style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b style="font-size:18px">'+esc(sel.client)+' · '+esc(sel.nom||sel.offre)+'</b>'+ofB(sel.offre)+sDot(sel.sante)+'<span style="margin-left:auto;display:flex;gap:6px"><button class="lk" id="pjedit">✎ Modifier</button><button class="lk" id="pjdone">'+(sel.statut==='terminée'?'Rouvrir':'Terminer ✓')+'</button><button class="lk" id="pjdel">🗑</button></span></div>'
         +'<div style="width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin-top:12px">'
         +ovCard('MONTANT',sel.montant?eur(sel.montant):'·')+ovCard('RÉCURRENCE',esc(sel.recurrence||'·'))+ovCard('DÉBUT → FIN',(sel.debut?dmy(sel.debut):'·')+' → '+(sel.fin?dmy(sel.fin):'·'))+ovCard('PHASE',esc(sel.phase||'·'))+ovCard('PROCHAINE ACTION',esc(sel.next||'·'))+ovCard('ÉCHÉANCE',sel.echeance?dmy(sel.echeance):'·')+'</div>'+(sel.contexte?('<div class="fs" style="margin-top:12px;white-space:pre-wrap;line-height:1.55">📖 '+esc(sel.contexte)+'</div>'):'')+'</div>'
+        +(sel.marque?(function(){const bm=(camp&&camp.budgetMensuel)||0;const tot=(camp&&camp.total)||0;const nb=(camp&&(camp.entries||[]).length)||0;const pc=bm?Math.round(100*tot/bm):null;const col=pc===null?'#C9CED4':(pc>=90?'#D4483B':(pc>=80?'#E8933A':'#2E9E6B'));
+        return '<div class="bgd-card" style="margin-bottom:14px"><div class="bgd-h">📡 Campagne liée · '+esc(sel.marque)+' <span class="cpsub">calendrier Notion · ce mois · zéro double saisie</span></div>'
+        +'<div style="width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin-top:10px">'
+        +ovCard('BUDGET ENGAGÉ',bm?(eur(tot)+' / '+eur(bm)):eur(tot))
+        +ovCard('CONSOMMÉ',pc!==null?('<span style="color:'+col+'">'+pc+' %</span>'):'·')
+        +ovCard('COLLABS DU MOIS',String(nb))
+        +'</div>'
+        +((pc!==null&&pc>=90)?'<div style="margin-top:9px;padding:8px 11px;border-radius:10px;background:#FBE5E0;color:#D4483B;font-size:12.5px;font-weight:600">⚠️ Budget de la marque presque consommé : vigilance sur la santé de la mission.</div>':'')
+        +'<div style="margin-top:9px"><a class="lk ceogo2" data-go="budget">budget →</a> <a class="lk ceogo2" data-go="campagnes">campagnes →</a></div></div>';})():'')
         +'<div class="bgd-grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr);margin-bottom:14px">'
         +'<div class="bgd-card"><div class="bgd-h">👥 Équipe & responsabilités <a class="lk" id="pjeq" style="float:right">✎</a></div><div style="width:100%;display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:8px">'+eqCard('LEAD STRATÉGIQUE','leadStrat')+eqCard('LEAD OPÉRATIONNEL','leadOps')+eqCard('CONTRIBUTEURS','contrib')+eqCard('VALIDATEUR FINAL','valid')+'</div>'
         +'<div class="bgd-h" style="margin-top:14px;font-size:14px">👤 Rôle CEO</div><div style="margin-top:4px">'+esc(sel.roleCeo||'·')+'</div></div>'
@@ -1147,6 +1159,7 @@ async function renderProjetsView(){
       $('pjdel').onclick=async()=>{if(!confirm('Supprimer cette mission ?'))return;await api('/api/missions',{method:'POST',body:JSON.stringify({op:'del',id:sel.id})});window.PJ_SEL=null;renderProjetsView();};
       $('pjdone').onclick=()=>save({statut:sel.statut==='terminée'?'en cours':'terminée'});
       $('pjedit').onclick=()=>{window.PJ_FORM=sel.id;renderProjetsView();};
+      host.querySelectorAll('.ceogo2').forEach(el=>{el.onclick=()=>navToView(el.dataset.go);});
       $('pjeq').onclick=()=>{const a2=prompt('Lead stratégique :',(sel.equipe||{}).leadStrat||'');if(a2===null)return;const b2=prompt('Lead opérationnel :',(sel.equipe||{}).leadOps||'');if(b2===null)return;const c2=prompt('Contributeurs :',(sel.equipe||{}).contrib||'');if(c2===null)return;const d2=prompt('Validateur final :',(sel.equipe||{}).valid||'');if(d2===null)return;save({equipe:{leadStrat:a2,leadOps:b2,contrib:c2,valid:d2}});};
       $('pjetadd').onclick=()=>{const n2=prompt('Nom de l\'étape (ex : Interviews, Rédaction, Sourcing…) :');if(!n2)return;save({etapes:[...(sel.etapes||[]),{nom:n2,done:false}]});};
       host.querySelectorAll('.pjet').forEach(e2=>e2.onclick=()=>{const et=[...(sel.etapes||[])];et[Number(e2.dataset.i)].done=!et[Number(e2.dataset.i)].done;save({etapes:et});});
