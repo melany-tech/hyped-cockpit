@@ -690,25 +690,34 @@ async function pennylaneSnapshot() {
       (d.items || []).forEach((a) => { treso += parseFloat(a.balance) || 0; });
       cursor = d.has_more ? (d.next_cursor || "") : "";
     } while (cursor);
-    // 2) CA ENCAISSÉ de l'année (HT, factures clients réellement payées, jamais le facturé)
+    // 2) CA ENCAISSÉ (HT, factures clients réellement payées) : 12 derniers mois + derniers encaissements
+    const lim = new Date(); lim.setMonth(lim.getMonth() - 12); const l0 = lim.toISOString().slice(0, 10);
     const y0 = new Date().getFullYear() + "-01-01";
+    const mensuel = {}; const lastPaid = [];
     let enc = 0; cursor = ""; let pages = 0, stop = false;
     do {
       const d = await plGet("/customer_invoices?limit=100&sort=-date" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""));
       for (const iv of (d.items || [])) {
-        if (iv.date && iv.date < y0) { stop = true; break; } // trié par date desc : on a dépassé l'année
+        if (iv.date && iv.date < l0) { stop = true; break; } // trié par date desc : on a dépassé 12 mois
         if (iv.draft) continue;
         if (iv.paid) {
           const ht = (parseFloat(iv.currency_amount_before_tax) || 0) * (parseFloat(iv.exchange_rate) || 1);
-          enc += ht; // les avoirs payés sont négatifs et se déduisent naturellement
+          const mk2 = String(iv.date || "").slice(0, 7);
+          if (mk2) mensuel[mk2] = (mensuel[mk2] || 0) + ht;
+          if (iv.date && iv.date >= y0) enc += ht; // avoirs négatifs déduits naturellement
+          if (lastPaid.length < 4 && ht > 0) lastPaid.push({ nom: (iv.customer && iv.customer.name) || iv.label || iv.invoice_number || "Facture", date: iv.date || "", montant: Math.round(ht) });
         }
       }
       cursor = (!stop && d.has_more) ? (d.next_cursor || "") : "";
       pages++;
-    } while (cursor && pages < 60);
-    PL_CACHE = { at: Date.now(), treso: Math.round(treso * 100) / 100, ca: Math.round(enc * 100) / 100, error: null };
+    } while (cursor && pages < 80);
+    Object.keys(mensuel).forEach((k) => { mensuel[k] = Math.round(mensuel[k] * 100) / 100; });
+    const moisK = new Date().toISOString().slice(0, 7);
+    const prevD = new Date(); prevD.setMonth(prevD.getMonth() - 1); const prevK = prevD.toISOString().slice(0, 7);
+    PL_CACHE = { at: Date.now(), treso: Math.round(treso * 100) / 100, ca: Math.round(enc * 100) / 100,
+      caMois: mensuel[moisK] || 0, caPrevMois: mensuel[prevK] || 0, mensuel, lastPaid, error: null };
   } catch (e) {
-    PL_CACHE = { at: Date.now(), treso: PL_CACHE.treso, ca: PL_CACHE.ca, error: String((e && e.message) || e).slice(0, 100) };
+    PL_CACHE = { ...PL_CACHE, at: Date.now(), error: String((e && e.message) || e).slice(0, 100) };
     try { console.error("[pennylane]", PL_CACHE.error); } catch (e2) {}
   }
   return PL_CACHE;
@@ -717,8 +726,19 @@ app.get("/api/ceo", auth, async (req, res) => {
   if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
   const o = loadCeo();
   let pl2 = null; try { pl2 = await pennylaneSnapshot(); } catch (e) {}
-  res.json({ ok: true, treso: o.treso || null, ca: o.ca || null,
-    pennylane: pl2 ? { connected: true, at: pl2.at, treso: pl2.treso, ca: pl2.ca, error: pl2.error, annee: new Date().getFullYear() } : { connected: false },
+  // historique de trésorerie (sert aux sparklines de la home) : 1 point par jour maximum
+  try {
+    const todayK = new Date().toISOString().slice(0, 10);
+    const cur = (pl2 && pl2.treso !== null && pl2.treso !== undefined) ? pl2.treso : (o.treso ? o.treso.amount : null);
+    if (cur !== null && cur !== undefined) {
+      o.tresoHist = o.tresoHist || [];
+      const last = o.tresoHist[o.tresoHist.length - 1];
+      if (!last || last.d !== todayK) { o.tresoHist.push({ d: todayK, v: cur }); if (o.tresoHist.length > 90) o.tresoHist = o.tresoHist.slice(-90); saveCeo(o); }
+      else if (last.v !== cur) { last.v = cur; saveCeo(o); }
+    }
+  } catch (e) {}
+  res.json({ ok: true, treso: o.treso || null, ca: o.ca || null, tresoHist: o.tresoHist || [],
+    pennylane: pl2 ? { connected: true, at: pl2.at, treso: pl2.treso, ca: pl2.ca, caMois: pl2.caMois, caPrevMois: pl2.caPrevMois, mensuel: pl2.mensuel || {}, lastPaid: pl2.lastPaid || [], error: pl2.error, annee: new Date().getFullYear() } : { connected: false },
     roadmap: o.roadmap || [], axes: RM_AXES, rmStatuts: RM_STATUTS, arbTypes: ARB_TYPES,
     arbitrages: (o.arbitrages || []).filter((a) => a.statut === "en attente").sort((a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999")) });
 });

@@ -1797,85 +1797,160 @@ async function loadCeoPanel(){
   try{
     const V='#7C5CFA';
     const month=new Date().toISOString().slice(0,7);
-    const pm=(()=>{const d=new Date();d.setMonth(d.getMonth()-1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');})();
+    const today=new Date().toISOString().slice(0,10);
     const gj=async(u)=>{try{const r=await api(u);return r.ok?await r.json():null;}catch(e){return null;}};
-    let brand='In Haircare'; try{brand=localStorage.getItem('hc_bgbrand')||'In Haircare';}catch(e){}
-    if(!brand)brand='In Haircare';
     const brands=['In Haircare','Doucéa','Curls Matter','LIVA'];
-    const [ceo,cb,td,bud,budPrev,buds]=await Promise.all([
-      gj('/api/ceo'),gj('/api/copilot/box'),gj('/api/todos?view='+encodeURIComponent(VIEWER.name)),
-      gj('/api/budget/'+encodeURIComponent(brand)+'?month='+month),
-      gj('/api/budget/'+encodeURIComponent(brand)+'?month='+pm),
+    const [ceo,cb,td,crm,dg,rh,buds]=await Promise.all([
+      gj('/api/ceo'),gj('/api/copilot/box'),gj('/api/todos?view='+encodeURIComponent(VIEWER.name)),gj('/api/crm'),gj('/api/dirigeant'),gj('/api/rh'),
       Promise.all(brands.map(b=>gj('/api/budget/'+encodeURIComponent(b)+'?month='+month).then(d=>d?{brand:b,...d}:null))).then(a=>a.filter(Boolean))
     ]);
-    const today=new Date().toISOString().slice(0,10);
-    const eur=(n)=>((Number(n)||0).toLocaleString('fr-FR')+' €');
-    const arbs=(ceo&&ceo.arbitrages)||[];
-    const props=((cb&&cb.proposals)||[]).filter(x=>x.categorie==='decision'&&x.status==='pending'&&nlow(x.cpName||'')===nlow(VIEWER.name));
-    // ---- 3 KPIs (pastille lavande ronde, comme la maquette) ----
-    const bm=(bud&&bud.budgetMensuel)||0, tot=(bud&&bud.total)||0, rest=bm?bm-tot:null;
-    const bmP=(budPrev&&budPrev.budgetMensuel)||0, restP=bmP?bmP-((budPrev&&budPrev.total)||0):null;
-    let sub2='vs mois dernier · n/d';
-    if(rest!==null&&restP!==null&&restP!==0){const pc=Math.round(1000*(rest-restP)/Math.abs(restP))/10;sub2='vs mois dernier <span style="color:'+(pc<0?'#D4483B':'#2E9E6B')+';font-weight:700">'+(pc>0?'+':'')+String(pc).replace('.',',')+' %</span>';}
-    const kic=(ic)=>'<div style="width:54px;height:54px;flex:0 0 54px;border-radius:50%;background:#EEEBFB;display:flex;align-items:center;justify-content:center;font-size:22px">'+ic+'</div>';
-    const kpi=(ic,lbl,val,sub)=>'<div class="bgd-card" style="min-width:0;display:flex;gap:14px;align-items:center;padding:18px">'+kic(ic)+'<div style="min-width:0"><div class="bgd-klbl">'+lbl+'</div><div class="bgd-kval" style="font-size:24px">'+val+'</div><div class="bgd-ksub">'+sub+'</div></div></div>';
-    const pl2=(ceo&&ceo.pennylane)||{connected:false};
-    const plOn2=pl2.connected&&!pl2.error&&pl2.treso!==null&&pl2.treso!==undefined;
-    const tresoM=ceo&&ceo.treso;
-    const fresh2=(at)=>at?('maj le '+new Date(at).toLocaleDateString('fr-FR')+' à '+new Date(at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})):'';
-    const tresoVal=plOn2?eur(pl2.treso):(tresoM?eur(tresoM.amount):'à renseigner');
-    const tresoSub=plOn2?('🟢 Pennylane · '+fresh2(pl2.at)):(pl2.connected&&pl2.error?'⚠️ Pennylane en erreur · valeur manuelle via ✎':(tresoM?('saisie manuelle · '+fresh2(tresoM.at)):'clique ✎ · ou branche Pennylane (clé dans Render)'));
-    const kpis='<div class="bgd-kpis" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));margin-bottom:14px">'
-      +kpi('🏦','Budget du mois - '+esc(brand),bm?eur(bm):'à définir',(bm&&bmP&&bm===bmP)?'vs mois dernier : stable':(bm&&bmP?sub2:'fiche marque, onglet Marques'))
-      +kpi('💰','Trésorerie disponible'+(plOn2?'':' <a class="lk" id="ceotreso" title="Saisir la trésorerie">✎</a>'),tresoVal,tresoSub)
-      +kpi('🏷️','Marques suivies',String(brands.length),'Actives ce mois-ci')
-      +'</div>';
-    // ---- Ma to-do ----
+    const eur=(n)=>((Math.round(Number(n)||0)).toLocaleString('fr-FR')+' €');
     const dmy=(x)=>String(x||'').split('-').reverse().join('/');
+    const pl=(ceo&&ceo.pennylane)||{connected:false};
+    const plOn=pl.connected&&!pl.error&&pl.treso!==null&&pl.treso!==undefined;
+    const tresoM=ceo&&ceo.treso;
+    const hist=(ceo&&ceo.tresoHist)||[];
+    // ---------- helpers graphiques ----------
+    const spark=(pts,color)=>{
+      if(!pts||pts.length<2)return '<div style="height:34px;display:flex;align-items:center" class="fs">graphique dès 2 jours de données</div>';
+      const w=210,h=34,mn=Math.min(...pts),mx=Math.max(...pts),rg=(mx-mn)||1,st=w/(pts.length-1);
+      const pp=pts.map((v,i)=>(i*st).toFixed(1)+','+(h-3-((v-mn)/rg)*(h-6)).toFixed(1)).join(' ');
+      return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" style="display:block;margin-top:6px;max-width:100%"><polyline points="'+pp+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="'+((pts.length-1)*st).toFixed(1)+'" cy="'+(h-3-((pts[pts.length-1]-mn)/rg)*(h-6)).toFixed(1)+'" r="3" fill="'+color+'"/></svg>';
+    };
+    const pct2=(cur,prev)=>{if(prev===null||prev===undefined||!prev)return null;const v=Math.round(1000*(cur-prev)/Math.abs(prev))/10;return v;};
+    const pctTxt=(v)=>v===null?'':('<span style="color:'+(v>=0?'#2E9E6B':'#D4483B')+';font-weight:700">'+(v>=0?'+':'')+String(v).replace('.',',')+' %</span>');
+    // ---------- données KPI ----------
+    const tresoVal=plOn?pl.treso:(tresoM?tresoM.amount:null);
+    const h30=hist.length>1?hist[Math.max(0,hist.length-31)].v:null;
+    const tresoPct=tresoVal!==null?pct2(tresoVal,h30):null;
+    const caMois=plOn?(pl.caMois||0):null;
+    const caPct=plOn?pct2(pl.caMois||0,pl.caPrevMois||0):null;
+    const mensuel=(pl&&pl.mensuel)||{};
+    const moisKeys=[];{const d0=new Date();d0.setMonth(d0.getMonth()-11);for(let i=0;i<12;i++){moisKeys.push(d0.toISOString().slice(0,7));d0.setMonth(d0.getMonth()+1);}}
+    const caSerie=moisKeys.map(k=>Math.round(mensuel[k]||0));
+    const crmStats=(crm&&crm.stats)||{pipeline:0,actifs:0,gagnesMois:0,gagnesMoisN:0};
+    const deals=(crm&&crm.deals)||[];
+    const props=((cb&&cb.proposals)||[]).filter(x=>x.categorie==='decision'&&x.status==='pending'&&nlow(x.cpName||'')===nlow(VIEWER.name));
+    const arbs=(ceo&&ceo.arbitrages)||[];
+    const nDec=arbs.length+props.length;
+    const mem=((dg&&dg.members)||[]).map((m,i)=>({...m,charge:Math.min(150,(m.open||0)*8+(m.late||0)*12)}));
+    const band=mem.length?Math.max(0,100-Math.round(mem.reduce((s,m)=>s+Math.min(m.charge,100),0)/mem.length)):0;
+    const absP=((rh&&rh.absences)||[]).filter(a=>a.statut==='en attente');
+    const surcharge=mem.filter(m=>m.charge>100).length;
+    // ---------- ligne 1 : 5 KPIs avec sparklines ----------
+    const kpi=(ic,bgc,lbl,val,sub,extra,link,go,lc)=>'<div class="bgd-card" style="min-width:0;display:flex;flex-direction:column;gap:2px"><div style="display:flex;gap:12px;align-items:flex-start"><div style="width:48px;height:48px;flex:0 0 48px;border-radius:50%;background:'+bgc+';display:flex;align-items:center;justify-content:center;font-size:20px">'+ic+'</div><div style="min-width:0;flex:1"><div class="bgd-klbl">'+lbl+'</div><div class="bgd-kval" style="font-size:23px">'+val+'</div><div class="bgd-ksub">'+sub+'</div></div></div>'+(extra||'')+'<a class="lk ceogo" data-go="'+go+'" style="border:none;background:none;padding:4px 0 0;color:'+lc+';font-weight:700;font-size:12.5px">'+link+' →</a></div>';
+    const kpis='<div class="bgd-kpis" style="grid-template-columns:repeat(auto-fit,minmax(225px,1fr));margin-bottom:14px">'
+      +kpi('💼','#E7F5EC','Trésorerie restante'+(plOn?'':' <a class="lk" id="ceotreso" title="Saisir">✎</a>'),tresoVal!==null?eur(tresoVal):'à renseigner',tresoVal!==null?('vs mois dernier '+(tresoPct!==null?pctTxt(tresoPct):'· n/d')+(plOn?' · 🟢 Pennylane':'')):'✎ ou branche Pennylane',spark(hist.slice(-30).map(x=>x.v),'#2E9E6B'),'Voir le détail finance','budget','#2E9E6B')
+      +kpi('📈','#EEEBFB','CA encaissé ce mois',caMois!==null?eur(caMois):'à venir',caMois!==null?('vs mois dernier '+(caPct!==null?pctTxt(caPct):'· n/d')):'branche Pennylane pour le réel',spark(caSerie.some(v=>v>0)?caSerie:null,'#7C5CFA'),'Voir le détail finance','budget','#7C5CFA')
+      +kpi('🔽','#E7F0FA','Pipeline commercial',eur(crmStats.pipeline),'prévisionnel en cours','<div style="margin-top:6px"><span style="color:'+V+';font-weight:700;font-size:12.5px">'+crmStats.actifs+' opportunité(s) active(s)</span></div>','Voir le pipeline','commercial','#2F6DB5')
+      +kpi('🗳️','#FDF0E0','Projets à arbitrer',String(nDec),'décision(s) requise(s)','','Voir les décisions','__dec','#C77F2A')
+      +kpi('👥','#FBE5E0','Bande passante équipe',band+' %','capacité restante','<div style="margin-top:6px"><span class="fs">approximation basée sur les tâches</span></div>','Voir la charge','projets','#D4483B')
+      +'</div>';
+    // ---------- ligne 2 ----------
     const tasks=((td&&td.tasks)||[]);
-    const plab=(x)=>{if(!x.echeance)return '<span class="fs">cette semaine</span>';if(x.echeance<today)return '<span style="color:#D4483B;font-size:12px;font-weight:700">En retard</span>';if(x.echeance===today)return '<span style="color:#C77F2A;font-size:12px;font-weight:700">Aujourd\'hui</span>';return '<span class="fs">'+esc(dmy(x.echeance))+'</span>';};
-    const todoH='<div class="bgd-card" style="height:100%"><div class="bgd-h">🎯 Ma to-do <a class="lk ceogo" data-go="todo" style="float:right">Tout voir →</a></div>'
-      +'<div style="margin:8px 0"><input id="ceotodoin" class="rhin" style="width:100%;box-sizing:border-box;border-radius:10px" placeholder="Ajouter une tâche pour toi… puis Entrée"></div>'
-      +(tasks.length?tasks.slice(0,6).map(x=>'<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #F0F1F6"><input type="checkbox" class="ceodone" data-id="'+esc(x.id)+'" style="width:15px;height:15px;flex:0 0 15px"><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(x.task)+'</span>'+plab(x)+'</div>').join(''):'<div style="text-align:center;padding:18px 8px"><div style="font-size:36px">📋✨</div><div class="fs" style="margin-top:6px">To-do à jour, bravo !</div></div>')
-      +(tasks.length>6?('<div class="fs" style="margin-top:7px">+ '+(tasks.length-6)+' autre(s) dans l\'onglet To-do</div>'):'')
-      +'</div>';
-    // ---- Décisions du jour ----
-    const decRows=arbs.map(a=>'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #F0F1F6"><span class="bgd-badge" style="background:#EEEBFB;color:#4C3BB8">'+esc(a.type)+'</span><span style="flex:1;min-width:140px">'+esc(a.sujet)+'</span>'+(a.montant?('<b>'+eur(a.montant)+'</b>'):'')+(a.deadline?('<span class="bgd-badge" style="background:'+(a.deadline<=today?'#FBE5E0':'#FDF0E0')+';color:'+(a.deadline<=today?'#D4483B':'#C77F2A')+'">'+dmy(a.deadline)+'</span>'):'')+'<span class="fs">par '+esc(a.par)+'</span><span style="display:flex;gap:5px"><button class="lk" data-ceoarb="valide" data-id="'+esc(a.id)+'">✅</button><button class="lk" data-ceoarb="refuse" data-id="'+esc(a.id)+'">❌</button><button class="lk" data-ceoarb="precisions" data-id="'+esc(a.id)+'">💬</button></span></div>').join('')
-      +props.slice(0,4).map(x=>'<div class="ceogo" data-go="messages" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #F0F1F6;cursor:pointer"><span class="bgd-badge" style="background:#E7F5EC;color:#2E9E6B">Copilote</span><span style="flex:1;min-width:0">'+esc(String(x.question||x.resume||'').slice(0,100))+'</span><span style="color:#B7C2C6">›</span></div>').join('');
-    const decH='<div class="bgd-card" style="height:100%"><div class="bgd-h">🗳️ Décisions du jour</div>'
-      +((arbs.length||props.length)?decRows
-        :'<div style="text-align:center;padding:26px 10px"><div style="font-size:44px">🎉</div><div style="font-weight:700;margin-top:10px;font-size:15px">Rien à trancher aujourd\'hui, bravo !</div><div class="fs" style="margin-top:8px;line-height:1.5">Arbitrages de l\'équipe + décisions de tes boites.<br>Celles des CP restent chez elles.</div></div>')
-      +'</div>';
-    // ---- Marques & comptes ----
-    const watch=[];buds.forEach(d=>{const bm2=d.budgetMensuel||0,tot2=d.total||0;
-      if(bm2>0&&tot2>bm2)watch.push({brand:d.brand,label:'budget dépassé',warn:2,restant:bm2-tot2});
-      else if(bm2>0&&tot2>=0.8*bm2)watch.push({brand:d.brand,label:Math.round(100*tot2/bm2)+' % consommé',warn:1,restant:bm2-tot2});
-      else watch.push({brand:d.brand,label:bm2>0?'OK':'budget à définir',warn:0,restant:bm2>0?(bm2-tot2):null});});
-    const cptH='<div class="bgd-card" style="height:100%"><div class="bgd-h">🏷️ Marques & comptes <a class="lk ceogo" data-go="budget" style="float:right">Budgets →</a></div>'
-      +watch.map(w=>'<div class="ceogo" data-go="budget" style="display:grid;grid-template-columns:28px minmax(88px,1fr) max-content max-content;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #F0F1F6;cursor:pointer"><span style="width:28px;height:28px;border-radius:9px;background:#1F2430;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:10px">'+esc(String(w.brand||'?').split(' ').map(s=>s[0]).join('').slice(0,2).toUpperCase())+'</span><b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(w.brand)+'</b><span class="fs" style="text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap">'+(w.restant!==null?eur(w.restant):' ')+'</span><span class="bgd-badge" style="justify-self:end;white-space:nowrap;font-size:11px;padding:5px 10px;background:'+(w.warn===2?'#FBE5E0':(w.warn===1?'#FDF0E0':'#E7F5EC'))+';color:'+(w.warn===2?'#D4483B':(w.warn===1?'#C77F2A':'#2E9E6B'))+'">'+esc(w.label)+'</span></div>').join('')
-      +'<div class="fs" style="margin-top:8px;line-height:1.5">Par client, jamais additionnés. Marges et échéances viendront avec Pennylane (V2).</div></div>';
-    // ---- Assistant IA pleine largeur ----
+    const chipC=['#E7F5EC|#2E9E6B','#EEEBFB|#4C3BB8','#FDF0E0|#C77F2A','#E7F0FA|#2F6DB5','#FBE5E0|#D4483B'];
+    const chip=(txt,i)=>{const c=chipC[i%chipC.length].split('|');return '<span class="bgd-badge" style="background:'+c[0]+';color:'+c[1]+';font-size:10.5px">'+esc(txt)+'</span>';};
+    const todoH='<div class="bgd-card" style="height:100%"><div class="bgd-h">✅ My personal to-do</div>'
+      +(tasks.length?tasks.slice(0,6).map((x,i)=>'<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #F0F1F6"><input type="checkbox" class="ceodone" data-id="'+esc(x.id)+'" style="width:15px;height:15px;flex:0 0 15px"><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(x.task)+'</span>'+chip(x.projet||x.type||'Tâche',i)+'<span class="fs" style="white-space:nowrap">'+(x.echeance?dmy(x.echeance).slice(0,5):'')+'</span></div>').join(''):'<div style="text-align:center;padding:18px 8px"><div style="font-size:36px">📋✨</div><div class="fs" style="margin-top:6px">To-do à jour, bravo !</div></div>')
+      +'<a class="lk ceogo" data-go="todo" style="border:none;background:none;padding:8px 0 0;color:'+V+';font-weight:700;font-size:12.5px">Voir toutes mes tâches →</a></div>';
+    const nLead=deals.filter(x=>['Lead','Contacté'].includes(x.statut)).length;
+    const nProp=deals.filter(x=>x.statut==='Proposition').length;
+    const nNego=deals.filter(x=>x.statut==='Négociation').length;
+    const nClose=crmStats.gagnesMoisN||0;
+    const nRel=deals.filter(x=>!['Gagné','Perdu'].includes(x.statut)&&x.next).length;
+    const fcol=(lbl,n,c)=>'<div style="flex:1;min-width:0;text-align:center;padding:9px 4px;border-right:1px solid #F0F1F6"><div class="fs" style="font-size:10.5px">'+lbl+'</div><div style="font-weight:800;font-size:21px;color:'+c+'">'+n+'</div></div>';
+    const crmH='<div class="bgd-card" style="height:100%"><div class="bgd-h">🧭 Suivi commercial <span class="cpsub" style="float:right">ce mois</span></div>'
+      +'<div style="display:flex;border:1px solid #F0F1F6;border-radius:12px;margin:8px 0;overflow:hidden">'+fcol('Leads entrants',nLead,'#2E9E6B')+fcol('Propositions',nProp,'#4C3BB8')+fcol('Négociation',nNego,'#C77F2A')+fcol('Closing',nClose,'#2E9E6B').replace('border-right:1px solid #F0F1F6','')+'</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">'
+      +'<div style="border:1px solid #F0F1F6;border-radius:12px;padding:10px"><div class="fs" style="font-size:11px">Chiffre d\'affaires prévisionnel</div><div style="font-weight:800;font-size:18px">'+eur(crmStats.pipeline)+'</div><div class="fs">pipeline actif</div></div>'
+      +'<div style="border:1px solid #F0F1F6;border-radius:12px;padding:10px"><div class="fs" style="font-size:11px">Actions à relancer</div><div style="font-weight:800;font-size:18px">'+nRel+'</div><div class="fs">prochaine(s) action(s) notée(s)</div></div>'
+      +'</div>'
+      +'<a class="lk ceogo" data-go="commercial" style="border:none;background:none;padding:8px 0 0;color:'+V+';font-weight:700;font-size:12.5px">Voir le pipeline complet →</a></div>';
+    const stB2=(d)=>{const bm=d.budgetMensuel||0,tot=d.total||0;const nb=(d.entries||[]).length;
+      if(!nb)return ['En attente','#EFF1F3','#7A828C','#C9CED4'];
+      if(bm&&tot>bm)return ['En retard','#FBE5E0','#D4483B','#D4483B'];
+      if(bm&&tot>=0.8*bm)return ['En cours','#E7F0FA','#2F6DB5','#E8933A'];
+      return ['En cours','#E7F0FA','#2F6DB5','#2E9E6B'];};
+    const nextDate=(d)=>{const ds=(d.entries||[]).map(e=>e.date).filter(x=>x&&x>=today).sort();return ds[0]||null;};
+    const respOf=(d)=>{const c={};(d.entries||[]).forEach(e=>{if(e.cp)c[e.cp]=(c[e.cp]||0)+1;});const top=Object.entries(c).sort((a,b)=>b[1]-a[1])[0];return top?top[0]:'à assigner';};
+    const pjH='<div class="bgd-card" style="height:100%"><div class="bgd-h">📋 Suivi projets équipe</div>'
+      +'<div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) max-content max-content 14px;gap:8px;padding:7px 0;border-bottom:1px solid #F0F1F6" class="fs"><span>Projet / Client</span><span>Responsable</span><span>Statut</span><span>Échéance</span><span></span></div>'
+      +buds.map(d=>{const s=stB2(d);const nd=nextDate(d);
+        return '<div class="ceogo" data-go="projets" style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) max-content max-content 14px;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid #F0F1F6;cursor:pointer"><b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(d.brand)+'</b><span class="fs" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(respOf(d))+'</span><span class="bgd-badge" style="background:'+s[1]+';color:'+s[2]+';font-size:10.5px">'+s[0]+'</span><span class="fs" style="white-space:nowrap">'+(nd?dmy(nd).slice(0,5):'·')+'</span><span style="width:9px;height:9px;border-radius:50%;background:'+s[3]+'"></span></div>';}).join('')
+      +'<a class="lk ceogo" data-go="projets" style="border:none;background:none;padding:8px 0 0;color:'+V+';font-weight:700;font-size:12.5px">Voir tous les projets →</a></div>';
+    // ---------- ligne 3 ----------
+    const AVC=['#6D5AE0','#E8865D','#2C9087','#B98A12','#4A7FB5'];
+    const chCol=(c)=>c>100?'#D4483B':(c>=85?'#C77F2A':(c>=70?'#B98A12':'#2E9E6B'));
+    const rhH='<div class="bgd-card" style="height:100%"><div class="bgd-h">👥 RH & équipe <a class="lk ceogo" data-go="rh" style="float:right">Voir la fiche équipe complète →</a></div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1.4fr;gap:9px;margin:8px 0">'
+      +'<div style="border:1px solid #F0F1F6;border-radius:12px;padding:10px"><div class="fs" style="font-size:11px">Effectif</div><div style="font-weight:800;font-size:20px">'+((dg&&dg.members)?dg.members.length+1:'·')+'</div><div class="fs">toi comprise</div></div>'
+      +'<div style="border:1px solid #F0F1F6;border-radius:12px;padding:10px"><div class="fs" style="font-size:11px">Capacité restante équipe</div><div style="font-weight:800;font-size:20px">'+band+' %</div><div class="ceobar" style="margin-top:5px"><div style="width:'+(100-band)+'%;background:'+chCol(100-band)+'"></div></div></div>'
+      +'</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:8px">'
+      +'<div class="ceogo" data-go="rh" style="border:1px solid #F0F1F6;border-radius:12px;padding:10px;cursor:pointer"><div class="fs" style="font-size:11px">🏖️ Congés en attente</div><div style="font-weight:800;font-size:18px">'+absP.length+'</div><div class="fs">demande(s)</div></div>'
+      +'<div class="ceogo" data-go="projets" style="border:1px solid #F0F1F6;border-radius:12px;padding:10px;cursor:pointer"><div class="fs" style="font-size:11px">⚠️ À risque surcharge</div><div style="font-weight:800;font-size:18px">'+surcharge+'</div><div class="fs">collaborateur(s)</div></div>'
+      +'</div>'
+      +'<div class="fs" style="font-weight:700;margin:4px 0">Membres de l\'équipe</div>'
+      +mem.slice(0,4).map((m,i)=>'<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid #F0F1F6"><span style="width:26px;height:26px;flex:0 0 26px;border-radius:50%;background:'+AVC[i%AVC.length]+';color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:11px">'+esc(String(m.name).slice(0,1).toUpperCase())+'</span><div style="min-width:0;flex:1"><b style="font-size:12.5px">'+esc(m.name)+'</b><div class="fs" style="font-size:10.5px">'+esc(m.role==='team'?'Social Media Manager':'Cheffe de projet')+'</div></div><b style="color:'+chCol(m.charge)+';font-size:12px">'+m.charge+' %</b><div class="ceobar" style="width:74px"><div style="width:'+Math.min(100,m.charge)+'%;background:'+chCol(m.charge)+'"></div></div><a class="lk ceogo" data-go="rh" title="Fiche RH">📄</a></div>').join('')
+      +'<div class="fs" style="margin-top:8px">🛡️ Chaque collaborateur dispose d\'une fiche RH complète (documents, RIB, congés, notes…).</div></div>';
+    const decH='<div class="bgd-card" style="height:100%" id="ceocard-dec"><div class="bgd-h">🗳️ Décisions du jour</div>'
+      +((arbs.length||props.length)?(
+        arbs.map((a,i)=>'<div style="display:flex;align-items:flex-start;gap:9px;padding:9px 0;border-bottom:1px solid #F0F1F6">'+chip(a.type,i)+'<span style="flex:1;min-width:0;font-size:13px">'+esc(a.sujet)+(a.montant?(' <b>'+eur(a.montant)+'</b>'):'')+'</span><span style="display:flex;gap:4px"><button class="lk" data-ceoarb="valide" data-id="'+esc(a.id)+'">✅</button><button class="lk" data-ceoarb="refuse" data-id="'+esc(a.id)+'">❌</button><button class="lk" data-ceoarb="precisions" data-id="'+esc(a.id)+'">💬</button></span></div>').join('')
+        +props.slice(0,4).map((x,i)=>'<div class="ceogo" data-go="messages" style="display:flex;align-items:flex-start;gap:9px;padding:9px 0;border-bottom:1px solid #F0F1F6;cursor:pointer">'+chip('Copilote',i+1)+'<span style="flex:1;min-width:0;font-size:13px">'+esc(String(x.question||x.resume||'').slice(0,100))+'</span><span style="color:#B7C2C6">›</span></div>').join('')
+      ):'<div style="text-align:center;padding:22px 8px"><div style="font-size:40px">🎉</div><div style="font-weight:700;margin-top:8px">Rien à trancher aujourd\'hui, bravo !</div><div class="fs" style="margin-top:6px">Arbitrages de l\'équipe + décisions de tes boîtes.</div></div>')
+      +'<a class="lk ceogo" data-go="messages" style="border:none;background:none;padding:8px 0 0;color:'+V+';font-weight:700;font-size:12.5px">Voir toutes les décisions →</a></div>';
+    const consoP=(d)=>{const bm=d.budgetMensuel||0,tot=d.total||0;return bm?Math.min(100,Math.round(100*tot/bm)):null;};
+    const mkH='<div class="bgd-card" style="height:100%"><div class="bgd-h">🏷️ Marques & comptes <a class="lk ceogo" data-go="budget" style="float:right">Voir tout →</a></div>'
+      +'<div style="display:grid;grid-template-columns:minmax(0,1fr) max-content minmax(90px,110px);gap:10px;padding:7px 0;border-bottom:1px solid #F0F1F6" class="fs"><span>Marque</span><span>Budget restant</span><span>Conso.</span></div>'
+      +buds.map(d=>{const pc=consoP(d);const bm=d.budgetMensuel||0;const col=pc===null?'#C9CED4':(pc>=90?'#D4483B':(pc>=80?'#E8933A':'#2E9E6B'));
+        return '<div class="ceogo" data-go="budget" style="display:grid;grid-template-columns:minmax(0,1fr) max-content minmax(90px,110px);gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid #F0F1F6;cursor:pointer"><b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(d.brand)+'</b><span class="fs" style="text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap">'+(bm?eur(bm-(d.total||0)):'à définir')+'</span>'+(pc!==null?('<span style="display:flex;align-items:center;gap:6px"><b style="font-size:11.5px;color:'+col+'">'+pc+' %</b><div class="ceobar" style="flex:1"><div style="width:'+pc+'%;background:'+col+'"></div></div></span>'):'<span class="fs">·</span>')+'</div>';}).join('')
+      +'<div style="margin-top:8px;padding:8px 11px;border-radius:10px;background:#F4F2FB;font-size:12px;color:#4C3BB8">📊 Les budgets détaillés sont disponibles dans l\'onglet Budget.</div></div>';
+    // ---------- ligne 4 : évolution du CA + derniers encaissements ----------
+    let chartH='';
+    if(caSerie.some(v=>v>0)){
+      const w=740,h=190,padL=48,padB=24,padT=16,iw=w-padL-14,ih=h-padT-padB;
+      const mx=Math.max(...caSerie,1);
+      const st=iw/(caSerie.length-1);
+      const P=(v,i)=>[padL+i*st,padT+ih-(v/mx)*ih];
+      const pts=caSerie.map((v,i)=>P(v,i).map(n=>n.toFixed(1)).join(',')).join(' ');
+      const area='M'+(padL)+','+(padT+ih)+' L'+caSerie.map((v,i)=>P(v,i).map(n=>n.toFixed(1)).join(',')).join(' L')+' L'+(padL+iw).toFixed(1)+','+(padT+ih)+' Z';
+      const nomsM=['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
+      const xlbl=moisKeys.map((k,i)=>(i%2===0)?('<text x="'+(padL+i*st).toFixed(1)+'" y="'+(h-6)+'" font-size="10" fill="#9AA3AC" text-anchor="middle">'+nomsM[Number(k.slice(5,7))-1]+'</text>'):'').join('');
+      const ylbl=[0,0.5,1].map(f=>'<text x="'+(padL-8)+'" y="'+(padT+ih-f*ih+3).toFixed(1)+'" font-size="10" fill="#9AA3AC" text-anchor="end">'+(Math.round(mx*f/1000))+' k€</text><line x1="'+padL+'" y1="'+(padT+ih-f*ih).toFixed(1)+'" x2="'+(padL+iw)+'" y2="'+(padT+ih-f*ih).toFixed(1)+'" stroke="#F0F1F6"/>').join('');
+      const li=caSerie.length-1;const lp=P(caSerie[li],li);
+      chartH='<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto;display:block">'+ylbl+'<path d="'+area+'" fill="#EEEBFB" opacity="0.6"/><polyline points="'+pts+'" fill="none" stroke="'+V+'" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>'+caSerie.map((v,i)=>{const q=P(v,i);return '<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="3" fill="'+V+'"/>';}).join('')+'<rect x="'+(lp[0]-42).toFixed(1)+'" y="'+(lp[1]-26).toFixed(1)+'" width="84" height="18" rx="9" fill="'+V+'"/><text x="'+lp[0].toFixed(1)+'" y="'+(lp[1]-13).toFixed(1)+'" font-size="10.5" fill="#fff" text-anchor="middle" font-weight="700">'+eur(caSerie[li])+'</text>'+xlbl+'</svg>';
+    } else {
+      chartH='<div style="text-align:center;padding:34px 10px"><div style="font-size:38px">📈</div><div style="font-weight:700;margin-top:8px">La courbe s\'affichera avec Pennylane</div><div class="fs" style="margin-top:6px">Génère la clé API (Paramètres → Connectivité → Développeurs) et colle-la dans Render (PENNYLANE_API_KEY) : le CA encaissé des 12 derniers mois apparaîtra ici automatiquement.</div></div>';
+    }
+    const lastPaid=(pl&&pl.lastPaid)||[];
+    const encH='<div style="min-width:0"><div class="bgd-h" style="font-size:14px">Derniers encaissements</div>'
+      +(lastPaid.length?lastPaid.map(x=>'<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #F0F1F6"><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px">'+esc(x.nom)+'</span><span class="fs">'+dmy(x.date).slice(0,5)+'</span><b style="white-space:nowrap">'+eur(x.montant)+'</b></div>').join(''):'<div class="fs" style="padding:8px 0">visibles dès que Pennylane est branché</div>')
+      +'<a class="lk ceogo" data-go="budget" style="border:none;background:none;padding:8px 0 0;color:'+V+';font-weight:700;font-size:12.5px">Voir le détail →</a></div>';
+    const caCard='<div class="bgd-card" style="margin-bottom:14px"><div class="bgd-h">📈 Évolution du CA encaissé <span class="cpsub">12 derniers mois · factures payées (HT)</span></div>'
+      +'<div style="display:grid;grid-template-columns:minmax(0,2.2fr) minmax(220px,1fr);gap:18px;align-items:start;margin-top:6px">'+ '<div style="min-width:0">'+chartH+'</div>'+encH+'</div></div>';
+    // ---------- assistant IA (conservé : c'est ta barre d'action) ----------
     window.CEO_CHAT=window.CEO_CHAT||[];
-    const iaH='<div class="bgd-card" id="ceobriefcard"><div class="bgd-h">🤖 Assistant IA données réelles <span class="cpsub">· clique une recommandation pour ouvrir sa source</span></div>'
+    const iaH='<div class="bgd-card" id="ceobriefcard" style="margin-bottom:14px"><div class="bgd-h">🤖 Assistant IA données réelles <span class="cpsub">· clique une recommandation pour ouvrir sa source</span></div>'
       +'<div id="ceobrieftxt" class="fs" style="font-size:13.5px;line-height:1.6;margin-top:4px">Chargement du brief du jour…</div><div id="ceobriefdet" style="margin-top:9px"></div>'
       +'<div id="ceochatlog">'+window.CEO_CHAT.map(m=>'<div style="padding:7px 11px;border-radius:11px;background:#F4F2FB;margin:7px 0 2px;font-size:13px"><b>Toi :</b> '+esc(m.q)+'</div><div style="padding:7px 11px;border-radius:11px;background:#F5F6F8;margin:2px 0;font-size:13px">'+esc(m.a)+'</div>').join('')+'</div>'
       +'<div style="display:flex;gap:8px;margin-top:10px"><input id="ceochatin" class="rhin" style="flex:1;border-radius:12px;padding:12px 14px" placeholder="Posez une question… (ex : « Quelles tâches sont en retard ? ») · ou une action : « ajoute … à Najem », « refuse les décisions de Rozenn »"><button id="ceochatgo" style="font-family:inherit;font-size:13.5px;font-weight:700;padding:12px 22px;border-radius:12px;border:none;background:linear-gradient(135deg,#8A63F8,#6D4DE8);color:#fff;cursor:pointer;white-space:nowrap">Envoyer ✨</button></div></div>';
-    // ---- assemblage (fidèle à la maquette : 3 KPIs, 3 cartes, IA, bouton violet) ----
+    // ---------- assemblage ----------
     p.innerHTML=kpis
-      +'<div class="bgd-grid ceogrid" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);margin-bottom:14px"><div id="ceocard-todo">'+todoH+'</div><div id="ceocard-dec">'+decH+'</div><div id="ceocard-cpt">'+cptH+'</div></div>'
-      +'<div id="ceocard-ia">'+iaH+'</div>'
-      +'<button id="ceofull" style="width:100%;margin-top:14px;padding:14px;border-radius:14px;font-size:14px;font-weight:700;font-family:inherit;border:none;background:'+V+';color:#fff;cursor:pointer">▦ Ouvrir le cockpit complet →</button>';
-    // ---- interactions ----
-    p.querySelectorAll('.ceogo').forEach(el=>el.onclick=(ev)=>{ev.stopPropagation();navToView(el.dataset.go);});
+      +'<div class="bgd-grid ceogrid" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.15fr);margin-bottom:14px">'+todoH+crmH+pjH+'</div>'
+      +'<div class="bgd-grid ceogrid" style="grid-template-columns:minmax(0,1.25fr) minmax(0,1fr) minmax(0,1fr);margin-bottom:14px">'+rhH+decH+mkH+'</div>'
+      +caCard
+      +iaH
+      +'<button id="ceofull" style="width:100%;padding:13px;border-radius:14px;font-size:14px;font-weight:700;font-family:inherit;border:none;background:'+V+';color:#fff;cursor:pointer">▦ Ouvrir le cockpit complet →</button>';
+    // ---------- interactions ----------
+    const goDec=()=>{const e2=document.getElementById('ceocard-dec');if(e2){e2.scrollIntoView({behavior:'smooth',block:'center'});e2.style.boxShadow='0 0 0 3px '+V;setTimeout(()=>{e2.style.boxShadow='';},1500);}};
+    p.querySelectorAll('.ceogo').forEach(el=>el.onclick=(ev)=>{ev.stopPropagation();if(el.dataset.go==='__dec'){goDec();return;}navToView(el.dataset.go);});
     const tE=$('ceotreso'); if(tE)tE.onclick=async(ev)=>{ev.stopPropagation();
       const v=prompt('Trésorerie disponible (€, telle que sur tes comptes) :',tresoM?String(tresoM.amount):''); if(v===null||v.trim()==='')return;
       const r=await api('/api/ceo/config',{method:'POST',body:JSON.stringify({treso:Number(v.replace(/[^\d.,-]/g,'').replace(',','.'))})});
       if(!r.ok){const dd=await r.json().catch(()=>({}));alert(dd.error||'Erreur');} loadCeoPanel();
     };
-    const cf=$('ceofull'); if(cf)cf.onclick=()=>setCeoMode(false);
     p.querySelectorAll('.ceodone').forEach(c=>c.onchange=async()=>{await api('/api/todos/'+encodeURIComponent(c.dataset.id)+'/done',{method:'POST'});loadCeoPanel();});
-    const ti=$('ceotodoin'); if(ti)ti.onkeydown=async(e)=>{ if(e.key==='Enter'&&ti.value.trim()){ e.preventDefault(); const v=ti.value.trim(); ti.disabled=true; await api('/api/todos',{method:'POST',body:JSON.stringify({task:v})}); loadCeoPanel(); } };
-    p.querySelectorAll('[data-ceoarb]').forEach(b=>b.onclick=async()=>{
+    p.querySelectorAll('[data-ceoarb]').forEach(b=>b.onclick=async(ev)=>{ev.stopPropagation();
       let comment='';
       if(b.dataset.ceoarb==='refuse')comment=prompt('Pourquoi ce refus ? (optionnel, transmis à la personne)')||'';
       if(b.dataset.ceoarb==='precisions'){comment=prompt('Quelles précisions te faut-il ?')||'';if(!comment)return;}
@@ -1883,6 +1958,7 @@ async function loadCeoPanel(){
       await api('/api/ceo/arbitrage/'+encodeURIComponent(b.dataset.id)+'/decide',{method:'POST',body:JSON.stringify({decision:b.dataset.ceoarb,comment})});
       loadCeoPanel();
     });
+    const cf=$('ceofull'); if(cf)cf.onclick=()=>setCeoMode(false);
     const cg=$('ceochatgo');
     const runChat=async()=>{
       const inp=$('ceochatin'); const q=inp?inp.value.trim():''; if(!q){if(inp)inp.focus();return;}
@@ -1895,7 +1971,6 @@ async function loadCeoPanel(){
     if(cg)cg.onclick=runChat;
     const ci=$('ceochatin'); if(ci)ci.onkeydown=(e)=>{ if(e.key==='Enter'){ e.preventDefault(); runChat(); } };
     show(p,true);
-    // brief IA + recommandations en pastilles colorées (palette de la maquette)
     gj('/api/ceo/brief').then(b=>{
       const e=$('ceobrieftxt'); if(e)e.textContent=(b&&b.text)?b.text:'Brief indisponible pour le moment.';
       const det=$('ceobriefdet');
@@ -1904,7 +1979,7 @@ async function loadCeoPanel(){
         det.innerHTML='<div style="display:flex;flex-wrap:wrap;gap:7px">'+b.faits.slice(0,6).map((f,i)=>{const c=PAL[i%PAL.length];return '<a class="lk ceofait" data-i="'+i+'" title="'+esc(String(f.t))+'" style="display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:7px 12px;border-radius:999px;background:'+c[0]+';border:1px solid '+c[0]+';color:'+c[1]+';font-size:12px;font-weight:600">• '+esc(String(f.t).slice(0,64))+(String(f.t).length>64?'…':'')+'</a>';}).join('')+'</div>';
         det.querySelectorAll('.ceofait').forEach(a2=>a2.onclick=()=>{
           const f=b.faits[Number(a2.dataset.i)]; if(!f)return;
-          if(f.go==='dec'||f.go==='chg'){const e2=document.getElementById('ceocard-dec');if(e2){e2.scrollIntoView({behavior:'smooth',block:'center'});e2.style.boxShadow='0 0 0 3px #7C5CFA';setTimeout(()=>{e2.style.boxShadow='';},1500);}}
+          if(f.go==='dec'||f.go==='chg')goDec();
           else if(f.go==='__perso'){setCeoMode(false);setTimeout(()=>{const e3=$('persopanel');if(e3)e3.scrollIntoView({behavior:'smooth',block:'start'});},300);}
           else if(f.go)navToView(f.go);
         });
@@ -1912,6 +1987,7 @@ async function loadCeoPanel(){
     });
   }catch(e){show(p,false);}
 }
+
 // --- Perso branding de Mélany : calendrier éditorial Instagram ---------------
 async function loadPersoPanel(){
   const p=$('persopanel'); if(!p)return;
