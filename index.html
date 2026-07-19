@@ -628,6 +628,8 @@ body.ceomode .nav.on{background:#EEEBFB;color:#6D5AE0}
       <a class="nav" data-go="contenus"><span class="ni">🎬</span> Contenus</a>
       <a class="nav" data-go="marques"><span class="ni">🏷️</span> Marques</a>
       <a class="nav" data-go="todo"><span class="ni">✅</span> To-do</a>
+      <a class="nav" data-go="commercial"><span class="ni">💼</span> Commercial</a>
+      <a class="nav" data-go="projets"><span class="ni">📁</span> Projets</a>
       <a class="nav" data-go="roadmap"><span class="ni">🗺️</span> Roadmap</a>
       <a class="nav" data-go="budget"><span class="ni">💶</span> Budget</a>
       <a class="nav" data-go="rh"><span class="ni">🌴</span> RH</a>
@@ -753,6 +755,8 @@ body.ceomode .nav.on{background:#EEEBFB;color:#6D5AE0}
     <section id="budgetview" style="display:none"><p class="pt"><span class="pi">💶</span> Budgets du mois</p><div class="panelhint">Toutes les marques d'un coup d'œil : engagé, restant, dépassements. Le budget mensuel se règle dans la fiche de chaque marque (onglet Marques), l'engagé vient du calendrier Notion. Export Excel par marque pour le reporting client.</div><div id="budgetallbox"><div class="state">Chargement…</div></div></section>
     <section id="rhview" style="display:none"><p class="pt"><span class="pi">🌴</span> RH · absences &amp; documents</p><div class="panelhint">Demande tes congés ou absences ici (la direction valide, tu es prévenue sur Slack), et retrouve tes documents : fiches de paie pour les salariées, factures pour les freelances. Chacune ne voit que les siens.</div><div id="rhbox"><div class="state">Chargement…</div></div></section>
     <section id="roadmapview" style="display:none"><p class="pt"><span class="pi">🗺️</span> Roadmap annuelle</p><div class="panelhint">Ton espace stratégie : les grands chantiers de l'année, trimestre par trimestre, organisés par axe. Clique un statut pour le faire évoluer, ✎ pour éditer, ＋ pour ajouter. Visible uniquement par la direction.</div><div id="roadmapbox"><div class="state">Chargement…</div></div></section>
+    <section id="commercialview" style="display:none"><p class="pt"><span class="pi">💼</span> Suivi commercial</p><div class="panelhint">Ta prospection de nouveaux clients : chaque deal avance de Lead à Gagné. Clique un statut pour le faire évoluer, ✎ pour éditer. Visible uniquement par la direction.</div><div id="crmbox"><div class="state">Chargement…</div></div></section>
+    <section id="projetsview" style="display:none"><p class="pt"><span class="pi">📁</span> Suivi de projets</p><div class="panelhint">Où en est chaque marque et chaque personne : budgets, collabs du mois, retards. Visible uniquement par la direction.</div><div id="projetsbox"><div class="state">Chargement…</div></div></section>
     <section id="rapportsview" style="display:none"><p class="pt"><span class="pi">📊</span> Rapports</p><div id="rapportsbox"><div class="state">Chargement…</div></div></section>
     <section id="calendrierview" style="display:none"><p class="pt"><span class="pi">📅</span> Calendrier</p><div id="calendrierbox"><div class="state">Chargement…</div></div></section>
     <section id="todoview" style="display:none"><p class="pt"><span class="pi">✅</span> To-do</p><div class="panelhint">Tes tâches à faire, marque par marque. Une case cochée = statut « Fait » dans Notion, tout est synchronisé.</div><div id="todowrap"><div class="state">Chargement…</div></div></section>
@@ -810,8 +814,8 @@ function statCardGo(act){
   else { navToView('cockpit'); setTimeout(()=>{const el=$('todopanel'); if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},220); } // à traiter / relances → priorités
 }
 let CURRENT_VIEW='cockpit';
-const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview',historique:'historiqueview',marques:'marquesview',todo:'todoview',processus:'processview',budget:'budgetview',rh:'rhview',roadmap:'roadmapview'};
-function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','historiqueview','marquesview','todoview','processview','budgetview','rhview','roadmapview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
+const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview',historique:'historiqueview',marques:'marquesview',todo:'todoview',processus:'processview',budget:'budgetview',rh:'rhview',roadmap:'roadmapview',commercial:'commercialview',projets:'projetsview'};
+function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','historiqueview','marquesview','todoview','processview','budgetview','rhview','roadmapview','commercialview','projetsview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
 function refreshCustomView(){
   if(CURRENT_VIEW==='campagnes')renderCampagnes();
   else if(CURRENT_VIEW==='contacts')renderContacts();
@@ -824,6 +828,8 @@ function refreshCustomView(){
   else if(CURRENT_VIEW==='budget')renderBudgetView();
   else if(CURRENT_VIEW==='rh')renderRhView();
   else if(CURRENT_VIEW==='roadmap')renderRoadmapView();
+  else if(CURRENT_VIEW==='commercial')renderCommercialView();
+  else if(CURRENT_VIEW==='projets')renderProjetsView();
 }
 // ===== Page Roadmap annuelle (direction) : 4 trimestres, axes, statuts ======
 async function renderRoadmapView(){
@@ -878,16 +884,108 @@ async function renderRoadmapView(){
   });
   box.querySelectorAll('[data-rmdel2]').forEach(el=>el.onclick=async()=>{ if(!confirm('Supprimer cette initiative ?'))return; await api('/api/ceo/roadmap',{method:'POST',body:JSON.stringify({del:el.dataset.rmdel2})}); renderRoadmapView(); });
 }
+// ===== Suivi commercial (CRM léger, direction) ==============================
+async function renderCommercialView(){
+  const box=$('crmbox'); if(!box)return;
+  if(!VIEWER||VIEWER.role!=='supervisor'){box.innerHTML='<div class="state">Réservé à la direction.</div>';return;}
+  let d=null; try{const r=await api('/api/crm'); if(r.ok)d=await r.json();}catch(e){}
+  if(!d||!d.ok){box.innerHTML='<div class="state">Commercial indisponible, réessaie.</div>';return;}
+  const eur=(n)=>((Number(n)||0).toLocaleString('fr-FR')+' €');
+  const sts=d.statuts||[]; const deals=d.deals||[];
+  const stC={'Lead':['#F4F2FB','#4C3BB8'],'Contacté':['#E7F0FA','#2F6DB5'],'Proposition':['#FDF0E0','#C77F2A'],'Négociation':['#FBE5E0','#C2553B'],'Gagné':['#E7F5EC','#2E9E6B'],'Perdu':['#EFF1F3','#7A828C']};
+  const kic=(ic)=>'<div style="width:54px;height:54px;flex:0 0 54px;border-radius:50%;background:#EEEBFB;display:flex;align-items:center;justify-content:center;font-size:22px">'+ic+'</div>';
+  const kpi=(ic,lbl,val,sub)=>'<div class="bgd-card" style="min-width:0;display:flex;gap:14px;align-items:center;padding:18px">'+kic(ic)+'<div style="min-width:0"><div class="bgd-klbl">'+lbl+'</div><div class="bgd-kval" style="font-size:24px">'+val+'</div><div class="bgd-ksub">'+sub+'</div></div></div>';
+  const kpis='<div class="bgd-kpis" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));margin-bottom:14px">'
+    +kpi('💼','Pipeline en cours',eur(d.stats.pipeline),d.stats.actifs+' deal(s) actif(s)')
+    +kpi('🏆','Gagné ce mois-ci',eur(d.stats.gagnesMois),d.stats.gagnesMoisN+' deal(s) signé(s)')
+    +kpi('➕','Nouveau prospect','<button class="lk" id="crmadd" style="background:#7C5CFA;color:#fff;border-color:#7C5CFA;font-size:13px">＋ Ajouter un deal</button>','nom, contact, montant, statut')
+    +'</div>';
+  const col=(st)=>{
+    const items=deals.filter(x=>x.statut===st);
+    const c=stC[st]||stC['Lead'];
+    return '<div class="bgd-card" style="min-width:0"><div class="bgd-h" style="display:flex;align-items:center;gap:7px"><span class="bgd-badge" style="background:'+c[0]+';color:'+c[1]+'">'+st+'</span><span class="fs">'+items.length+'</span></div>'
+      +(items.length?items.map(x=>'<div style="padding:8px 0;border-bottom:1px solid #F0F1F6"><div style="display:flex;align-items:center;gap:7px"><b style="flex:1;min-width:0">'+esc(x.nom)+'</b>'+(x.montant?('<b style="white-space:nowrap">'+eur(x.montant)+'</b>'):'')+'<a class="lk" data-crmedit="'+esc(x.id)+'">✎</a><a class="lk" data-crmdel="'+esc(x.id)+'">✕</a></div>'
+        +(x.contact?('<div class="fs">'+esc(x.contact)+'</div>'):'')
+        +(x.next?('<div class="fs">→ '+esc(x.next)+'</div>'):'')
+        +'<div style="margin-top:5px"><a class="lk" data-crmnext="'+esc(x.id)+'" style="font-size:11.5px">faire avancer →</a></div>'
+        +'</div>').join(''):'<div class="fs" style="padding:6px 0">vide</div>')
+      +'</div>';
+  };
+  box.innerHTML=kpis+'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px">'+sts.map(col).join('')+'</div>';
+  const add=$('crmadd'); if(add)add.onclick=async()=>{
+    const nom=prompt('Nom du prospect / de la marque :'); if(!nom||!nom.trim())return;
+    const contact=prompt('Contact (nom, email…) :','')||'';
+    const montant=prompt('Montant estimé (€) :','')||'';
+    const next=prompt('Prochaine action :','')||'';
+    const r=await api('/api/crm',{method:'POST',body:JSON.stringify({nom,contact,montant:Number(montant)||0,next})});
+    if(!r.ok){const dd=await r.json().catch(()=>({}));alert(dd.error||'Erreur');} renderCommercialView();
+  };
+  box.querySelectorAll('[data-crmnext]').forEach(a2=>a2.onclick=async()=>{
+    const x=deals.find(z=>z.id===a2.dataset.crmnext); if(!x)return;
+    const i=sts.indexOf(x.statut); const nx=sts[Math.min(i+1,sts.length-1)];
+    await api('/api/crm',{method:'POST',body:JSON.stringify({id:x.id,statut:nx})}); renderCommercialView();
+  });
+  box.querySelectorAll('[data-crmedit]').forEach(a2=>a2.onclick=async()=>{
+    const x=deals.find(z=>z.id===a2.dataset.crmedit); if(!x)return;
+    const nom=prompt('Nom :',x.nom); if(nom===null)return;
+    const contact=prompt('Contact :',x.contact||''); if(contact===null)return;
+    const montant=prompt('Montant (€) :',String(x.montant||'')); if(montant===null)return;
+    const next=prompt('Prochaine action :',x.next||''); if(next===null)return;
+    const st=prompt('Statut ('+sts.join(', ')+') :',x.statut)||x.statut;
+    await api('/api/crm',{method:'POST',body:JSON.stringify({id:x.id,nom,contact,montant:Number(montant)||0,next,statut:st})}); renderCommercialView();
+  });
+  box.querySelectorAll('[data-crmdel]').forEach(a2=>a2.onclick=async()=>{ if(!confirm('Supprimer ce deal ?'))return; await api('/api/crm',{method:'POST',body:JSON.stringify({del:a2.dataset.crmdel})}); renderCommercialView(); });
+}
+// ===== Suivi de projets (direction) : par marque et par personne =============
+async function renderProjetsView(){
+  const box=$('projetsbox'); if(!box)return;
+  if(!VIEWER||VIEWER.role!=='supervisor'){box.innerHTML='<div class="state">Réservé à la direction.</div>';return;}
+  const gj=async(u)=>{try{const r=await api(u);return r.ok?await r.json():null;}catch(e){return null;}};
+  const month=new Date().toISOString().slice(0,7);
+  const brands=['In Haircare','Doucéa','Curls Matter','LIVA'];
+  const [dg,buds]=await Promise.all([gj('/api/dirigeant'),Promise.all(brands.map(b=>gj('/api/budget/'+encodeURIComponent(b)+'?month='+month).then(x=>x?{brand:b,...x}:null))).then(a=>a.filter(Boolean))]);
+  const eur=(n)=>((Number(n)||0).toLocaleString('fr-FR')+' €');
+  const dmy=(x)=>String(x||'').split('-').reverse().join('/');
+  const cards=buds.map(d=>{
+    const bm=d.budgetMensuel||0,tot=d.total||0;const pc=bm?Math.min(100,Math.round(100*tot/bm)):0;
+    const cps={};(d.entries||[]).forEach(e=>{if(e.cp)cps[e.cp]=(cps[e.cp]||0)+1;});
+    const cpsTxt=Object.entries(cps).map(([n,c])=>esc(n)+' ('+c+')').join(' · ')||'à assigner';
+    const col=pc>=100?'#D4483B':(pc>=80?'#C77F2A':'#2E9E6B');
+    return '<div class="bgd-card" style="min-width:0"><div style="display:flex;align-items:center;gap:9px"><span style="width:30px;height:30px;border-radius:9px;background:#1F2430;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:11px">'+esc(String(d.brand).split(' ').map(s=>s[0]).join('').slice(0,2).toUpperCase())+'</span><b style="flex:1">'+esc(d.brand)+'</b>'
+      +(bm?('<span class="bgd-badge" style="background:'+(pc>=100?'#FBE5E0':(pc>=80?'#FDF0E0':'#E7F5EC'))+';color:'+col+'">'+pc+' %</span>'):'<span class="bgd-badge" style="background:#EFF1F3;color:#7A828C">budget à définir</span>')+'</div>'
+      +(bm?('<div class="ceobar" style="margin:9px 0 4px"><div style="width:'+pc+'%;background:'+col+'"></div></div><div class="fs">'+eur(tot)+' engagés / '+eur(bm)+' · restant '+eur(bm-tot)+'</div>'):'')
+      +'<div class="fs" style="margin-top:6px">🎬 '+(d.entries||[]).length+' collab(s) ce mois-ci</div>'
+      +'<div class="fs" style="margin-top:3px">👥 '+cpsTxt+'</div>'
+      +'<div style="margin-top:8px"><a class="lk pjgo" data-go="budget">budget →</a> <a class="lk pjgo" data-go="calendrier">calendrier →</a></div>'
+      +'</div>';
+  }).join('');
+  const mem=((dg&&dg.members)||[]);
+  const chCol=(c)=>c>100?'#D4483B':(c>=85?'#C77F2A':(c>=70?'#B98A12':'#2E9E6B'));
+  const AVC=['#6D5AE0','#E8865D','#2C9087','#B98A12','#4A7FB5'];
+  const persH='<div class="bgd-card" style="margin-top:14px"><div class="bgd-h">👥 Par personne</div>'
+    +(mem.length?mem.map((m,mi)=>{const c=Math.min(150,(m.open||0)*8+(m.late||0)*12);
+      return '<div style="display:grid;grid-template-columns:26px minmax(90px,max-content) minmax(0,1fr) max-content max-content max-content;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid #F0F1F6">'
+      +'<span style="width:26px;height:26px;border-radius:50%;background:'+AVC[mi%AVC.length]+';color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:11px">'+esc(String(m.name).slice(0,1).toUpperCase())+'</span>'
+      +'<b>'+esc(m.name)+'</b>'
+      +'<div class="ceobar"><div style="width:'+Math.min(100,c)+'%;background:'+chCol(c)+'"></div></div>'
+      +'<span class="fs">'+(m.open||0)+' tâche(s)</span>'
+      +(m.late?('<span class="bgd-badge" style="background:#FBE5E0;color:#D4483B">'+m.late+' retard(s)</span>'):'<span class="bgd-badge" style="background:#E7F5EC;color:#2E9E6B">à jour</span>')
+      +(m.absence?('<span class="bgd-badge" style="background:#F5EFE2;color:#B98A12">🏖️ → '+dmy(m.absence.au)+'</span>'):'<span></span>')
+      +'</div>';}).join(''):'<div class="fs">équipe introuvable</div>')
+    +'</div>';
+  box.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px">'+cards+'</div>'+persH;
+  box.querySelectorAll('.pjgo').forEach(a2=>a2.onclick=()=>navToView(a2.dataset.go));
+}
 // ===== Vue RH : dashboard absences + documents (mock-up de Mélany du 19/07) ==
 // Codes visuels de la page Budget : cartes blanches arrondies, pastilles pastel,
 // badges de statut, VIOLET (#6D5AE0) comme couleur d'action.
 let RH_DOCS_OPEN=false;
 async function renderRhView(){
   const box=$('rhbox'); if(!box)return;
-  let d=null,td=null,dg=null;
+  let d=null,td=null,dg=null,fi=null;
   try{
     const gj=async(u)=>{try{const r=await api(u);return r.ok?await r.json():null;}catch(e){return null;}};
-    [d,td,dg]=await Promise.all([gj('/api/rh'),gj('/api/todos?view='+encodeURIComponent(VIEWER?VIEWER.name:'')),(VIEWER&&VIEWER.role==='supervisor')?gj('/api/dirigeant'):Promise.resolve(null)]);
+    [d,td,dg,fi]=await Promise.all([gj('/api/rh'),gj('/api/todos?view='+encodeURIComponent(VIEWER?VIEWER.name:'')),(VIEWER&&VIEWER.role==='supervisor')?gj('/api/dirigeant'):Promise.resolve(null),gj('/api/rh/fiches')]);
   }catch(e){}
   if(!d||!d.ok){ box.innerHTML='<div class="state">RH indisponible pour le moment, réessaie.</div>'; return; }
   const sup=!!d.supervisor;
@@ -1010,9 +1108,23 @@ async function renderRhView(){
       +'</div>';
     basH='<div class="bgd-grid" style="grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);margin-top:14px">'+chargeH+rhBloc+'</div>';
   }
+  const fiches=(fi&&fi.fiches)||[];
+  const fichesH=fiches.length?('<div class="bgd-card" style="margin-top:14px"><div class="bgd-h">🗂️ '+(sup?'Fiches équipe':'Ma fiche')+' <span class="cpsub">coordonnées, RIB, congés · stockées sur le disque sécurisé du cockpit</span></div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:8px">'
+    +fiches.map((f,i)=>'<div style="border:1px solid #EDF0F2;border-radius:14px;padding:13px">'
+      +'<div style="display:flex;align-items:center;gap:9px">'+avatar(f.name,i)+'<div style="min-width:0"><b>'+esc(f.name)+'</b><div class="fs">'+esc(f.role)+'</div></div>'
+      +(f.absence?('<span class="bgd-badge" style="margin-left:auto;background:#F5EFE2;color:#B98A12">🏖️ → '+dmy(f.absence.au)+'</span>'):'')
+      +'<a class="lk" data-rhfedit="'+esc(f.name)+'" style="margin-left:'+(f.absence?'6px':'auto')+'">✎</a></div>'
+      +'<div class="fs" style="margin-top:8px">✉️ '+esc(f.email)+'</div>'
+      +'<div class="fs">📞 '+(f.tel?esc(f.tel):'<span style="opacity:.5">à renseigner</span>')+'</div>'
+      +'<div class="fs">🏦 '+(f.iban?esc(f.iban):'<span style="opacity:.5">RIB à renseigner</span>')+'</div>'
+      +'<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'+badge('congés : '+f.conges.left+' / '+f.conges.quota,'#E7F5EC','#1F8A5D')+badge(f.docs+' document(s)','#EDE9FC','#4C3BB8')+'</div>'
+      +(f.notes?('<div class="fs" style="margin-top:7px">📝 '+esc(f.notes)+'</div>'):'')
+      +'</div>').join('')+'</div></div>'):'';
   box.innerHTML=kpis
     +'<div class="bgd-grid" style="grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);margin-bottom:14px">'+congesH+formH+'</div>'
     +'<div class="bgd-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">'+demH+docH+rapH+'</div>'
+    +fichesH
     +basH;
   // ---------- interactions ----------
   const g=$('rhgo'); if(g)g.onclick=async()=>{
@@ -1058,6 +1170,14 @@ async function renderRhView(){
     rd.readAsDataURL(f);
   };
   box.querySelectorAll('.rhtdone').forEach(c=>c.onchange=async()=>{ await api('/api/todos/'+encodeURIComponent(c.dataset.id)+'/done',{method:'POST'}); renderRhView(); });
+  box.querySelectorAll('[data-rhfedit]').forEach(a2=>a2.onclick=async()=>{
+    const f=((fi&&fi.fiches)||[]).find(x=>x.name===a2.dataset.rhfedit); if(!f)return;
+    const tel=prompt('Téléphone de '+f.name+' :',f.tel||''); if(tel===null)return;
+    const iban=prompt('IBAN / RIB de '+f.name+' (stocké uniquement sur le disque sécurisé du cockpit) :',f.iban||''); if(iban===null)return;
+    const notes=prompt('Notes RH (contrat, date d\'arrivée…) :',f.notes||''); if(notes===null)return;
+    const r=await api('/api/rh/profil',{method:'POST',body:JSON.stringify({who:f.name,tel,iban,notes})});
+    if(!r.ok){const dd=await r.json().catch(()=>({}));alert(dd.error||'Erreur');} renderRhView();
+  });
   box.querySelectorAll('.ceogo2').forEach(el=>el.onclick=()=>navToView(el.dataset.go));
 }
 // ===== Vue Budget : dashboard « Suivi des budgets » =========================
@@ -1474,7 +1594,7 @@ async function load(){
   }else show($('filterbar'),false);
   // Rôle « team » (ex. social media manager) : espace allégé, centré sur la to-do.
   // On masque les outils créateurs (profils, mails, campagnes, marques, contacts, rapports).
-  if(VIEWER.role!=='supervisor'){const rmn=document.querySelector('.sb-nav .nav[data-go="roadmap"]');if(rmn)rmn.style.display='none';}
+  if(VIEWER.role!=='supervisor'){['roadmap','commercial','projets'].forEach(g=>{const n2=document.querySelector('.sb-nav .nav[data-go="'+g+'"]');if(n2)n2.style.display='none';});}
   if(VIEWER.role==='team'){
     ['profils','campagnes','contenus','marques','contacts','messages','rapports','budget'].forEach(g=>{const a=document.querySelector('.sb-nav .nav[data-go="'+g+'"]');if(a)a.style.display='none';});
     ['srcpanel','mailpanel','pipelinepanel','brandpanel','fillpanel','listpanel','statcards'].forEach(id=>{const e=$(id);if(e){e.classList.add('hidden');e.style.display='none';}});
@@ -1699,9 +1819,15 @@ async function loadCeoPanel(){
     if(rest!==null&&restP!==null&&restP!==0){const pc=Math.round(1000*(rest-restP)/Math.abs(restP))/10;sub2='vs mois dernier <span style="color:'+(pc<0?'#D4483B':'#2E9E6B')+';font-weight:700">'+(pc>0?'+':'')+String(pc).replace('.',',')+' %</span>';}
     const kic=(ic)=>'<div style="width:54px;height:54px;flex:0 0 54px;border-radius:50%;background:#EEEBFB;display:flex;align-items:center;justify-content:center;font-size:22px">'+ic+'</div>';
     const kpi=(ic,lbl,val,sub)=>'<div class="bgd-card" style="min-width:0;display:flex;gap:14px;align-items:center;padding:18px">'+kic(ic)+'<div style="min-width:0"><div class="bgd-klbl">'+lbl+'</div><div class="bgd-kval" style="font-size:24px">'+val+'</div><div class="bgd-ksub">'+sub+'</div></div></div>';
+    const pl2=(ceo&&ceo.pennylane)||{connected:false};
+    const plOn2=pl2.connected&&!pl2.error&&pl2.treso!==null&&pl2.treso!==undefined;
+    const tresoM=ceo&&ceo.treso;
+    const fresh2=(at)=>at?('maj le '+new Date(at).toLocaleDateString('fr-FR')+' à '+new Date(at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})):'';
+    const tresoVal=plOn2?eur(pl2.treso):(tresoM?eur(tresoM.amount):'à renseigner');
+    const tresoSub=plOn2?('🟢 Pennylane · '+fresh2(pl2.at)):(pl2.connected&&pl2.error?'⚠️ Pennylane en erreur · valeur manuelle via ✎':(tresoM?('saisie manuelle · '+fresh2(tresoM.at)):'clique ✎ · ou branche Pennylane (clé dans Render)'));
     const kpis='<div class="bgd-kpis" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));margin-bottom:14px">'
       +kpi('🏦','Budget du mois - '+esc(brand),bm?eur(bm):'à définir',(bm&&bmP&&bm===bmP)?'vs mois dernier : stable':(bm&&bmP?sub2:'fiche marque, onglet Marques'))
-      +kpi('⏳','Budget restant - '+esc(brand),rest!==null?eur(rest):'·',rest!==null?sub2:'budget mensuel à renseigner')
+      +kpi('💰','Trésorerie disponible'+(plOn2?'':' <a class="lk" id="ceotreso" title="Saisir la trésorerie">✎</a>'),tresoVal,tresoSub)
       +kpi('🏷️','Marques suivies',String(brands.length),'Actives ce mois-ci')
       +'</div>';
     // ---- Ma to-do ----
@@ -1741,6 +1867,11 @@ async function loadCeoPanel(){
       +'<button id="ceofull" style="width:100%;margin-top:14px;padding:14px;border-radius:14px;font-size:14px;font-weight:700;font-family:inherit;border:none;background:'+V+';color:#fff;cursor:pointer">▦ Ouvrir le cockpit complet →</button>';
     // ---- interactions ----
     p.querySelectorAll('.ceogo').forEach(el=>el.onclick=(ev)=>{ev.stopPropagation();navToView(el.dataset.go);});
+    const tE=$('ceotreso'); if(tE)tE.onclick=async(ev)=>{ev.stopPropagation();
+      const v=prompt('Trésorerie disponible (€, telle que sur tes comptes) :',tresoM?String(tresoM.amount):''); if(v===null||v.trim()==='')return;
+      const r=await api('/api/ceo/config',{method:'POST',body:JSON.stringify({treso:Number(v.replace(/[^\d.,-]/g,'').replace(',','.'))})});
+      if(!r.ok){const dd=await r.json().catch(()=>({}));alert(dd.error||'Erreur');} loadCeoPanel();
+    };
     const cf=$('ceofull'); if(cf)cf.onclick=()=>setCeoMode(false);
     p.querySelectorAll('.ceodone').forEach(c=>c.onchange=async()=>{await api('/api/todos/'+encodeURIComponent(c.dataset.id)+'/done',{method:'POST'});loadCeoPanel();});
     const ti=$('ceotodoin'); if(ti)ti.onkeydown=async(e)=>{ if(e.key==='Enter'&&ti.value.trim()){ e.preventDefault(); const v=ti.value.trim(); ti.disabled=true; await api('/api/todos',{method:'POST',body:JSON.stringify({task:v})}); loadCeoPanel(); } };

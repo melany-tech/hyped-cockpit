@@ -892,6 +892,70 @@ app.get("/api/ceo/brief", auth, async (req, res) => {
     res.json({ ok: true, text, at: CEO_BRIEF_CACHE.at, faits });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// --- Suivi commercial (CRM léger de la direction) -----------------------------
+// Les deals de prospection de Mélany : nouveaux clients potentiels, montants, statuts.
+const CRM_STATUTS = ["Lead", "Contacté", "Proposition", "Négociation", "Gagné", "Perdu"];
+app.get("/api/crm", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  const o = loadCeo(); const deals = o.crm || [];
+  const actifs = deals.filter((d) => !["Gagné", "Perdu"].includes(d.statut));
+  const moisCourant = new Date().toISOString().slice(0, 7);
+  const gagnes = deals.filter((d) => d.statut === "Gagné" && String(new Date(d.updated || d.at || 0).toISOString()).slice(0, 7) === moisCourant);
+  res.json({ ok: true, statuts: CRM_STATUTS, deals,
+    stats: { pipeline: actifs.reduce((s, d) => s + (Number(d.montant) || 0), 0), actifs: actifs.length,
+      gagnesMois: gagnes.reduce((s, d) => s + (Number(d.montant) || 0), 0), gagnesMoisN: gagnes.length } });
+});
+app.post("/api/crm", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  const o = loadCeo(); o.crm = o.crm || [];
+  const b = req.body || {};
+  if (b.del) { o.crm = o.crm.filter((x) => x.id !== String(b.del)); saveCeo(o); return res.json({ ok: true }); }
+  if (b.id) {
+    const d = o.crm.find((x) => x.id === String(b.id));
+    if (!d) return res.status(404).json({ error: "deal introuvable" });
+    if (b.statut && CRM_STATUTS.includes(b.statut)) d.statut = b.statut;
+    if (b.nom !== undefined) d.nom = String(b.nom).slice(0, 120);
+    if (b.contact !== undefined) d.contact = String(b.contact).slice(0, 120);
+    if (b.montant !== undefined) d.montant = Number(b.montant) || 0;
+    if (b.next !== undefined) d.next = String(b.next).slice(0, 200);
+    d.updated = Date.now(); saveCeo(o); return res.json({ ok: true });
+  }
+  const nom = String(b.nom || "").trim();
+  if (!nom) return res.status(400).json({ error: "nom du prospect manquant" });
+  const d = { id: crypto.randomBytes(6).toString("hex"), nom: nom.slice(0, 120), contact: String(b.contact || "").slice(0, 120),
+    montant: Number(b.montant) || 0, statut: CRM_STATUTS.includes(b.statut) ? b.statut : "Lead",
+    next: String(b.next || "").slice(0, 200), at: Date.now(), updated: Date.now() };
+  o.crm.push(d); saveCeo(o); res.json({ ok: true, id: d.id });
+});
+// --- Fiches équipe (RH) : coordonnées, RIB, notes, stockées sur le disque persistant ---
+app.get("/api/rh/fiches", auth, (req, res) => {
+  const sup = req.user.role === "supervisor";
+  const o = loadRh(); const profils = o.profils || {};
+  const list = USERS.filter((u) => !COPILOT.departed.includes(String(u.email).toLowerCase()) && normName(u.name) !== "kendia")
+    .filter((u) => sup || normName(u.name) === normName(req.user.name))
+    .map((u) => {
+      const pr = profils[normName(u.name)] || {};
+      const lv = rhLeave(o, u.name);
+      const today = new Date().toISOString().slice(0, 10);
+      const absNow = (o.absences || []).find((a) => a.statut === "validée" && normName(a.who) === normName(u.name) && a.du <= today && today <= a.au) || null;
+      return { name: u.name, role: u.role === "supervisor" ? "direction" : (u.role === "team" ? "social média" : "cheffe de projet"),
+        email: u.email, tel: pr.tel || "", iban: pr.iban || "", notes: pr.notes || "",
+        conges: lv, docs: (o.docs || []).filter((x) => normName(x.who) === normName(u.name)).length,
+        absence: absNow ? { type: absNow.type, au: absNow.au } : null };
+    });
+  res.json({ ok: true, supervisor: sup, fiches: list });
+});
+app.post("/api/rh/profil", auth, (req, res) => {
+  const sup = req.user.role === "supervisor";
+  const who = (sup && req.body?.who) ? String(req.body.who) : req.user.name;
+  if (!sup && normName(who) !== normName(req.user.name)) return res.status(403).json({ error: "pas ta fiche" });
+  const o = loadRh(); o.profils = o.profils || {};
+  const pr = (o.profils[normName(who)] = o.profils[normName(who)] || {});
+  if (req.body?.tel !== undefined) pr.tel = String(req.body.tel).slice(0, 30);
+  if (req.body?.iban !== undefined) pr.iban = String(req.body.iban).replace(/[^A-Za-z0-9 ]/g, "").slice(0, 40);
+  if (req.body?.notes !== undefined) pr.notes = String(req.body.notes).slice(0, 500);
+  saveRh(o); res.json({ ok: true });
+});
 app.get("/api/alerts", auth, async (req, res) => {
   // Remplissage des calendriers : visible par TOUTES les CP (plus seulement le pilote).
   if (DEMO) return res.json({ monthLabel: "juillet 2026", minDays: MIN_DAYS, fill: [
