@@ -531,6 +531,100 @@ app.get("/api/weekly/file/:fid", auth, (req, res) => {
   res.setHeader("Content-Disposition", (req.query.dl ? "attachment" : "inline") + "; filename=\"" + encodeURIComponent(f.filename) + "\"");
   res.send(fs.readFileSync(p));
 });
+// --- RH : demandes d'absence + documents (fiches de paie, factures) ----------
+// Tout est stocké sur le DISQUE PERSISTANT (rh.json + rh_docs/), JAMAIS sur GitHub.
+// Chacune ne voit que ses demandes et ses documents ; la direction voit tout.
+const RH_STORE = path.join(DATA_DIR, "rh.json");
+const RH_DIR = path.join(DATA_DIR, "rh_docs");
+try { fs.mkdirSync(RH_DIR, { recursive: true }); } catch (e) {}
+function loadRh() { try { return JSON.parse(fs.readFileSync(RH_STORE, "utf8")); } catch (e) { return { absences: [], docs: [] }; } }
+function saveRh(o) { try { fs.writeFileSync(RH_STORE, JSON.stringify(o, null, 2)); } catch (e) {} }
+function rhSlackTo(email) { return (COPILOT.slackIds || {})[String(email || "").toLowerCase()] || ""; }
+function dmyFr(d) { return String(d).split("-").reverse().join("/"); }
+const RH_TYPES = ["Congés payés", "Sans solde", "Maladie", "Télétravail", "Autre"];
+app.get("/api/rh", auth, (req, res) => {
+  const o = loadRh(); const sup = req.user.role === "supervisor";
+  const me = normName(req.user.name);
+  const abs = (o.absences || []).filter((a) => sup || normName(a.who) === me);
+  const docs = (o.docs || []).filter((x) => sup || normName(x.who) === me);
+  res.json({ ok: true, supervisor: sup, types: RH_TYPES,
+    absences: abs.slice().sort((a, b) => String(b.du).localeCompare(String(a.du))),
+    docs: docs.slice().sort((a, b) => (b.at || 0) - (a.at || 0)),
+    team: sup ? USERS.filter((u) => u.role !== "supervisor").map((u) => u.name) : [] });
+});
+app.post("/api/rh/absence", auth, async (req, res) => {
+  const du = String(req.body?.du || ""), au = String(req.body?.au || du);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(du) || !/^\d{4}-\d{2}-\d{2}$/.test(au)) return res.status(400).json({ error: "dates invalides" });
+  if (au < du) return res.status(400).json({ error: "la fin est avant le début" });
+  const type = RH_TYPES.includes(req.body?.type) ? req.body.type : "Autre";
+  const o = loadRh();
+  const a = { id: crypto.randomBytes(6).toString("hex"), who: req.user.name, email: req.user.email, type, du, au, note: String(req.body?.note || "").slice(0, 400), statut: "en attente", at: Date.now() };
+  o.absences = o.absences || []; o.absences.push(a); saveRh(o);
+  try {
+    for (const u of USERS.filter((x) => x.role === "supervisor")) {
+      const su = rhSlackTo(u.email);
+      if (su) await copilotNotify({ slackUser: su, text: "🏖️ Demande d'absence de *" + a.who + "* : " + type + " du " + dmyFr(du) + " au " + dmyFr(au) + (a.note ? " (« " + a.note + " »)" : "") + ". À valider dans le cockpit, onglet RH." });
+    }
+  } catch (e) {}
+  res.json({ ok: true, id: a.id });
+});
+app.post("/api/rh/absence/:id/decide", auth, async (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  const ok2 = req.body?.decision === "validee";
+  const o = loadRh(); const a = (o.absences || []).find((x) => x.id === req.params.id);
+  if (!a) return res.status(404).json({ error: "demande introuvable" });
+  a.statut = ok2 ? "validée" : "refusée"; a.decidedBy = req.user.name; a.decidedAt = Date.now();
+  if (req.body?.comment) a.comment = String(req.body.comment).slice(0, 300);
+  saveRh(o);
+  try { const su = rhSlackTo(a.email); if (su) await copilotNotify({ slackUser: su, text: (ok2 ? "✅ Absence validée" : "❌ Absence refusée") + " par " + req.user.name + " : " + a.type + " du " + dmyFr(a.du) + " au " + dmyFr(a.au) + (a.comment ? " · « " + a.comment + " »" : "") + "." }); } catch (e) {}
+  res.json({ ok: true, statut: a.statut });
+});
+app.post("/api/rh/absence/:id/del", auth, (req, res) => {
+  // annuler : la direction toujours, la personne seulement tant que c'est en attente
+  const o = loadRh(); const a = (o.absences || []).find((x) => x.id === req.params.id);
+  if (!a) return res.status(404).json({ error: "introuvable" });
+  if (req.user.role !== "supervisor" && (normName(a.who) !== normName(req.user.name) || a.statut !== "en attente")) return res.status(403).json({ error: "plus modifiable" });
+  o.absences = (o.absences || []).filter((x) => x.id !== a.id); saveRh(o);
+  res.json({ ok: true });
+});
+app.post("/api/rh/doc", auth, async (req, res) => {
+  // dépôt : la direction pour n'importe qui, chacune pour elle-même (ex. sa facture)
+  const who = (req.user.role === "supervisor" && req.body?.who) ? String(req.body.who) : req.user.name;
+  const m = /^data:([^;]+);base64,(.+)$/.exec(String(req.body?.data || ""));
+  if (!m) return res.status(400).json({ error: "fichier illisible" });
+  const buf = Buffer.from(m[2], "base64");
+  if (buf.length > 15 * 1024 * 1024) return res.status(400).json({ error: "fichier trop lourd (15 Mo max)" });
+  const fid = crypto.randomBytes(8).toString("hex");
+  try { fs.writeFileSync(path.join(RH_DIR, fid), buf); } catch (e) { return res.status(500).json({ error: "impossible d'enregistrer sur le disque" }); }
+  const o = loadRh(); o.docs = o.docs || [];
+  const cat = ["Fiche de paie", "Facture", "Contrat", "Autre"].includes(req.body?.cat) ? req.body.cat : "Autre";
+  o.docs.push({ id: fid, who, cat, filename: String(req.body?.filename || "document").slice(0, 100), mime: m[1], size: buf.length, by: req.user.name, at: Date.now() });
+  saveRh(o);
+  try {
+    if (normName(who) !== normName(req.user.name)) {
+      const em = emailOf(who); const su = em ? rhSlackTo(em) : "";
+      if (su) await copilotNotify({ slackUser: su, text: "📄 " + req.user.name + " a déposé un document pour toi dans le cockpit (onglet RH) : " + cat + " · " + String(req.body?.filename || "document") + "." });
+    }
+  } catch (e) {}
+  res.json({ ok: true, id: fid });
+});
+app.get("/api/rh/doc/:fid", auth, (req, res) => {
+  const o = loadRh(); const f = (o.docs || []).find((x) => x.id === req.params.fid);
+  const p = path.join(RH_DIR, String(req.params.fid).replace(/[^a-f0-9]/g, ""));
+  if (!f || !fs.existsSync(p)) return res.status(404).send("document introuvable");
+  if (req.user.role !== "supervisor" && normName(f.who) !== normName(req.user.name)) return res.status(403).send("pas ton document");
+  res.setHeader("Content-Type", f.mime || "application/octet-stream");
+  res.setHeader("Content-Disposition", (req.query.dl ? "attachment" : "inline") + "; filename=\"" + encodeURIComponent(f.filename) + "\"");
+  res.send(fs.readFileSync(p));
+});
+app.post("/api/rh/doc/:fid/del", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  const o = loadRh(); const f = (o.docs || []).find((x) => x.id === req.params.fid);
+  if (!f) return res.status(404).json({ error: "introuvable" });
+  o.docs = (o.docs || []).filter((x) => x.id !== f.id); saveRh(o);
+  try { fs.unlinkSync(path.join(RH_DIR, String(req.params.fid).replace(/[^a-f0-9]/g, ""))); } catch (e) {}
+  res.json({ ok: true });
+});
 app.get("/api/alerts", auth, async (req, res) => {
   // Remplissage des calendriers : visible par TOUTES les CP (plus seulement le pilote).
   if (DEMO) return res.json({ monthLabel: "juillet 2026", minDays: MIN_DAYS, fill: [

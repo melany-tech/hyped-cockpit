@@ -521,6 +521,7 @@ body.ceomode #mailpanel{display:none !important}
 .mailhead .cpsub{font-weight:500;color:#56666D;font-size:11.5px;margin-left:8px}
 .cpsect{font-weight:700;font-size:13px;margin:12px 0 6px;padding-top:8px;border-top:1px dashed #E4E0D5}
 .cpsect .cpsub{font-weight:500;color:#56666D;font-size:11.5px;margin-left:6px}
+.rhin{font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid #E4E0D5;border-radius:8px;background:#fff}
 /* deltas vs hier */
 .scard .dl{font-size:11px;font-weight:700;margin-top:5px}
 .dl.chg{color:var(--teal)}.dl.eq{color:#9aa6a8}
@@ -623,6 +624,7 @@ body.ceomode #mailpanel{display:none !important}
       <a class="nav" data-go="marques"><span class="ni">🏷️</span> Marques</a>
       <a class="nav" data-go="todo"><span class="ni">✅</span> To-do</a>
       <a class="nav" data-go="budget"><span class="ni">💶</span> Budget</a>
+      <a class="nav" data-go="rh"><span class="ni">🌴</span> RH</a>
       <!-- Onglet Contacts masqué à la demande de Mélany (13/07/2026) : l'annuaire faisait
            doublon à l'usage. Pour le réactiver, remettre la ligne ci-dessous.
            <a class="nav" data-go="contacts"><span class="ni">👥</span> Contacts</a> -->
@@ -743,6 +745,7 @@ body.ceomode #mailpanel{display:none !important}
     <section id="contactsview" style="display:none"><p class="pt"><span class="pi">👥</span> Contacts créateurs</p><div id="contactsbox"><div class="state">Chargement…</div></div></section>
     <section id="processview" style="display:none"><p class="pt"><span class="pi">📚</span> Process &amp; documents de référence</p><div class="panelhint">Tout ce qu'il faut lire ou renvoyer : guides, fiches de process, modèles. Ajoute un document, il est visible par toute l'équipe.</div><div id="processbox"><div class="state">Chargement…</div></div></section>
     <section id="budgetview" style="display:none"><p class="pt"><span class="pi">💶</span> Budgets du mois</p><div class="panelhint">Toutes les marques d'un coup d'œil : engagé, restant, dépassements. Le budget mensuel se règle dans la fiche de chaque marque (onglet Marques), l'engagé vient du calendrier Notion. Export Excel par marque pour le reporting client.</div><div id="budgetallbox"><div class="state">Chargement…</div></div></section>
+    <section id="rhview" style="display:none"><p class="pt"><span class="pi">🌴</span> RH · absences &amp; documents</p><div class="panelhint">Demande tes congés ou absences ici (la direction valide, tu es prévenue sur Slack), et retrouve tes documents : fiches de paie pour les salariées, factures pour les freelances. Chacune ne voit que les siens.</div><div id="rhbox"><div class="state">Chargement…</div></div></section>
     <section id="rapportsview" style="display:none"><p class="pt"><span class="pi">📊</span> Rapports</p><div id="rapportsbox"><div class="state">Chargement…</div></div></section>
     <section id="calendrierview" style="display:none"><p class="pt"><span class="pi">📅</span> Calendrier</p><div id="calendrierbox"><div class="state">Chargement…</div></div></section>
     <section id="todoview" style="display:none"><p class="pt"><span class="pi">✅</span> To-do</p><div class="panelhint">Tes tâches à faire, marque par marque. Une case cochée = statut « Fait » dans Notion, tout est synchronisé.</div><div id="todowrap"><div class="state">Chargement…</div></div></section>
@@ -800,8 +803,8 @@ function statCardGo(act){
   else { navToView('cockpit'); setTimeout(()=>{const el=$('todopanel'); if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},220); } // à traiter / relances → priorités
 }
 let CURRENT_VIEW='cockpit';
-const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview',historique:'historiqueview',marques:'marquesview',todo:'todoview',processus:'processview',budget:'budgetview'};
-function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','historiqueview','marquesview','todoview','processview','budgetview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
+const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview',historique:'historiqueview',marques:'marquesview',todo:'todoview',processus:'processview',budget:'budgetview',rh:'rhview'};
+function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','historiqueview','marquesview','todoview','processview','budgetview','rhview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
 function refreshCustomView(){
   if(CURRENT_VIEW==='campagnes')renderCampagnes();
   else if(CURRENT_VIEW==='contacts')renderContacts();
@@ -812,6 +815,88 @@ function refreshCustomView(){
   else if(CURRENT_VIEW==='todo')renderTodoTab();
   else if(CURRENT_VIEW==='processus')renderProcess();
   else if(CURRENT_VIEW==='budget')renderBudgetView();
+  else if(CURRENT_VIEW==='rh')renderRhView();
+}
+// ===== Vue RH : demandes d'absence + documents (paie, factures) =============
+async function renderRhView(){
+  const box=$('rhbox'); if(!box)return;
+  let d=null;
+  try{ const r=await api('/api/rh'); if(r.ok)d=await r.json(); }catch(e){}
+  if(!d||!d.ok){ box.innerHTML='<div class="state">RH indisponible pour le moment, réessaie.</div>'; return; }
+  const sup=!!d.supervisor;
+  const dmy=(x)=>String(x||'').split('-').reverse().join('/');
+  const st=(s)=>s==='validée'?'<span class="bgd-badge" style="background:#E4F0EA;color:#2C9087">validée ✅</span>':(s==='refusée'?'<span class="bgd-badge" style="background:#F8E3DC;color:#C2553B">refusée ❌</span>':'<span class="bgd-badge" style="background:#FBEBDD;color:#C77F2A">en attente ⏳</span>');
+  const form='<div class="bgd-card" style="margin-bottom:12px"><div class="bgd-h">🏖️ Demander une absence</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px">'
+    +'<select id="rhtype" class="rhin">'+(d.types||[]).map(x=>'<option>'+esc(x)+'</option>').join('')+'</select>'
+    +'<label class="fs">du</label><input type="date" id="rhdu" class="rhin"><label class="fs">au</label><input type="date" id="rhau" class="rhin">'
+    +'<input id="rhnote" class="rhin" style="flex:1;min-width:160px" placeholder="commentaire (optionnel)">'
+    +'<button class="lk primary" id="rhgo">Envoyer la demande</button></div>'
+    +'<div class="fs" style="margin-top:6px">La direction est prévenue sur Slack et la réponse arrive ici et sur Slack.</div></div>';
+  const abs=(d.absences||[]);
+  const absH='<div class="bgd-card" style="margin-bottom:12px"><div class="bgd-h">📅 '+(sup?'Demandes de l\'équipe':'Mes demandes')+'</div>'
+    +(abs.length?abs.map(a=>'<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #F0F3F3">'
+      +(sup?('<b>'+esc(a.who)+'</b> · '):'')
+      +'<span>'+esc(a.type)+'</span><span class="fs">du '+dmy(a.du)+' au '+dmy(a.au)+'</span>'
+      +(a.note?('<span class="fs">« '+esc(a.note)+' »</span>'):'')+st(a.statut)
+      +(a.comment?('<span class="fs">· '+esc(a.comment)+'</span>'):'')
+      +((sup&&a.statut==='en attente')?('<span style="margin-left:auto;display:flex;gap:6px"><button class="lk" data-rhdec="validee" data-id="'+esc(a.id)+'">✅ Valider</button><button class="lk" data-rhdec="refusee" data-id="'+esc(a.id)+'">❌ Refuser</button></span>')
+        :((!sup&&a.statut==='en attente')?('<button class="lk" data-rhdel="'+esc(a.id)+'" style="margin-left:auto">🗑 Annuler</button>'):''))
+      +'</div>').join(''):'<div class="state2" style="padding:8px">Aucune demande pour le moment.</div>')
+    +'</div>';
+  const docs=(d.docs||[]);
+  const kb=(n)=>n>1048576?((n/1048576).toFixed(1)+' Mo'):(Math.round((n||0)/1024)+' Ko');
+  const docH='<div class="bgd-card"><div class="bgd-h">📄 '+(sup?'Documents de l\'équipe':'Mes documents')+'</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0">'
+    +(sup?('<select id="rhwho" class="rhin">'+(d.team||[]).map(n=>'<option>'+esc(n)+'</option>').join('')+'</select>'):'')
+    +'<select id="rhcat" class="rhin"><option>Fiche de paie</option><option>Facture</option><option>Contrat</option><option>Autre</option></select>'
+    +'<input type="file" id="rhfile" class="rhin" style="max-width:240px">'
+    +'<button class="lk primary" id="rhup">📎 Déposer</button>'
+    +'<span class="fs">'+(sup?'tu déposes pour la personne choisie, elle est prévenue sur Slack':'dépose ici tes factures · tes fiches de paie sont ajoutées par la direction')+'</span></div>'
+    +(docs.length?docs.map(f=>'<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid #F0F3F3">'
+      +(sup?('<b>'+esc(f.who)+'</b> · '):'')
+      +'<span class="bgd-badge" style="background:#EDE7F5;color:#1C3A44">'+esc(f.cat)+'</span>'
+      +'<a class="lk" href="/api/rh/doc/'+esc(f.id)+'" target="_blank" rel="noopener">'+esc(f.filename)+'</a>'
+      +'<span class="fs">'+kb(f.size)+' · déposé par '+esc(f.by||'?')+' le '+new Date(f.at||0).toLocaleDateString('fr-FR')+'</span>'
+      +'<a class="lk" href="/api/rh/doc/'+esc(f.id)+'?dl=1" style="margin-left:auto">⬇️</a>'
+      +(sup?('<button class="lk" data-rhdocdel="'+esc(f.id)+'">🗑</button>'):'')
+      +'</div>').join(''):'<div class="state2" style="padding:8px">Aucun document pour le moment.</div>')
+    +'</div>';
+  box.innerHTML=form+absH+docH;
+  const g=$('rhgo'); if(g)g.onclick=async()=>{
+    const du=$('rhdu').value,au=$('rhau').value||du;
+    if(!du){alert('Choisis au moins la date de début 🙂');return;}
+    g.disabled=true;g.textContent='Envoi…';
+    const r=await api('/api/rh/absence',{method:'POST',body:JSON.stringify({type:$('rhtype').value,du,au,note:$('rhnote').value})});
+    const dd=await r.json().catch(()=>({}));
+    if(!r.ok)alert(dd.error||'Erreur, réessaie.');
+    renderRhView();
+  };
+  box.querySelectorAll('[data-rhdec]').forEach(b=>b.onclick=async()=>{
+    let comment='';
+    if(b.dataset.rhdec==='refusee'){ comment=prompt('Un petit mot pour expliquer (optionnel) :')||''; }
+    b.disabled=true;
+    await api('/api/rh/absence/'+encodeURIComponent(b.dataset.id)+'/decide',{method:'POST',body:JSON.stringify({decision:b.dataset.rhdec,comment})});
+    renderRhView();
+  });
+  box.querySelectorAll('[data-rhdel]').forEach(b=>b.onclick=async()=>{ b.disabled=true; await api('/api/rh/absence/'+encodeURIComponent(b.dataset.rhdel)+'/del',{method:'POST'}); renderRhView(); });
+  box.querySelectorAll('[data-rhdocdel]').forEach(b=>b.onclick=async()=>{ if(!confirm('Supprimer ce document ?'))return; b.disabled=true; await api('/api/rh/doc/'+encodeURIComponent(b.dataset.rhdocdel)+'/del',{method:'POST'}); renderRhView(); });
+  const up=$('rhup'); if(up)up.onclick=()=>{
+    const f=$('rhfile').files[0];
+    if(!f){alert('Choisis d\'abord un fichier 🙂');return;}
+    if(f.size>15*1024*1024){alert('15 Mo max');return;}
+    up.disabled=true;up.textContent='Envoi…';
+    const rd=new FileReader();
+    rd.onload=async()=>{
+      const body={data:rd.result,filename:f.name,cat:$('rhcat').value};
+      const w=$('rhwho'); if(w)body.who=w.value;
+      const r=await api('/api/rh/doc',{method:'POST',body:JSON.stringify(body)});
+      const dd=await r.json().catch(()=>({}));
+      if(!r.ok)alert(dd.error||'Erreur, réessaie.');
+      renderRhView();
+    };
+    rd.readAsDataURL(f);
+  };
 }
 // ===== Vue Budget : dashboard « Suivi des budgets » =========================
 let BG_MONTH='', BG_BRAND='', BG_ALL=false;
