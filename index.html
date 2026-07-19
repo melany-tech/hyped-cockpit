@@ -527,6 +527,9 @@ body.ceomode #filterbar{display:none !important}
 .ceobar>div{height:100%;border-radius:99px}
 @media(max-width:1150px){.ceogrid{grid-template-columns:1fr !important}}
 body.ceomode .nav.on{background:#EEEBFB;color:#6D5AE0}
+#ceohomebk{position:fixed;left:236px;top:12px;z-index:80;align-items:center;gap:6px;padding:9px 16px;border-radius:999px;border:1px solid #E4E0F7;background:#fff;color:#6D5AE0;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer;box-shadow:0 4px 14px rgba(20,20,40,.10)}
+#ceohomebk:hover{background:#F4F2FB}
+@media(max-width:900px){#ceohomebk{left:12px;top:8px}}
 /* deltas vs hier */
 .scard .dl{font-size:11px;font-weight:700;margin-top:5px}
 .dl.chg{color:var(--teal)}.dl.eq{color:#9aa6a8}
@@ -628,6 +631,7 @@ body.ceomode .nav.on{background:#EEEBFB;color:#6D5AE0}
       <a class="nav" data-go="contenus"><span class="ni">🎬</span> Contenus</a>
       <a class="nav" data-go="marques"><span class="ni">🏷️</span> Marques</a>
       <a class="nav" data-go="todo"><span class="ni">✅</span> To-do</a>
+      <a class="nav" data-go="finance"><span class="ni">💶</span> Finance</a>
       <a class="nav" data-go="commercial"><span class="ni">💼</span> Commercial</a>
       <a class="nav" data-go="projets"><span class="ni">📁</span> Projets</a>
       <a class="nav" data-go="roadmap"><span class="ni">🗺️</span> Roadmap</a>
@@ -755,6 +759,7 @@ body.ceomode .nav.on{background:#EEEBFB;color:#6D5AE0}
     <section id="budgetview" style="display:none"><p class="pt"><span class="pi">💶</span> Budgets du mois</p><div class="panelhint">Toutes les marques d'un coup d'œil : engagé, restant, dépassements. Le budget mensuel se règle dans la fiche de chaque marque (onglet Marques), l'engagé vient du calendrier Notion. Export Excel par marque pour le reporting client.</div><div id="budgetallbox"><div class="state">Chargement…</div></div></section>
     <section id="rhview" style="display:none"><p class="pt"><span class="pi">🌴</span> RH · absences &amp; documents</p><div class="panelhint">Demande tes congés ou absences ici (la direction valide, tu es prévenue sur Slack), et retrouve tes documents : fiches de paie pour les salariées, factures pour les freelances. Chacune ne voit que les siens.</div><div id="rhbox"><div class="state">Chargement…</div></div></section>
     <section id="roadmapview" style="display:none"><p class="pt"><span class="pi">🗺️</span> Roadmap annuelle</p><div class="panelhint">Ton espace stratégie : les grands chantiers de l'année, trimestre par trimestre, organisés par axe. Clique un statut pour le faire évoluer, ✎ pour éditer, ＋ pour ajouter. Visible uniquement par la direction.</div><div id="roadmapbox"><div class="state">Chargement…</div></div></section>
+    <section id="financeview" style="display:none"><p class="pt"><span class="pi">💶</span> Finance</p><div class="panelhint">Les finances de l'entreprise : trésorerie, chiffre d'affaires encaissé, derniers encaissements et connexion Pennylane. Visible uniquement par la direction.</div><div id="financebox"><div class="state">Chargement…</div></div></section>
     <section id="commercialview" style="display:none"><p class="pt"><span class="pi">💼</span> Suivi commercial</p><div class="panelhint">Ta prospection de nouveaux clients : chaque deal avance de Lead à Gagné. Clique un statut pour le faire évoluer, ✎ pour éditer. Visible uniquement par la direction.</div><div id="crmbox"><div class="state">Chargement…</div></div></section>
     <section id="projetsview" style="display:none"><p class="pt"><span class="pi">📁</span> Suivi de projets</p><div class="panelhint">Où en est chaque marque et chaque personne : budgets, collabs du mois, retards. Visible uniquement par la direction.</div><div id="projetsbox"><div class="state">Chargement…</div></div></section>
     <section id="rapportsview" style="display:none"><p class="pt"><span class="pi">📊</span> Rapports</p><div id="rapportsbox"><div class="state">Chargement…</div></div></section>
@@ -814,8 +819,8 @@ function statCardGo(act){
   else { navToView('cockpit'); setTimeout(()=>{const el=$('todopanel'); if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},220); } // à traiter / relances → priorités
 }
 let CURRENT_VIEW='cockpit';
-const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview',historique:'historiqueview',marques:'marquesview',todo:'todoview',processus:'processview',budget:'budgetview',rh:'rhview',roadmap:'roadmapview',commercial:'commercialview',projets:'projetsview'};
-function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','historiqueview','marquesview','todoview','processview','budgetview','rhview','roadmapview','commercialview','projetsview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
+const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview',historique:'historiqueview',marques:'marquesview',todo:'todoview',processus:'processview',budget:'budgetview',rh:'rhview',roadmap:'roadmapview',finance:'financeview',commercial:'commercialview',projets:'projetsview'};
+function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','historiqueview','marquesview','todoview','processview','budgetview','rhview','roadmapview','financeview','commercialview','projetsview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
 function refreshCustomView(){
   if(CURRENT_VIEW==='campagnes')renderCampagnes();
   else if(CURRENT_VIEW==='contacts')renderContacts();
@@ -828,8 +833,76 @@ function refreshCustomView(){
   else if(CURRENT_VIEW==='budget')renderBudgetView();
   else if(CURRENT_VIEW==='rh')renderRhView();
   else if(CURRENT_VIEW==='roadmap')renderRoadmapView();
+  else if(CURRENT_VIEW==='finance')renderFinanceView();
   else if(CURRENT_VIEW==='commercial')renderCommercialView();
   else if(CURRENT_VIEW==='projets')renderProjetsView();
+}
+// ===== Vue Finance (direction) : trésorerie, CA encaissé, connexion Pennylane ======
+async function renderFinanceView(){
+  const bx=$('financebox'); if(!bx)return;
+  try{
+    const V='#7C5CFA';
+    const r=await api('/api/ceo'); if(!r.ok){bx.innerHTML='<div class="state">Réservé à la direction.</div>';return;}
+    const ceo=await r.json();
+    const eur=(n)=>((Math.round(Number(n)||0)).toLocaleString('fr-FR')+' €');
+    const dmy=(x)=>String(x||'').split('-').reverse().join('/');
+    const pl=ceo.pennylane||{connected:false};
+    const plOn=pl.connected&&!pl.error&&pl.treso!==null&&pl.treso!==undefined;
+    const tresoM=ceo.treso;
+    const tresoVal=plOn?pl.treso:(tresoM?tresoM.amount:null);
+    const caAn=plOn?pl.ca:(ceo.ca?ceo.ca.encaisse:null);
+    const kpi=(ic,bgc,lbl,val,sub)=>'<div class="bgd-card" style="min-width:0"><div style="display:flex;gap:12px;align-items:center"><div style="width:48px;height:48px;flex:0 0 48px;border-radius:50%;background:'+bgc+';display:flex;align-items:center;justify-content:center;font-size:20px">'+ic+'</div><div style="min-width:0"><div class="bgd-klbl">'+lbl+'</div><div class="bgd-kval" style="font-size:22px">'+val+'</div><div class="bgd-ksub">'+sub+'</div></div></div></div>';
+    const kpis='<div class="bgd-kpis" style="grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin-bottom:14px">'
+      +kpi('💼','#E7F5EC','Trésorerie disponible'+(plOn?'':' <a class="lk" id="fintreso" title="Saisir">✎</a>'),tresoVal!==null?eur(tresoVal):'<span style="font-size:15px">à renseigner</span>',plOn?'🟢 Pennylane · temps réel':(tresoM?'saisie manuelle du '+new Date(tresoM.at).toLocaleDateString('fr-FR'):'✎ ou connecte Pennylane ci-dessous'))
+      +kpi('📈','#EEEBFB','CA encaissé '+new Date().getFullYear(),caAn!==null&&caAn!==undefined?eur(caAn):'<span style="font-size:15px">à venir</span>',plOn?'factures payées (HT)':'via Pennylane ci-dessous')
+      +kpi('🗓️','#E7F0FA','CA encaissé ce mois',plOn?eur(pl.caMois||0):'<span style="font-size:15px">à venir</span>',plOn?'vs mois dernier : '+eur(pl.caPrevMois||0):'via Pennylane ci-dessous')
+      +'</div>';
+    const mensuel=pl.mensuel||{};
+    const moisKeys=[];{const d0=new Date();d0.setMonth(d0.getMonth()-11);for(let i=0;i<12;i++){moisKeys.push(d0.toISOString().slice(0,7));d0.setMonth(d0.getMonth()+1);}}
+    const serie=moisKeys.map(k=>Math.round(mensuel[k]||0));
+    let chartH='';
+    if(serie.some(v=>v>0)){
+      const w=740,h=190,padL=48,padB=24,padT=16,iw=w-padL-14,ih=h-padT-padB;
+      const mx=Math.max.apply(null,serie.concat([1]));
+      const st2=iw/(serie.length-1);
+      const P=(v,i)=>[padL+i*st2,padT+ih-(v/mx)*ih];
+      const pts=serie.map((v,i)=>P(v,i).map(n=>n.toFixed(1)).join(',')).join(' ');
+      const area='M'+padL+','+(padT+ih)+' L'+serie.map((v,i)=>P(v,i).map(n=>n.toFixed(1)).join(',')).join(' L')+' L'+(padL+iw).toFixed(1)+','+(padT+ih)+' Z';
+      const nomsM=['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
+      const xl=moisKeys.map((k,i)=>(i%2===0)?('<text x="'+(padL+i*st2).toFixed(1)+'" y="'+(h-6)+'" font-size="10" fill="#9AA3AC" text-anchor="middle">'+nomsM[Number(k.slice(5,7))-1]+'</text>'):'').join('');
+      const yl=[0,0.5,1].map(f=>'<text x="'+(padL-8)+'" y="'+(padT+ih-f*ih+3).toFixed(1)+'" font-size="10" fill="#9AA3AC" text-anchor="end">'+(Math.round(mx*f/1000))+' k€</text><line x1="'+padL+'" y1="'+(padT+ih-f*ih).toFixed(1)+'" x2="'+(padL+iw)+'" y2="'+(padT+ih-f*ih).toFixed(1)+'" stroke="#F0F1F6"/>').join('');
+      chartH='<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto;display:block">'+yl+'<path d="'+area+'" fill="#EEEBFB" opacity="0.6"/><polyline points="'+pts+'" fill="none" stroke="'+V+'" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>'+serie.map((v,i)=>{const q=P(v,i);return '<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="3" fill="'+V+'"/>';}).join('')+xl+'</svg>';
+    } else {
+      chartH='<div style="text-align:center;padding:30px 10px"><div style="font-size:36px">📈</div><div style="font-weight:700;margin-top:8px">La courbe du CA s\'affichera dès la connexion Pennylane</div><div class="fs" style="margin-top:6px">12 derniers mois, factures clients réellement payées (HT).</div></div>';
+    }
+    const lastPaid=pl.lastPaid||[];
+    const encH='<div style="min-width:0"><div class="bgd-h" style="font-size:14px">Derniers encaissements</div>'
+      +(lastPaid.length?lastPaid.map(x=>'<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #F0F1F6"><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px">'+esc(x.nom)+'</span><span class="fs">'+dmy(x.date).slice(0,5)+'</span><b style="white-space:nowrap">'+eur(x.montant)+'</b></div>').join(''):'<div class="fs" style="padding:8px 0">visibles dès que Pennylane est connecté</div>')+'</div>';
+    const caCard='<div class="bgd-card" style="margin-bottom:14px"><div class="bgd-h">📈 Évolution du CA encaissé <span class="cpsub">12 derniers mois</span></div>'
+      +'<div style="width:100%;display:grid;grid-template-columns:minmax(0,2.2fr) minmax(220px,1fr);gap:18px;align-items:start;margin-top:6px"><div style="min-width:0">'+chartH+'</div>'+encH+'</div></div>';
+    const st=plOn?('<span style="color:#2E9E6B;font-weight:700">🟢 API connectée</span> <span class="fs">· données mises à jour à '+(pl.at?new Date(pl.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'·')+' · rafraîchies toutes les 30 min</span>')
+      :(pl.error?('<span style="color:#D4483B;font-weight:700">🔴 Erreur de connexion</span> <span class="fs">· '+esc(String(pl.error))+'</span>')
+      :'<span style="color:#C77F2A;font-weight:700">🟠 Non connectée</span> <span class="fs">· colle ta clé ci-dessous pour tout automatiser</span>');
+    const connH='<div class="bgd-card" style="width:100%"><div class="bgd-h">🔌 Connexion Pennylane</div>'
+      +'<div style="margin:6px 0 2px">'+st+'</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px"><input type="password" id="plkeyin" class="rhin" style="flex:1;min-width:240px;border-radius:12px;padding:12px 14px" placeholder="Colle ici ta clé API Pennylane" autocomplete="off"><button id="plkeygo" style="font-family:inherit;font-size:13.5px;font-weight:700;padding:12px 22px;border-radius:12px;border:none;background:linear-gradient(135deg,#8A63F8,#6D4DE8);color:#fff;cursor:pointer;white-space:nowrap">'+(plOn?'Reconnecter l\'API':'Connecter l\'API')+'</button></div>'
+      +'<div id="plkeymsg" style="margin-top:8px"></div>'
+      +'<div class="fs" style="margin-top:8px">🛡️ Ta clé est stockée uniquement sur le disque sécurisé du serveur : jamais dans le code, jamais réaffichée ici. Pour la générer : Pennylane → Paramètres → Connectivité → Développeurs → « Générer un Token API ».</div></div>';
+    bx.innerHTML=kpis+caCard+connH;
+    const tE=$('fintreso'); if(tE)tE.onclick=async()=>{
+      const v=prompt('Trésorerie disponible (€) :',tresoM?String(tresoM.amount):''); if(v===null||v.trim()==='')return;
+      await api('/api/ceo/config',{method:'POST',body:JSON.stringify({treso:Number(v.replace(/[^\d.,-]/g,'').replace(',','.'))})});
+      renderFinanceView();
+    };
+    const bg=$('plkeygo'); if(bg)bg.onclick=async()=>{
+      const inp=$('plkeyin'); const k=inp?inp.value.trim():''; if(!k){if(inp)inp.focus();return;}
+      bg.disabled=true; bg.textContent='Connexion…';
+      let dd={}; try{const rr=await api('/api/ceo/pennylane',{method:'POST',body:JSON.stringify({key:k})});dd=await rr.json().catch(()=>({}));}catch(e){}
+      const m=$('plkeymsg');
+      if(dd.connected){ if(m)m.innerHTML='<b style="color:#2E9E6B">🟢 Connecté ! Récupération des chiffres…</b>'; setTimeout(()=>renderFinanceView(),1200); }
+      else { if(m)m.innerHTML='<b style="color:#D4483B">Échec : '+esc(dd.error||'clé refusée')+'</b><span class="fs"> · vérifie la clé et réessaie.</span>'; bg.disabled=false; bg.textContent='Connecter l\'API'; }
+    };
+  }catch(e){bx.innerHTML='<div class="state">Erreur de chargement.</div>';}
 }
 // ===== Page Roadmap annuelle (direction) : 4 trimestres, axes, statuts ======
 async function renderRoadmapView(){
@@ -1401,6 +1474,7 @@ async function renderProcess(){
   }catch(e){box.innerHTML='<div class="state">Erreur de chargement.</div>';}
 }
 function showView(v){
+  (function(){let bk=$('ceohomebk');if(!bk){bk=document.createElement('button');bk.id='ceohomebk';bk.innerHTML='← Retour à l\u2019accueil';bk.onclick=()=>navToView('cockpit');document.body.appendChild(bk);}bk.style.display=(document.body.classList.contains('ceomode')&&v!=='cockpit')?'inline-flex':'none';})();
   if(v!=='contacts')QUI_BACK=null; // on quitte Contacts par la barre latérale : plus besoin du bouton Retour
   CURRENT_VIEW=v;
   const main=$('maincol'), sv=$('soonview'); const isCockpit=(v==='cockpit');
@@ -1594,7 +1668,7 @@ async function load(){
   }else show($('filterbar'),false);
   // Rôle « team » (ex. social media manager) : espace allégé, centré sur la to-do.
   // On masque les outils créateurs (profils, mails, campagnes, marques, contacts, rapports).
-  if(VIEWER.role!=='supervisor'){['roadmap','commercial','projets'].forEach(g=>{const n2=document.querySelector('.sb-nav .nav[data-go="'+g+'"]');if(n2)n2.style.display='none';});}
+  if(VIEWER.role!=='supervisor'){['roadmap','finance','commercial','projets'].forEach(g=>{const n2=document.querySelector('.sb-nav .nav[data-go="'+g+'"]');if(n2)n2.style.display='none';});}
   if(VIEWER.role==='team'){
     ['profils','campagnes','contenus','marques','contacts','messages','rapports','budget'].forEach(g=>{const a=document.querySelector('.sb-nav .nav[data-go="'+g+'"]');if(a)a.style.display='none';});
     ['srcpanel','mailpanel','pipelinepanel','brandpanel','fillpanel','listpanel','statcards'].forEach(id=>{const e=$(id);if(e){e.classList.add('hidden');e.style.display='none';}});
@@ -1840,8 +1914,8 @@ async function loadCeoPanel(){
     // ---------- ligne 1 : 5 KPIs avec sparklines ----------
     const kpi=(ic,bgc,lbl,val,sub,extra,link,go,lc)=>'<div class="bgd-card" style="min-width:0;display:flex;flex-direction:column;gap:2px"><div style="display:flex;gap:12px;align-items:flex-start"><div style="width:48px;height:48px;flex:0 0 48px;border-radius:50%;background:'+bgc+';display:flex;align-items:center;justify-content:center;font-size:20px">'+ic+'</div><div style="min-width:0;flex:1"><div class="bgd-klbl">'+lbl+'</div><div class="bgd-kval" style="font-size:23px">'+val+'</div><div class="bgd-ksub">'+sub+'</div></div></div>'+(extra||'')+'<a class="lk ceogo" data-go="'+go+'" style="border:none;background:none;padding:4px 0 0;color:'+lc+';font-weight:700;font-size:12.5px">'+link+' →</a></div>';
     const kpis='<div class="bgd-kpis" style="grid-template-columns:repeat(auto-fit,minmax(225px,1fr));margin-bottom:14px">'
-      +kpi('💼','#E7F5EC','Trésorerie restante'+(plOn?'':' <a class="lk" id="ceotreso" title="Saisir">✎</a>'),tresoVal!==null?eur(tresoVal):'<span style="font-size:15px">à renseigner</span>',tresoVal!==null?('vs mois dernier '+(tresoPct!==null?pctTxt(tresoPct):'· n/d')+(plOn?' · 🟢 Pennylane':'')):'✎ ou branche Pennylane',spark(hist.slice(-30).map(x=>x.v),'#2E9E6B'),'Voir le détail finance','budget','#2E9E6B')
-      +kpi('📈','#EEEBFB','CA encaissé ce mois',caMois!==null?eur(caMois):'à venir',caMois!==null?('vs mois dernier '+(caPct!==null?pctTxt(caPct):'· n/d')):'branche Pennylane pour le réel',spark(caSerie.some(v=>v>0)?caSerie:null,'#7C5CFA'),'Voir le détail finance','budget','#7C5CFA')
+      +kpi('💼','#E7F5EC','Trésorerie restante'+(plOn?'':' <a class="lk" id="ceotreso" title="Saisir">✎</a>'),tresoVal!==null?eur(tresoVal):'<span style="font-size:15px">à renseigner</span>',tresoVal!==null?('vs mois dernier '+(tresoPct!==null?pctTxt(tresoPct):'· n/d')+(plOn?' · 🟢 Pennylane':'')):'✎ ou branche Pennylane',spark(hist.slice(-30).map(x=>x.v),'#2E9E6B'),'Voir le détail finance','finance','#2E9E6B')
+      +kpi('📈','#EEEBFB','CA encaissé ce mois',caMois!==null?eur(caMois):'à venir',caMois!==null?('vs mois dernier '+(caPct!==null?pctTxt(caPct):'· n/d')):'branche Pennylane pour le réel',spark(caSerie.some(v=>v>0)?caSerie:null,'#7C5CFA'),'Voir le détail finance','finance','#7C5CFA')
       +kpi('🔽','#E7F0FA','Pipeline commercial',eur(crmStats.pipeline),'prévisionnel en cours','<div style="margin-top:6px"><span style="color:'+V+';font-weight:700;font-size:12.5px">'+crmStats.actifs+' opportunité(s) active(s)</span></div>','Voir le pipeline','commercial','#2F6DB5')
       +kpi('🗳️','#FDF0E0','Projets à arbitrer',String(nDec),'décision(s) requise(s)','','Voir les décisions','__dec','#C77F2A')
       +kpi('👥','#FBE5E0','Bande passante équipe',band+' %','capacité restante','<div style="margin-top:6px"><span class="fs">approximation basée sur les tâches</span></div>','Voir la charge','projets','#D4483B')
@@ -1901,11 +1975,11 @@ async function loadCeoPanel(){
       +'<div class="fs" style="font-weight:700;margin:4px 0">Membres de l\'équipe</div>'
       +mem.slice(0,4).map((m,i)=>'<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid #F0F1F6"><span style="width:26px;height:26px;flex:0 0 26px;border-radius:50%;background:'+AVC[i%AVC.length]+';color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:11px">'+esc(String(m.name).slice(0,1).toUpperCase())+'</span><div style="min-width:0;flex:1"><b style="font-size:12.5px">'+esc(m.name)+'</b><div class="fs" style="font-size:10.5px">'+esc(m.role==='team'?'Social Media Manager':'Cheffe de projet')+'</div></div><b style="color:'+chCol(m.charge)+';font-size:12px">'+m.charge+' %</b><div class="ceobar" style="width:74px"><div style="width:'+Math.min(100,m.charge)+'%;background:'+chCol(m.charge)+'"></div></div><a class="lk ceogo" data-go="rh" title="Fiche RH">📄</a></div>').join('')
       +'<div class="fs" style="margin-top:8px">🛡️ Chaque collaborateur dispose d\'une fiche RH complète (documents, RIB, congés, notes…).</div></div>';
-    const decH='<div class="bgd-card" style="height:100%" id="ceocard-dec"><div class="bgd-h">🗳️ Décisions du jour</div>'
+    const decH='<div class="bgd-card" style="height:100%" id="ceocard-dec"><div class="bgd-h">🗳️ Décisions du jour</div><div class="fs" style="margin:2px 0 4px">Se remplit tout seul : ⚖️ quand une CP te demande un arbitrage (bouton « Arbitrage CEO » dans son cockpit) + 📬 quand tes boîtes mail attendent une décision.</div>'
       +((arbs.length||props.length)?(
         arbs.map((a,i)=>'<div style="display:flex;align-items:flex-start;gap:9px;padding:9px 0;border-bottom:1px solid #F0F1F6">'+chip(a.type,i)+'<span style="flex:1;min-width:0;font-size:13px">'+esc(a.sujet)+(a.montant?(' <b>'+eur(a.montant)+'</b>'):'')+'</span><span style="display:flex;gap:4px"><button class="lk" data-ceoarb="valide" data-id="'+esc(a.id)+'">✅</button><button class="lk" data-ceoarb="refuse" data-id="'+esc(a.id)+'">❌</button><button class="lk" data-ceoarb="precisions" data-id="'+esc(a.id)+'">💬</button></span></div>').join('')
         +props.slice(0,4).map((x,i)=>'<div class="ceogo" data-go="messages" style="display:flex;align-items:flex-start;gap:9px;padding:9px 0;border-bottom:1px solid #F0F1F6;cursor:pointer">'+chip('Copilote',i+1)+'<span style="flex:1;min-width:0;font-size:13px">'+esc(String(x.question||x.resume||'').slice(0,100))+'</span><span style="color:#B7C2C6">›</span></div>').join('')
-      ):'<div style="text-align:center;padding:22px 8px"><div style="font-size:40px">🎉</div><div style="font-weight:700;margin-top:8px">Rien à trancher aujourd\'hui, bravo !</div><div class="fs" style="margin-top:6px">Arbitrages de l\'équipe + décisions de tes boîtes.</div></div>')
+      ):'<div style="text-align:center;padding:22px 8px"><div style="font-size:40px">🎉</div><div style="font-weight:700;margin-top:8px">Rien à trancher aujourd\'hui, bravo !</div><div class="fs" style="margin-top:6px">Dès qu\'une demande arrive, elle apparaît ici avec les boutons ✅ valider · ❌ refuser · 💬 demander des précisions, et tu es la seule à la voir.</div></div>')
       +'<a class="lk ceogo" data-go="messages" style="border:none;background:none;padding:8px 0 0;color:'+V+';font-weight:700;font-size:12.5px">Voir toutes les décisions →</a></div>';
     const consoP=(d)=>{const bm=d.budgetMensuel||0,tot=d.total||0;return bm?Math.min(100,Math.round(100*tot/bm)):null;};
     const mkH='<div class="bgd-card" style="height:100%"><div class="bgd-h">🏷️ Marques & comptes <a class="lk ceogo" data-go="budget" style="float:right">Voir tout →</a></div>'
@@ -1937,7 +2011,7 @@ async function loadCeoPanel(){
     const lastPaid=(pl&&pl.lastPaid)||[];
     const encH='<div style="min-width:0"><div class="bgd-h" style="font-size:14px">Derniers encaissements</div>'
       +(lastPaid.length?lastPaid.map(x=>'<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #F0F1F6"><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px">'+esc(x.nom)+'</span><span class="fs">'+dmy(x.date).slice(0,5)+'</span><b style="white-space:nowrap">'+eur(x.montant)+'</b></div>').join(''):'<div class="fs" style="padding:8px 0">visibles dès que Pennylane est branché</div>')
-      +'<a class="lk ceogo" data-go="budget" style="border:none;background:none;padding:8px 0 0;color:'+V+';font-weight:700;font-size:12.5px">Voir le détail →</a></div>';
+      +'<a class="lk ceogo" data-go="finance" style="border:none;background:none;padding:8px 0 0;color:'+V+';font-weight:700;font-size:12.5px">Voir le détail →</a></div>';
     const caCard='<div class="bgd-card" style="margin-bottom:14px"><div class="bgd-h">📈 Évolution du CA encaissé <span class="cpsub">12 derniers mois · factures payées (HT)</span></div>'
       +'<div style="width:100%;display:grid;grid-template-columns:minmax(0,2.2fr) minmax(220px,1fr);gap:18px;align-items:start;margin-top:6px">'+ '<div style="min-width:0">'+chartH+'</div>'+encH+'</div></div>';
     // ---------- assistant IA (conservé : c'est ta barre d'action) ----------

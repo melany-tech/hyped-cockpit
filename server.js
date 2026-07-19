@@ -672,7 +672,11 @@ const RM_STATUTS = ["À venir", "En cours", "À risque", "Bloqué", "Terminé"];
 // --- Pennylane (V2 finances) : trésorerie réelle + CA encaissé ---------------
 // S'active automatiquement quand PENNYLANE_API_KEY est présent dans l'environnement
 // (clé générée et collée par Mélany elle-même dans Render). Cache 30 min.
-const PL_KEY = () => process.env.PENNYLANE_API_KEY || "";
+const PL_KEY_FILE = path.join(DATA_DIR, "pennylane_key.txt");
+const PL_KEY = () => {
+  if (process.env.PENNYLANE_API_KEY) return process.env.PENNYLANE_API_KEY;
+  try { return fs.readFileSync(PL_KEY_FILE, "utf8").trim(); } catch (e) { return ""; }
+};
 let PL_CACHE = { at: 0, treso: null, ca: null, error: null };
 async function plGet(pathUrl) {
   const r = await fetch("https://app.pennylane.com/api/external/v2" + pathUrl, { headers: { "Authorization": "Bearer " + PL_KEY(), "Accept": "application/json" } });
@@ -758,6 +762,24 @@ app.post("/api/ceo/config", auth, (req, res) => {
     o.ca = { encaisse: enc, objectif: obj, periode: String(req.body?.periode || prev.periode || "année"), at: Date.now(), by: req.user.name, source: "saisie manuelle (encaissé uniquement)" };
   }
   saveCeo(o); res.json({ ok: true });
+});
+// Clé API Pennylane saisie par Mélany depuis l'onglet Finance : stockée UNIQUEMENT sur le disque persistant (jamais dans le code, jamais renvoyée au navigateur)
+app.post("/api/ceo/pennylane", auth, async (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  const key = String(req.body?.key || "").trim();
+  if (!key) {
+    try { fs.unlinkSync(PL_KEY_FILE); } catch (e) {}
+    PL_CACHE = { at: 0, treso: null, ca: null, error: null };
+    return res.json({ ok: true, connected: false });
+  }
+  if (!/^\S{10,500}$/.test(key)) return res.status(400).json({ error: "format de clé invalide" });
+  if (process.env.PENNYLANE_API_KEY) return res.status(400).json({ error: "une clé est déjà définie dans Render (variable d'environnement) : elle est prioritaire" });
+  try { fs.writeFileSync(PL_KEY_FILE, key, { mode: 0o600 }); } catch (e) { return res.status(500).json({ error: "impossible d'enregistrer la clé" }); }
+  PL_CACHE = { at: 0, treso: null, ca: null, error: null };
+  let snap = null; try { snap = await pennylaneSnapshot(); } catch (e) {}
+  const okc = !!(snap && !snap.error && snap.treso !== null && snap.treso !== undefined);
+  if (!okc) { try { fs.unlinkSync(PL_KEY_FILE); } catch (e) {} PL_CACHE = { at: 0, treso: null, ca: null, error: null }; }
+  res.json({ ok: true, connected: okc, error: okc ? null : ((snap && snap.error) || "clé refusée par Pennylane") });
 });
 // Roadmap annuelle : initiatives par trimestre et par axe, gérées par la direction
 app.post("/api/ceo/roadmap", auth, (req, res) => {
@@ -904,8 +926,8 @@ app.get("/api/ceo/brief", auth, async (req, res) => {
   if (Date.now() - CEO_BRIEF_CACHE.at < 3600000 && CEO_BRIEF_CACHE.text && !req.query.force) return res.json({ ok: true, text: CEO_BRIEF_CACHE.text, at: CEO_BRIEF_CACHE.at, faits: CEO_BRIEF_CACHE.faits || [] });
   try {
     const faits = await ceoFacts();
-    if (!faits.length) { CEO_BRIEF_CACHE = { at: Date.now(), text: "Rien d'urgent aujourd'hui : pas d'arbitrage ni de décision en attente, pas de retard critique, budgets sous contrôle. Profites-en pour avancer sur la roadmap ✨", faits: [] }; return res.json({ ok: true, text: CEO_BRIEF_CACHE.text, at: CEO_BRIEF_CACHE.at, faits: [] }); }
-    const sys = "Tu es l'assistante de direction de Mélany (agence Hyped). À partir des FAITS fournis (et RIEN d'autre : n'invente aucun chiffre), écris un brief matinal en français : 3 à 6 phrases courtes, priorités d'abord, ton direct et chaleureux, sans tiret quadratin, sans liste à puces.";
+    if (!faits.length) { CEO_BRIEF_CACHE = { at: Date.now(), text: "RAS aujourd'hui : aucun arbitrage ni décision en attente, pas de retard critique, budgets sous contrôle.", faits: [] }; return res.json({ ok: true, text: CEO_BRIEF_CACHE.text, at: CEO_BRIEF_CACHE.at, faits: [] }); }
+    const sys = "Tu es l'assistante de direction de Mélany (agence Hyped). À partir des FAITS fournis (et RIEN d'autre : n'invente aucun chiffre), écris un point du jour FACTUEL en français : 2 à 3 phrases courtes maximum, uniquement des constats, priorités d'abord, ton neutre et direct. INTERDIT : conseils, injonctions ou formules du type « n'oublie pas », « il faut », « pense à », « profites-en ». Pas de tiret quadratin, pas de liste à puces.";
     const out = process.env.OPENAI_API_KEY ? await callOpenAI(sys, faits.map((f) => f.t).join("\n"), 600) : (process.env.ANTHROPIC_API_KEY ? await callAnthropic(sys, faits.map((f) => f.t).join("\n"), 600) : null);
     const text = (out && out.ok) ? out.body : ("À traiter aujourd'hui : " + faits.slice(0, 5).map((f) => f.t).join(" · "));
     CEO_BRIEF_CACHE = { at: Date.now(), text, faits };
