@@ -697,18 +697,21 @@ async function pennylaneSnapshot() {
     // 2) CA ENCAISSÉ (HT, factures clients réellement payées) : 12 derniers mois + derniers encaissements
     const lim = new Date(); lim.setMonth(lim.getMonth() - 12); const l0 = lim.toISOString().slice(0, 10);
     const y0 = new Date().getFullYear() + "-01-01";
-    const mensuel = {}; const lastPaid = [];
+    const mensuel = {}; const factMensuel = {}; const lastPaid = [];
     let enc = 0; cursor = ""; let pages = 0, stop = false;
     do {
       const d = await plGet("/customer_invoices?limit=100&sort=-date" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""));
       for (const iv of (d.items || [])) {
         if (iv.date && iv.date < l0) { stop = true; break; } // trié par date desc : on a dépassé 12 mois
         if (iv.draft) continue;
-        if (iv.paid) {
-          const ht = (parseFloat(iv.currency_amount_before_tax) || 0) * (parseFloat(iv.exchange_rate) || 1);
-          const mk2 = String(iv.date || "").slice(0, 7);
+        const ht = (parseFloat(iv.currency_amount_before_tax) || 0) * (parseFloat(iv.exchange_rate) || 1);
+        const mk2 = String(iv.date || "").slice(0, 7);
+        // FACTURÉ : toutes les factures émises, avoirs en négatif (une facture annulée par avoir se neutralise)
+        if (mk2) factMensuel[mk2] = (factMensuel[mk2] || 0) + ht;
+        // ENCAISSÉ : statut strictement "paid". Une facture annulée par avoir est "cancelled" avec paid=true : ce n'est PAS un encaissement.
+        if (iv.status === "paid") {
           if (mk2) mensuel[mk2] = (mensuel[mk2] || 0) + ht;
-          if (iv.date && iv.date >= y0) enc += ht; // avoirs négatifs déduits naturellement
+          if (iv.date && iv.date >= y0) enc += ht;
           if (lastPaid.length < 4 && ht > 0) lastPaid.push({ nom: (iv.customer && iv.customer.name) || iv.label || iv.invoice_number || "Facture", date: iv.date || "", montant: Math.round(ht) });
         }
       }
@@ -716,10 +719,12 @@ async function pennylaneSnapshot() {
       pages++;
     } while (cursor && pages < 80);
     Object.keys(mensuel).forEach((k) => { mensuel[k] = Math.round(mensuel[k] * 100) / 100; });
+    Object.keys(factMensuel).forEach((k) => { factMensuel[k] = Math.round(factMensuel[k] * 100) / 100; });
     const moisK = new Date().toISOString().slice(0, 7);
     const prevD = new Date(); prevD.setMonth(prevD.getMonth() - 1); const prevK = prevD.toISOString().slice(0, 7);
     PL_CACHE = { at: Date.now(), treso: Math.round(treso * 100) / 100, ca: Math.round(enc * 100) / 100,
-      caMois: mensuel[moisK] || 0, caPrevMois: mensuel[prevK] || 0, mensuel, lastPaid, error: null };
+      caMois: mensuel[moisK] || 0, caPrevMois: mensuel[prevK] || 0, mensuel, lastPaid,
+      factureMois: factMensuel[moisK] || 0, facturePrevMois: factMensuel[prevK] || 0, factMensuel, error: null };
   } catch (e) {
     PL_CACHE = { ...PL_CACHE, at: Date.now(), error: String((e && e.message) || e).slice(0, 100) };
     try { console.error("[pennylane]", PL_CACHE.error); } catch (e2) {}
@@ -742,7 +747,7 @@ app.get("/api/ceo", auth, async (req, res) => {
     }
   } catch (e) {}
   res.json({ ok: true, treso: o.treso || null, ca: o.ca || null, tresoHist: o.tresoHist || [],
-    pennylane: pl2 ? { connected: true, at: pl2.at, treso: pl2.treso, ca: pl2.ca, caMois: pl2.caMois, caPrevMois: pl2.caPrevMois, mensuel: pl2.mensuel || {}, lastPaid: pl2.lastPaid || [], error: pl2.error, annee: new Date().getFullYear() } : { connected: false },
+    pennylane: pl2 ? { connected: true, at: pl2.at, treso: pl2.treso, ca: pl2.ca, caMois: pl2.caMois, caPrevMois: pl2.caPrevMois, mensuel: pl2.mensuel || {}, lastPaid: pl2.lastPaid || [], factureMois: pl2.factureMois || 0, facturePrevMois: pl2.facturePrevMois || 0, factMensuel: pl2.factMensuel || {}, error: pl2.error, annee: new Date().getFullYear() } : { connected: false },
     roadmap: o.roadmap || [], axes: RM_AXES, rmStatuts: RM_STATUTS, arbTypes: ARB_TYPES,
     arbitrages: (o.arbitrages || []).filter((a) => a.statut === "en attente").sort((a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999")) });
 });

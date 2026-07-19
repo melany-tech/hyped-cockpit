@@ -853,9 +853,9 @@ async function renderFinanceView(){
     const caAn=plOn?pl.ca:(ceo.ca?ceo.ca.encaisse:null);
     const kpi=(ic,bgc,lbl,val,sub)=>'<div class="bgd-card" style="min-width:0"><div style="display:flex;gap:12px;align-items:center"><div style="width:48px;height:48px;flex:0 0 48px;border-radius:50%;background:'+bgc+';display:flex;align-items:center;justify-content:center;font-size:20px">'+ic+'</div><div style="min-width:0"><div class="bgd-klbl">'+lbl+'</div><div class="bgd-kval" style="font-size:22px">'+val+'</div><div class="bgd-ksub">'+sub+'</div></div></div></div>';
     const kpis='<div class="bgd-kpis" style="grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin-bottom:14px">'
-      +kpi('💼','#E7F5EC','Trésorerie disponible'+(plOn?'':' <a class="lk" id="fintreso" title="Saisir">✎</a>'),tresoVal!==null?eur(tresoVal):'<span style="font-size:15px">à renseigner</span>',plOn?'🟢 Pennylane · temps réel':(tresoM?'saisie manuelle du '+new Date(tresoM.at).toLocaleDateString('fr-FR'):'✎ ou connecte Pennylane ci-dessous'))
+      +kpi('📄','#E7F5EC','Facturé ce mois',plOn?eur(pl.factureMois||0):'<span style="font-size:15px">à venir</span>',plOn?('vs mois dernier : '+eur(pl.facturePrevMois||0)+' · net des avoirs (HT)'):'via Pennylane ci-dessous')
       +kpi('📈','#EEEBFB','CA encaissé '+new Date().getFullYear(),caAn!==null&&caAn!==undefined?eur(caAn):'<span style="font-size:15px">à venir</span>',plOn?'factures payées (HT)':'via Pennylane ci-dessous')
-      +kpi('🗓️','#E7F0FA','CA encaissé ce mois',plOn?eur(pl.caMois||0):'<span style="font-size:15px">à venir</span>',plOn?'vs mois dernier : '+eur(pl.caPrevMois||0):'via Pennylane ci-dessous')
+      +kpi('💰','#E7F0FA','Encaissé ce mois',plOn?eur(pl.caMois||0):'<span style="font-size:15px">à venir</span>',plOn?'vs mois dernier : '+eur(pl.caPrevMois||0)+' · reçu sur le compte (HT)':'via Pennylane ci-dessous')
       +'</div>';
     const mensuel=pl.mensuel||{};
     const moisKeys=[];{const d0=new Date();d0.setMonth(d0.getMonth()-11);for(let i=0;i<12;i++){moisKeys.push(d0.toISOString().slice(0,7));d0.setMonth(d0.getMonth()+1);}}
@@ -889,11 +889,6 @@ async function renderFinanceView(){
       +'<div id="plkeymsg" style="margin-top:8px"></div>'
       +'<div class="fs" style="margin-top:8px">🛡️ Ta clé est stockée uniquement sur le disque sécurisé du serveur : jamais dans le code, jamais réaffichée ici. Pour la générer : Pennylane → Paramètres → Connectivité → Développeurs → « Générer un Token API ».</div></div>';
     bx.innerHTML=kpis+caCard+connH;
-    const tE=$('fintreso'); if(tE)tE.onclick=async()=>{
-      const v=prompt('Trésorerie disponible (€) :',tresoM?String(tresoM.amount):''); if(v===null||v.trim()==='')return;
-      await api('/api/ceo/config',{method:'POST',body:JSON.stringify({treso:Number(v.replace(/[^\d.,-]/g,'').replace(',','.'))})});
-      renderFinanceView();
-    };
     const bg=$('plkeygo'); if(bg)bg.onclick=async()=>{
       const inp=$('plkeyin'); const k=inp?inp.value.trim():''; if(!k){if(inp)inp.focus();return;}
       bg.disabled=true; bg.textContent='Connexion…';
@@ -1902,6 +1897,9 @@ async function loadCeoPanel(){
     const mensuel=(pl&&pl.mensuel)||{};
     const moisKeys=[];{const d0=new Date();d0.setMonth(d0.getMonth()-11);for(let i=0;i<12;i++){moisKeys.push(d0.toISOString().slice(0,7));d0.setMonth(d0.getMonth()+1);}}
     const caSerie=moisKeys.map(k=>Math.round(mensuel[k]||0));
+    const factSerie=moisKeys.map(k=>Math.round(((pl&&pl.factMensuel)||{})[k]||0));
+    const factM=plOn?(pl.factureMois||0):null;
+    const factPct=plOn?pct2(pl.factureMois||0,pl.facturePrevMois||0):null;
     const crmStats=(crm&&crm.stats)||{pipeline:0,actifs:0,gagnesMois:0,gagnesMoisN:0};
     const deals=(crm&&crm.deals)||[];
     const props=((cb&&cb.proposals)||[]).filter(x=>x.categorie==='decision'&&x.status==='pending'&&nlow(x.cpName||'')===nlow(VIEWER.name));
@@ -1914,8 +1912,8 @@ async function loadCeoPanel(){
     // ---------- ligne 1 : 5 KPIs avec sparklines ----------
     const kpi=(ic,bgc,lbl,val,sub,extra,link,go,lc)=>'<div class="bgd-card" style="min-width:0;display:flex;flex-direction:column;gap:2px"><div style="display:flex;gap:12px;align-items:flex-start"><div style="width:48px;height:48px;flex:0 0 48px;border-radius:50%;background:'+bgc+';display:flex;align-items:center;justify-content:center;font-size:20px">'+ic+'</div><div style="min-width:0;flex:1"><div class="bgd-klbl">'+lbl+'</div><div class="bgd-kval" style="font-size:23px">'+val+'</div><div class="bgd-ksub">'+sub+'</div></div></div>'+(extra||'')+'<a class="lk ceogo" data-go="'+go+'" style="border:none;background:none;padding:4px 0 0;color:'+lc+';font-weight:700;font-size:12.5px">'+link+' →</a></div>';
     const kpis='<div class="bgd-kpis" style="grid-template-columns:repeat(auto-fit,minmax(225px,1fr));margin-bottom:14px">'
-      +kpi('💼','#E7F5EC','Trésorerie restante'+(plOn?'':' <a class="lk" id="ceotreso" title="Saisir">✎</a>'),tresoVal!==null?eur(tresoVal):'<span style="font-size:15px">à renseigner</span>',tresoVal!==null?('vs mois dernier '+(tresoPct!==null?pctTxt(tresoPct):'· n/d')+(plOn?' · 🟢 Pennylane':'')):'✎ ou branche Pennylane',spark(hist.slice(-30).map(x=>x.v),'#2E9E6B'),'Voir le détail finance','finance','#2E9E6B')
-      +kpi('📈','#EEEBFB','CA encaissé ce mois',caMois!==null?eur(caMois):'à venir',caMois!==null?('vs mois dernier '+(caPct!==null?pctTxt(caPct):'· n/d')):'branche Pennylane pour le réel',spark(caSerie.some(v=>v>0)?caSerie:null,'#7C5CFA'),'Voir le détail finance','finance','#7C5CFA')
+      +kpi('📄','#E7F5EC','Facturé ce mois',factM!==null?eur(factM):'<span style="font-size:15px">à venir</span>',factM!==null?('vs mois dernier '+(factPct!==null?pctTxt(factPct):'· n/d')+' · 🟢 Pennylane'):'branche Pennylane pour le réel',spark(factSerie.some(v=>v!==0)?factSerie:null,'#2E9E6B'),'Voir le détail finance','finance','#2E9E6B')
+      +kpi('💰','#EEEBFB','Encaissé ce mois',caMois!==null?eur(caMois):'à venir',caMois!==null?('vs mois dernier '+(caPct!==null?pctTxt(caPct):'· n/d')):'branche Pennylane pour le réel',spark(caSerie.some(v=>v>0)?caSerie:null,'#7C5CFA'),'Voir le détail finance','finance','#7C5CFA')
       +kpi('🔽','#E7F0FA','Pipeline commercial',eur(crmStats.pipeline),'prévisionnel en cours','<div style="margin-top:6px"><span style="color:'+V+';font-weight:700;font-size:12.5px">'+crmStats.actifs+' opportunité(s) active(s)</span></div>','Voir le pipeline','commercial','#2F6DB5')
       +kpi('🗳️','#FDF0E0','Projets à arbitrer',String(nDec),'décision(s) requise(s)','','Voir les décisions','__dec','#C77F2A')
       +kpi('👥','#FBE5E0','Bande passante équipe',band+' %','capacité restante','<div style="margin-top:6px"><span class="fs">approximation basée sur les tâches</span></div>','Voir la charge','projets','#D4483B')
@@ -2030,11 +2028,6 @@ async function loadCeoPanel(){
     // ---------- interactions ----------
     const goDec=()=>{const e2=document.getElementById('ceocard-dec');if(e2){e2.scrollIntoView({behavior:'smooth',block:'center'});e2.style.boxShadow='0 0 0 3px '+V;setTimeout(()=>{e2.style.boxShadow='';},1500);}};
     p.querySelectorAll('.ceogo').forEach(el=>el.onclick=(ev)=>{ev.stopPropagation();if(el.dataset.go==='__dec'){goDec();return;}navToView(el.dataset.go);});
-    const tE=$('ceotreso'); if(tE)tE.onclick=async(ev)=>{ev.stopPropagation();
-      const v=prompt('Trésorerie disponible (€, telle que sur tes comptes) :',tresoM?String(tresoM.amount):''); if(v===null||v.trim()==='')return;
-      const r=await api('/api/ceo/config',{method:'POST',body:JSON.stringify({treso:Number(v.replace(/[^\d.,-]/g,'').replace(',','.'))})});
-      if(!r.ok){const dd=await r.json().catch(()=>({}));alert(dd.error||'Erreur');} loadCeoPanel();
-    };
     p.querySelectorAll('.ceodone').forEach(c=>c.onchange=async()=>{await api('/api/todos/'+encodeURIComponent(c.dataset.id)+'/done',{method:'POST'});loadCeoPanel();});
     p.querySelectorAll('[data-ceoarb]').forEach(b=>b.onclick=async(ev)=>{ev.stopPropagation();
       let comment='';
