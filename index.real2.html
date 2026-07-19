@@ -513,6 +513,12 @@ body.ceomode #mailpanel{display:none !important}
 .cprew{display:flex;gap:6px;margin-top:7px}
 .cprewin{flex:1;font-family:inherit;font-size:12.5px;padding:8px 10px;border:1px solid #E4E0D5;border-radius:8px;background:#fff}
 .cprewin:focus{outline:none;border-color:#2C9087}
+.cplegende{display:flex;flex-wrap:wrap;gap:8px;margin-top:5px;font-weight:500;font-size:11.5px;color:#56666D}
+.cplegende .lg{padding:3px 9px;border-radius:999px;border:1px solid #E4E0D5;background:#fff}
+.cplegende .lgsable{background:#F5EFE2;border-color:#EADFC8}
+.cplegende .lggris{background:#F2F4F4;border-color:#E2E7E7}
+.mailhead{font-weight:700;font-size:14px;margin:16px 0 4px}
+.mailhead .cpsub{font-weight:500;color:#56666D;font-size:11.5px;margin-left:8px}
 /* deltas vs hier */
 .scard .dl{font-size:11px;font-weight:700;margin-top:5px}
 .dl.chg{color:var(--teal)}.dl.eq{color:#9aa6a8}
@@ -2087,7 +2093,7 @@ async function loadCopilotBox(who){
     const fparts=(VIEWER&&VIEWER.role==='supervisor')?cpSelParts():[];
     if(fparts.length) ps=ps.filter(p=>fparts.some(x=>nlow(x)===nlow(p.cpName||'')));
     if(!ps.length){box.innerHTML='';show(box,false);return;}
-    box.innerHTML='<div class="cphead">🤖 Copilote · '+ps.length+' décision(s) en attente <span class="cpsub">mêmes choix que sur Slack, en un clic</span></div>'
+    box.innerHTML='<div class="cphead">🤖 Zone copilote · '+ps.length+' fil(s) où il te demande ou te propose quelque chose<div class="cplegende"><span class="lg lgsable">encadré sable = le message reçu</span><span class="lg lggris">bloc gris = notre brouillon, à relire avant envoi</span><span class="lg">mêmes choix que sur Slack</span></div></div>'
       +ps.map(p=>{
         const disp=p.creator||p.fromLabel||p.to||'expéditeur inconnu';
         const who2=esc(disp), br=p.brand?(' · '+esc(p.brand)):'';
@@ -2102,14 +2108,14 @@ async function loadCopilotBox(who){
           const lm=p.lastMsg
             ?('<div class="cplastlab">✉️ Son message</div><div class="cplast">'+esc(String(p.lastMsg).slice(0,700))+(String(p.lastMsg).length>700?'…':'')+'</div>')
             :('<div class="cplast cplastload" data-id="'+esc(p.id)+'">Chargement de son message…</div>');
-          return '<div class="cpcard">'+head+lm+'<div class="cplastlab">🤖 La question</div><div class="cpq">'+esc(p.question||p.resume||'')+'</div>'
+          return '<div class="cpcard" id="cpc-'+esc(p.id)+'">'+head+lm+'<div class="cplastlab">🤖 La question</div><div class="cpq">'+esc(p.question||p.resume||'')+'</div>'
             +'<div class="cpbtns"><button class="lk" data-id="'+p.id+'" data-cpact="accept">✅ Oui</button><button class="lk" data-id="'+p.id+'" data-cpact="refuse">❌ Non</button><button class="lk" data-id="'+p.id+'" data-cpact="directive">💬 Je te dis quoi répondre</button><button class="lk" data-id="'+p.id+'" data-cpact="self">✍️ Je gère moi-même</button><button class="lk" data-id="'+p.id+'" data-cpact="seen">👁️ Vu, rien à répondre</button></div></div>';
         }
         const rep=p.reply?('<div class="cprep">'+esc(String(p.reply).slice(0,1400))+(String(p.reply).length>1400?'…':'')+'</div>'):'';
         const lab=p.status==='ready'?('Réponse rédigée selon ta décision ('+(p.decision==='accept'?'oui ✅':'non ❌')+') : relis et envoie'):'Réponse prête (voix Hyped) : relis et envoie';
         // 🪄 barre de reformulation : la CP dit comment réécrire, l'IA repart du brouillon
         const rew=p.reply?('<div class="cprew"><input class="cprewin" placeholder="🪄 Pas comme tu l\'aurais dit ? Dis-moi quoi changer : « plus court », « moins d\'emojis », « propose un appel »…"><button class="lk" data-id="'+p.id+'" data-cpact="rework">Reformuler</button></div>'):'';
-        return '<div class="cpcard">'+head+'<div class="cpq">'+esc(p.resume||'')+'</div><div class="cplab">'+lab+'</div>'+rep+rew
+        return '<div class="cpcard" id="cpc-'+esc(p.id)+'">'+head+'<div class="cpq">'+esc(p.resume||'')+'</div><div class="cplab">'+lab+'</div>'+rep+rew
           +'<div class="cpbtns">'+(p.reply?('<button class="lk" data-id="'+p.id+'" data-cpact="send">📤 Envoyer</button>'):'')+'<button class="lk" data-id="'+p.id+'" data-cpact="self">✍️ Je gère moi-même</button><button class="lk" data-id="'+p.id+'" data-cpact="seen">👁️ Vu, rien à répondre</button></div></div>';
       }).join('');
     show(box,true);
@@ -2239,11 +2245,13 @@ function decorateMailRows(ps,who){
     if(!info)return;
     const div=document.createElement('div'); div.className='cprowbtns';
     if(p.categorie==='decision'&&p.status==='pending'){
-      div.innerHTML='<span class="cplab2">🤖 '+esc(p.question||p.resume||'Décision demandée')+'</span><button class="lk" data-id="'+esc(p.id)+'" data-cpact="accept">✅ Oui</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="refuse">❌ Non</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="directive">💬 Je te dis quoi répondre</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="self">✍️ Je gère</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="seen">👁️ Vu</button>';
+      div.innerHTML='<span class="cplab2">🤖 '+esc(p.question||p.resume||'Décision demandée')+'</span><a class="lk cpup" data-target="cpc-'+esc(p.id)+'">🔎 voir la carte ↑</a><button class="lk" data-id="'+esc(p.id)+'" data-cpact="accept">✅ Oui</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="refuse">❌ Non</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="directive">💬 Je te dis quoi répondre</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="self">✍️ Je gère</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="seen">👁️ Vu</button>';
     }else if(p.reply){
-      div.innerHTML='<span class="cplab2">🤖 Réponse prête'+(p.status==='ready'?(' · décision : '+(p.decision==='accept'?'oui ✅':'non ❌')):'')+'</span><button class="lk" data-id="'+esc(p.id)+'" data-cpact="send">📤 Envoyer</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="self">✍️ Je gère</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="seen">👁️ Vu</button>';
+      div.innerHTML='<span class="cplab2">🤖 Réponse prête'+(p.status==='ready'?(' · décision : '+(p.decision==='accept'?'oui ✅':'non ❌')):'')+'</span><a class="lk cpup" data-target="cpc-'+esc(p.id)+'">🔎 voir la carte ↑</a><button class="lk" data-id="'+esc(p.id)+'" data-cpact="send">📤 Envoyer</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="self">✍️ Je gère</button><button class="lk" data-id="'+esc(p.id)+'" data-cpact="seen">👁️ Vu</button>';
     }else return;
     info.appendChild(div);
+    // « voir la carte ↑ » : on remonte à la carte copilote correspondante et on la surligne
+    div.querySelectorAll('a.cpup').forEach(a2=>a2.onclick=(ev)=>{ ev.stopPropagation(); const el=document.getElementById(a2.dataset.target); if(el){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.style.boxShadow='0 0 0 3px #2C9087'; setTimeout(()=>{el.style.boxShadow='';},1600); } });
     div.querySelectorAll('button[data-cpact]').forEach(b=>b.onclick=async(ev)=>{
       ev.stopPropagation();
       let text;
@@ -2355,7 +2363,7 @@ function renderMail(d, who){
     return `<div class="row"><span class="rdot" style="background:#9AA7AA"></span><div class="info"><div class="t">${esc(m.subject)||'(sans objet)'}</div><div class="s">${esc(m.from||'')}${m.interne?' · <span class="cptag">interne</span>':''}${dt?` · <span class="maildate">${esc(dt)}</span>`:''}</div>${snip?`<div class="msgsnip">${esc(snip.slice(0,130))}${snip.length>130?'…':''}</div>`:''}</div>${m.brand?`<span class="brand">${esc(m.brand)}</span>`:''}${link}</div>`;};
   const attenteHtml=attente.length?`<details class="othermails"><summary>⏳ En attente de réponse créateur (${attente.length}) · tu as répondu, la balle est chez eux</summary>${attente.slice(0,50).map(aRow).join('')}</details>`:'';
   const autresHtml=(autres.length?`<details class="othermails"><summary>📥 Autres mails reçus (${autres.length}) · internes, en copie, hors collabs</summary>${autres.slice(0,50).map(aRow).join('')}</details>`:'')+attenteHtml;
-  const sum=`<div class="mailsum">${d.relevant||0} mail(s) liés aux collabs · <b>${reps.length} réponse(s) créateur</b> · ${attente.length} en attente créateur · ${autres.length} autre(s) · ${d.noise||0} ignoré(s) (pubs, newsletters)</div>`;
+  const sum=`<div class="mailhead">📥 Toute la boîte <span class="cpsub">un fil par ligne · la phrase grise est l'aperçu de la première ligne du mail · les lignes marquées 🤖 ont leur carte détaillée dans la zone copilote au-dessus</span></div><div class="mailsum">${d.relevant||0} mail(s) liés aux collabs · <b>${reps.length} réponse(s) créateur</b> · ${attente.length} en attente créateur · ${autres.length} autre(s) · ${d.noise||0} ignoré(s) (pubs, newsletters)</div>`;
   if(!reps.length){$('mailbox').innerHTML=sum+'<div class="state">Aucune réponse créateur récente. 👌</div>'+autresHtml;return;}
   const CC={facturation:'#C77F2A',preview:'#7A5AA8',logistique:'#2C9087','réponse':'#1C3A44'};
   $('mailbox').innerHTML=sum+reps.map(m=>{
