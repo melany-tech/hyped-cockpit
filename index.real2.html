@@ -842,53 +842,79 @@ async function renderFinanceView(){
   const bx=$('financebox'); if(!bx)return;
   try{
     const V='#7C5CFA';
-    const r=await api('/api/ceo'); if(!r.ok){bx.innerHTML='<div class="state">Réservé à la direction.</div>';return;}
+    const r=await api('/api/ceo'+(window.FIN_FRESH?'?fresh=1':'')); window.FIN_FRESH=false;
+    if(!r.ok){bx.innerHTML='<div class="state">Réservé à la direction.</div>';return;}
     const ceo=await r.json();
     const eur=(n)=>((Math.round(Number(n)||0)).toLocaleString('fr-FR')+' €');
     const dmy=(x)=>String(x||'').split('-').reverse().join('/');
     const pl=ceo.pennylane||{connected:false};
-    const plOn=pl.connected&&!pl.error&&pl.treso!==null&&pl.treso!==undefined;
-    const tresoM=ceo.treso;
-    const tresoVal=plOn?pl.treso:(tresoM?tresoM.amount:null);
-    const caAn=plOn?pl.ca:(ceo.ca?ceo.ca.encaisse:null);
-    const kpi=(ic,bgc,lbl,val,sub)=>'<div class="bgd-card" style="min-width:0"><div style="display:flex;gap:12px;align-items:center"><div style="width:48px;height:48px;flex:0 0 48px;border-radius:50%;background:'+bgc+';display:flex;align-items:center;justify-content:center;font-size:20px">'+ic+'</div><div style="min-width:0"><div class="bgd-klbl">'+lbl+'</div><div class="bgd-kval" style="font-size:22px">'+val+'</div><div class="bgd-ksub">'+sub+'</div></div></div></div>';
-    const kpis='<div class="bgd-kpis" style="grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin-bottom:14px">'
-      +kpi('📄','#E7F5EC','Facturé ce mois',plOn?eur(pl.factureMois||0):'<span style="font-size:15px">à venir</span>',plOn?('vs mois dernier : '+eur(pl.facturePrevMois||0)+' · net des avoirs (HT)'):'via Pennylane ci-dessous')
-      +kpi('📈','#EEEBFB','CA encaissé '+new Date().getFullYear(),caAn!==null&&caAn!==undefined?eur(caAn):'<span style="font-size:15px">à venir</span>',plOn?'factures payées (HT)':'via Pennylane ci-dessous')
-      +kpi('💰','#E7F0FA','Encaissé ce mois',plOn?eur(pl.caMois||0):'<span style="font-size:15px">à venir</span>',plOn?'vs mois dernier : '+eur(pl.caPrevMois||0)+' · reçu sur le compte (HT)':'via Pennylane ci-dessous')
+    const plOn=pl.connected&&!pl.error;
+    const yr=new Date().getFullYear();
+    const factAnnee=Object.entries(pl.factMensuel||{}).filter(([k])=>k.startsWith(String(yr))).reduce((s2,[,v])=>s2+v,0);
+    const caAn=plOn?(pl.ca||0):0;
+    const reste=Math.max(0,factAnnee-caAn);
+    // ---------- KPIs ----------
+    const kpi=(ic,bgc,lbl,val,sub)=>'<div class="bgd-card" style="min-width:0"><div style="display:flex;gap:12px;align-items:center"><div style="width:52px;height:52px;flex:0 0 52px;border-radius:50%;background:'+bgc+';display:flex;align-items:center;justify-content:center;font-size:22px">'+ic+'</div><div style="min-width:0"><div class="bgd-klbl">'+lbl+'</div><div class="bgd-kval" style="font-size:24px">'+val+'</div><div class="bgd-ksub">'+sub+'</div></div></div></div>';
+    const kpis='<div class="bgd-kpis" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr));margin-bottom:14px">'
+      +kpi('📄','#EEEBFB','Facturé ce mois',plOn?eur(pl.factureMois||0):'<span style="font-size:15px">à venir</span>',plOn?('vs mois dernier : '+eur(pl.facturePrevMois||0)+' · net des avoirs'):'connecte Pennylane ci-dessous')
+      +kpi('💰','#E7F5EC','Encaissé ce mois',plOn?eur(pl.caMois||0):'<span style="font-size:15px">à venir</span>',plOn?('vs mois dernier : '+eur(pl.caPrevMois||0)+' · reçu (HT)'):'connecte Pennylane ci-dessous')
+      +kpi('🧾','#E7F0FA','CA encaissé '+yr,plOn?eur(caAn):'<span style="font-size:15px">à venir</span>','factures payées (HT)')
       +'</div>';
+    // ---------- carte principale : donut ----------
+    const pct=factAnnee>0?Math.max(0,Math.min(1,caAn/factAnnee)):0;
+    const C=2*Math.PI*44;
+    const donut='<svg viewBox="0 0 110 110" style="width:126px;height:126px;flex:0 0 126px"><circle cx="55" cy="55" r="44" fill="none" stroke="#EEF1F6" stroke-width="14"/><circle cx="55" cy="55" r="44" fill="none" stroke="'+V+'" stroke-width="14" stroke-dasharray="'+(C*pct).toFixed(1)+' '+C.toFixed(1)+'" stroke-linecap="round" transform="rotate(-90 55 55)"/><text x="55" y="52" text-anchor="middle" style="font-size:17px;font-weight:800;fill:'+V+'">'+Math.round(100*pct)+'<tspan style="font-size:10px">%</tspan></text><text x="55" y="68" text-anchor="middle" style="font-size:9px;fill:#6A7A7A">encaissé</text></svg>';
+    const dot=(c)=>'<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+c+';margin-right:7px"></span>';
+    const leg=(c,lbl,val)=>'<div style="margin-bottom:10px">'+dot(c)+'<span class="fs">'+lbl+'</span><div style="font-weight:800;font-size:19px;margin-left:16px">'+val+'</div></div>';
+    const mainH='<div class="bgd-card" style="min-width:0;display:flex;flex-direction:column">'
+      +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px"><span style="width:46px;height:46px;flex:0 0 46px;border-radius:14px;background:'+V+';color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:15px">HA</span><div><b style="font-size:17px">Hyped Agency</b> <span class="bgd-badge" style="background:'+(plOn?'#E7F5EC':'#FDF0E0')+';color:'+(plOn?'#1F8A5D':'#C77F2A')+'">'+(plOn?'Pennylane connecté':'à connecter')+'</span><div class="fs">Comptabilité : Pennylane · année '+yr+'</div></div></div>'
+      +'<div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;padding:8px 0 4px">'+donut
+      +'<div style="min-width:0">'+leg(V,'Facturé '+yr,plOn?eur(factAnnee):'·')+leg('#2E9E6B','Déjà encaissé',plOn?eur(caAn):'·')+leg('#E8933A','Reste à encaisser',plOn?eur(reste):'·')+'</div></div>'
+      +'<div class="fs" style="margin:6px 0 12px">Encaissé = factures réellement payées (HT). Une facture annulée par avoir ne compte jamais. Chiffres Pennylane, rafraîchis toutes les 30 min.</div>'
+      +'<button id="finrefresh" style="margin-top:auto;width:100%;font-family:inherit;font-size:14px;font-weight:700;padding:13px;border-radius:13px;border:none;background:'+V+';color:#fff;cursor:pointer">🔄 Actualiser depuis Pennylane</button></div>';
+    // ---------- courbe ----------
     const mensuel=pl.mensuel||{};
-    const moisKeys=[];{const d0=new Date();d0.setMonth(d0.getMonth()-11);for(let i=0;i<12;i++){moisKeys.push(d0.toISOString().slice(0,7));d0.setMonth(d0.getMonth()+1);}}
+    const moisKeys=[];{const d0=new Date();d0.setMonth(d0.getMonth()-11);for(let i2=0;i2<12;i2++){moisKeys.push(d0.toISOString().slice(0,7));d0.setMonth(d0.getMonth()+1);}}
     const serie=moisKeys.map(k=>Math.round(mensuel[k]||0));
     let chartH='';
     if(serie.some(v=>v>0)){
-      const w=740,h=190,padL=48,padB=24,padT=16,iw=w-padL-14,ih=h-padT-padB;
+      const w=700,h=180,padL=48,padB=24,padT=14,iw=w-padL-14,ih=h-padT-padB;
       const mx=Math.max.apply(null,serie.concat([1]));
       const st2=iw/(serie.length-1);
-      const P=(v,i)=>[padL+i*st2,padT+ih-(v/mx)*ih];
-      const pts=serie.map((v,i)=>P(v,i).map(n=>n.toFixed(1)).join(',')).join(' ');
-      const area='M'+padL+','+(padT+ih)+' L'+serie.map((v,i)=>P(v,i).map(n=>n.toFixed(1)).join(',')).join(' L')+' L'+(padL+iw).toFixed(1)+','+(padT+ih)+' Z';
+      const P=(v,i2)=>[padL+i2*st2,padT+ih-(v/mx)*ih];
+      const pts=serie.map((v,i2)=>P(v,i2).map(n=>n.toFixed(1)).join(',')).join(' ');
+      const area='M'+padL+','+(padT+ih)+' L'+serie.map((v,i2)=>P(v,i2).map(n=>n.toFixed(1)).join(',')).join(' L')+' L'+(padL+iw).toFixed(1)+','+(padT+ih)+' Z';
       const nomsM=['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
-      const xl=moisKeys.map((k,i)=>(i%2===0)?('<text x="'+(padL+i*st2).toFixed(1)+'" y="'+(h-6)+'" font-size="10" fill="#9AA3AC" text-anchor="middle">'+nomsM[Number(k.slice(5,7))-1]+'</text>'):'').join('');
+      const xl=moisKeys.map((k,i2)=>(i2%2===0)?('<text x="'+(padL+i2*st2).toFixed(1)+'" y="'+(h-6)+'" font-size="10" fill="#9AA3AC" text-anchor="middle">'+nomsM[Number(k.slice(5,7))-1]+'</text>'):'').join('');
       const yl=[0,0.5,1].map(f=>'<text x="'+(padL-8)+'" y="'+(padT+ih-f*ih+3).toFixed(1)+'" font-size="10" fill="#9AA3AC" text-anchor="end">'+(Math.round(mx*f/1000))+' k€</text><line x1="'+padL+'" y1="'+(padT+ih-f*ih).toFixed(1)+'" x2="'+(padL+iw)+'" y2="'+(padT+ih-f*ih).toFixed(1)+'" stroke="#F0F1F6"/>').join('');
-      chartH='<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto;display:block">'+yl+'<path d="'+area+'" fill="#EEEBFB" opacity="0.6"/><polyline points="'+pts+'" fill="none" stroke="'+V+'" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>'+serie.map((v,i)=>{const q=P(v,i);const nm=nomsM[Number(moisKeys[i].slice(5,7))-1]+' '+moisKeys[i].slice(2,4);return '<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="3" fill="'+V+'"/><circle class="pltip" data-tip="'+nm+' : '+eur(v)+'" cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="15" fill="transparent" style="cursor:pointer"/>';}).join('')+xl+'</svg>';
+      chartH='<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto;display:block">'+yl+'<path d="'+area+'" fill="#EEEBFB" opacity="0.6"/><polyline points="'+pts+'" fill="none" stroke="'+V+'" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>'+serie.map((v,i2)=>{const q=P(v,i2);const nm=nomsM[Number(moisKeys[i2].slice(5,7))-1]+' '+moisKeys[i2].slice(2,4);return '<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="3" fill="'+V+'"/><circle class="pltip" data-tip="'+nm+' : '+eur(v)+'" cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="15" fill="transparent" style="cursor:pointer"/>';}).join('')+xl+'</svg>';
     } else {
-      chartH='<div style="text-align:center;padding:30px 10px"><div style="font-size:36px">📈</div><div style="font-weight:700;margin-top:8px">La courbe du CA s\'affichera dès la connexion Pennylane</div><div class="fs" style="margin-top:6px">12 derniers mois, factures clients réellement payées (HT).</div></div>';
+      chartH='<div style="text-align:center;padding:26px 10px"><div style="font-size:34px">📈</div><div class="fs" style="margin-top:6px">La courbe se remplit dès la connexion Pennylane.</div></div>';
     }
+    const chartCard='<div class="bgd-card" style="min-width:0"><div class="bgd-h" style="display:flex;align-items:center">Évolution du CA encaissé<span class="bgd-badge" style="margin-left:auto;background:#F4F2FB;color:#4C3BB8">12 derniers mois · survole un point</span></div><div style="margin-top:8px">'+chartH+'</div></div>';
+    // ---------- alertes & statuts ----------
+    const stIc=(bg,ic)=>'<span style="width:30px;height:30px;flex:0 0 30px;border-radius:50%;background:'+bg+';display:inline-flex;align-items:center;justify-content:center;font-size:14px">'+ic+'</span>';
+    const stRow=(ic2,lbl,bdg,val)=>'<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #F0F1F6;flex-wrap:wrap">'+ic2+'<b style="font-size:13px">'+lbl+'</b>'+bdg+'<b style="margin-left:auto;white-space:nowrap">'+val+'</b></div>';
+    const bdg=(txt,bg,fg)=>'<span class="bgd-badge" style="background:'+bg+';color:'+fg+'">'+txt+'</span>';
+    const alertH='<div class="bgd-card" style="min-width:0"><div class="bgd-h">Alertes & Statuts</div>'
+      +stRow(stIc('#FDF0E0','⚠️'),'Factures en retard',(pl.lateN?bdg(pl.lateN+' facture(s)','#FBE5E0','#D4483B'):bdg('aucune 🎉','#E7F5EC','#1F8A5D')),plOn?eur(pl.lateSum||0):'·')
+      +stRow(stIc('#E7F0FA','⏳'),'Factures à venir',(pl.upcomN?bdg(pl.upcomN+' facture(s)','#E7F0FA','#2F6DB5'):bdg('aucune','#EFF1F3','#7A828C')),plOn?eur(pl.upcomSum||0):'·')
+      +stRow(stIc('#E7F5EC','✓'),'Encaissé ce mois',((pl.caMois||0)>0?bdg('ça rentre','#E7F5EC','#1F8A5D'):bdg('rien pour l\'instant','#FDF0E0','#C77F2A')),plOn?eur(pl.caMois||0):'·')
+      +stRow(stIc('#EEEBFB','🔌'),'Connexion Pennylane',(plOn?bdg('🟢 connectée','#E7F5EC','#1F8A5D'):bdg('🟠 à connecter','#FDF0E0','#C77F2A')),(pl.at?('maj '+new Date(pl.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})):''))
+      +'</div>';
+    // ---------- derniers encaissements + connexion ----------
     const lastPaid=pl.lastPaid||[];
-    const encH='<div style="min-width:0"><div class="bgd-h" style="font-size:14px">Derniers encaissements</div>'
-      +(lastPaid.length?lastPaid.map(x=>'<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #F0F1F6"><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px">'+esc(x.nom)+'</span><span class="fs">'+dmy(x.date).slice(0,5)+'</span><b style="white-space:nowrap">'+eur(x.montant)+'</b></div>').join(''):'<div class="fs" style="padding:8px 0">visibles dès que Pennylane est connecté</div>')+'</div>';
-    const caCard='<div class="bgd-card" style="margin-bottom:14px"><div class="bgd-h">📈 Évolution du CA encaissé <span class="cpsub">12 derniers mois</span></div>'
-      +'<div style="width:100%;display:grid;grid-template-columns:minmax(0,2.2fr) minmax(220px,1fr);gap:18px;align-items:start;margin-top:6px"><div style="min-width:0">'+chartH+'</div>'+encH+'</div></div>';
-    const st=plOn?('<span style="color:#2E9E6B;font-weight:700">🟢 API connectée</span> <span class="fs">· données mises à jour à '+(pl.at?new Date(pl.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'·')+' · rafraîchies toutes les 30 min</span>')
-      :(pl.error?('<span style="color:#D4483B;font-weight:700">🔴 Erreur de connexion</span> <span class="fs">· '+esc(String(pl.error))+'</span>')
-      :'<span style="color:#C77F2A;font-weight:700">🟠 Non connectée</span> <span class="fs">· colle ta clé ci-dessous pour tout automatiser</span>');
-    const connH='<div class="bgd-card" style="width:100%"><div class="bgd-h">🔌 Connexion Pennylane</div>'
-      +'<div style="margin:6px 0 2px">'+st+'</div>'
-      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px"><input type="password" id="plkeyin" class="rhin" style="flex:1;min-width:240px;border-radius:12px;padding:12px 14px" placeholder="Colle ici ta clé API Pennylane" autocomplete="off"><button id="plkeygo" style="font-family:inherit;font-size:13.5px;font-weight:700;padding:12px 22px;border-radius:12px;border:none;background:linear-gradient(135deg,#8A63F8,#6D4DE8);color:#fff;cursor:pointer;white-space:nowrap">'+(plOn?'Reconnecter l\'API':'Connecter l\'API')+'</button></div>'
+    const encH='<div class="bgd-card" style="min-width:0"><div class="bgd-h">Derniers encaissements</div>'
+      +(lastPaid.length?lastPaid.map(x=>'<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #F0F1F6">'+stIc('#E7F5EC','✓')+'<span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px">'+esc(x.nom)+'</span><span class="bgd-badge" style="background:#F4F2FB;color:#4C3BB8">'+dmy(x.date).slice(0,5)+'</span><b style="white-space:nowrap">'+eur(x.montant)+'</b></div>').join(''):'<div class="fs" style="padding:10px 0">visibles dès que Pennylane est connecté</div>')
+      +'</div>';
+    const connH='<div class="bgd-card" style="min-width:0" id="fincard-conn"><div class="bgd-h">🔌 Connexion Pennylane</div>'
+      +'<div style="margin:6px 0 2px">'+(plOn?('<span style="color:#2E9E6B;font-weight:700">🟢 API connectée</span> <span class="fs">· rafraîchie toutes les 30 min</span>'):(pl.error?('<span style="color:#D4483B;font-weight:700">🔴 Erreur</span> <span class="fs">· '+esc(String(pl.error))+'</span>'):'<span style="color:#C77F2A;font-weight:700">🟠 Non connectée</span> <span class="fs">· colle ta clé ci-dessous</span>'))+'</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px"><input type="password" id="plkeyin" class="rhin" style="flex:1;min-width:220px;border-radius:12px;padding:12px 14px" placeholder="Colle ici ta clé API Pennylane" autocomplete="off"><button id="plkeygo" style="font-family:inherit;font-size:13.5px;font-weight:700;padding:12px 22px;border-radius:12px;border:none;background:linear-gradient(135deg,#8A63F8,#6D4DE8);color:#fff;cursor:pointer;white-space:nowrap">'+(plOn?'Reconnecter l\'API':'Connecter l\'API')+'</button></div>'
       +'<div id="plkeymsg" style="margin-top:8px"></div>'
-      +'<div class="fs" style="margin-top:8px">🛡️ Ta clé est stockée uniquement sur le disque sécurisé du serveur : jamais dans le code, jamais réaffichée ici. Pour la générer : Pennylane → Paramètres → Connectivité → Développeurs → « Générer un Token API ».</div></div>';
-    bx.innerHTML=kpis+caCard+connH;
+      +'<div class="fs" style="margin-top:8px">🛡️ Clé stockée uniquement sur le disque sécurisé du serveur : jamais dans le code, jamais réaffichée. À générer dans Pennylane → Paramètres → Connectivité → Développeurs.</div></div>';
+    bx.innerHTML=kpis
+      +'<div class="bgd-grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);margin-bottom:14px"><div style="min-width:0;display:flex;flex-direction:column;gap:14px">'+mainH+'</div><div style="min-width:0;display:flex;flex-direction:column;gap:14px">'+chartCard+alertH+'</div></div>'
+      +'<div class="bgd-grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">'+encH+connH+'</div>';
     const tipOn=(root)=>{
       let tb=document.getElementById('pltipbox');
       if(!tb){tb=document.createElement('div');tb.id='pltipbox';tb.style.cssText='position:fixed;z-index:120;pointer-events:none;background:#1F2430;color:#fff;font-size:12.5px;font-weight:700;font-family:inherit;padding:7px 11px;border-radius:9px;box-shadow:0 4px 14px rgba(0,0,0,.28);display:none;white-space:nowrap';document.body.appendChild(tb);}
@@ -898,13 +924,14 @@ async function renderFinanceView(){
       });
     };
     tipOn(bx);
-    const bg=$('plkeygo'); if(bg)bg.onclick=async()=>{
+    const fr=$('finrefresh'); if(fr)fr.onclick=()=>{fr.disabled=true;fr.textContent='🔄 Actualisation…';window.FIN_FRESH=true;renderFinanceView();};
+    const bg2=$('plkeygo'); if(bg2)bg2.onclick=async()=>{
       const inp=$('plkeyin'); const k=inp?inp.value.trim():''; if(!k){if(inp)inp.focus();return;}
-      bg.disabled=true; bg.textContent='Connexion…';
+      bg2.disabled=true; bg2.textContent='Connexion…';
       let dd={}; try{const rr=await api('/api/ceo/pennylane',{method:'POST',body:JSON.stringify({key:k})});dd=await rr.json().catch(()=>({}));}catch(e){}
       const m=$('plkeymsg');
       if(dd.connected){ if(m)m.innerHTML='<b style="color:#2E9E6B">🟢 Connecté ! Récupération des chiffres…</b>'; setTimeout(()=>renderFinanceView(),1200); }
-      else { if(m)m.innerHTML='<b style="color:#D4483B">Échec : '+esc(dd.error||'clé refusée')+'</b><span class="fs"> · vérifie la clé et réessaie.</span>'; bg.disabled=false; bg.textContent='Connecter l\'API'; }
+      else { if(m)m.innerHTML='<b style="color:#D4483B">Échec : '+esc(dd.error||'clé refusée')+'</b><span class="fs"> · vérifie la clé et réessaie.</span>'; bg2.disabled=false; bg2.textContent='Connecter l\'API'; }
     };
   }catch(e){bx.innerHTML='<div class="state">Erreur de chargement.</div>';}
 }

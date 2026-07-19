@@ -683,9 +683,9 @@ async function plGet(pathUrl) {
   if (!r.ok) throw new Error("Pennylane HTTP " + r.status);
   return r.json();
 }
-async function pennylaneSnapshot() {
+async function pennylaneSnapshot(force) {
   if (!PL_KEY()) return null;
-  if (Date.now() - PL_CACHE.at < 30 * 60 * 1000 && (PL_CACHE.treso !== null || PL_CACHE.error)) return PL_CACHE;
+  if (!force && Date.now() - PL_CACHE.at < 30 * 60 * 1000 && (PL_CACHE.treso !== null || PL_CACHE.error)) return PL_CACHE;
   try {
     // 1) Trésorerie disponible = somme des soldes de TOUS les comptes bancaires synchronisés
     let treso = 0, cursor = "";
@@ -698,6 +698,7 @@ async function pennylaneSnapshot() {
     const lim = new Date(); lim.setMonth(lim.getMonth() - 12); const l0 = lim.toISOString().slice(0, 10);
     const y0 = new Date().getFullYear() + "-01-01";
     const mensuel = {}; const factMensuel = {}; const lastPaid = [];
+    let lateN = 0, lateSum = 0, upcomN = 0, upcomSum = 0;
     let enc = 0; cursor = ""; let pages = 0, stop = false;
     do {
       const d = await plGet("/customer_invoices?limit=100&sort=-date" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""));
@@ -710,6 +711,8 @@ async function pennylaneSnapshot() {
         const mk2 = String(iv.date || "").slice(0, 7);
         // FACTURÉ : toutes les factures émises, avoirs en négatif (une facture annulée par avoir se neutralise)
         if (mk2) factMensuel[mk2] = (factMensuel[mk2] || 0) + ht;
+        if (iv.status === "late") { lateN++; lateSum += ht; }
+        else if (iv.status === "upcoming") { upcomN++; upcomSum += ht; }
         // ENCAISSÉ : statut strictement "paid". Une facture annulée par avoir est "cancelled" avec paid=true : ce n'est PAS un encaissement.
         if (iv.status === "paid") {
           if (mk2) mensuel[mk2] = (mensuel[mk2] || 0) + ht;
@@ -726,7 +729,8 @@ async function pennylaneSnapshot() {
     const prevD = new Date(); prevD.setMonth(prevD.getMonth() - 1); const prevK = prevD.toISOString().slice(0, 7);
     PL_CACHE = { at: Date.now(), treso: Math.round(treso * 100) / 100, ca: Math.round(enc * 100) / 100,
       caMois: mensuel[moisK] || 0, caPrevMois: mensuel[prevK] || 0, mensuel, lastPaid,
-      factureMois: factMensuel[moisK] || 0, facturePrevMois: factMensuel[prevK] || 0, factMensuel, error: null };
+      factureMois: factMensuel[moisK] || 0, facturePrevMois: factMensuel[prevK] || 0, factMensuel,
+      lateN, lateSum: Math.round(lateSum), upcomN, upcomSum: Math.round(upcomSum), error: null };
   } catch (e) {
     PL_CACHE = { ...PL_CACHE, at: Date.now(), error: String((e && e.message) || e).slice(0, 100) };
     try { console.error("[pennylane]", PL_CACHE.error); } catch (e2) {}
@@ -736,7 +740,7 @@ async function pennylaneSnapshot() {
 app.get("/api/ceo", auth, async (req, res) => {
   if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
   const o = loadCeo();
-  let pl2 = null; try { pl2 = await pennylaneSnapshot(); } catch (e) {}
+  let pl2 = null; try { pl2 = await pennylaneSnapshot(req.query.fresh === "1"); } catch (e) {}
   // historique de trésorerie (sert aux sparklines de la home) : 1 point par jour maximum
   try {
     const todayK = new Date().toISOString().slice(0, 10);
@@ -749,7 +753,7 @@ app.get("/api/ceo", auth, async (req, res) => {
     }
   } catch (e) {}
   res.json({ ok: true, treso: o.treso || null, ca: o.ca || null, tresoHist: o.tresoHist || [],
-    pennylane: pl2 ? { connected: true, at: pl2.at, treso: pl2.treso, ca: pl2.ca, caMois: pl2.caMois, caPrevMois: pl2.caPrevMois, mensuel: pl2.mensuel || {}, lastPaid: pl2.lastPaid || [], factureMois: pl2.factureMois || 0, facturePrevMois: pl2.facturePrevMois || 0, factMensuel: pl2.factMensuel || {}, error: pl2.error, annee: new Date().getFullYear() } : { connected: false },
+    pennylane: pl2 ? { connected: true, at: pl2.at, treso: pl2.treso, ca: pl2.ca, caMois: pl2.caMois, caPrevMois: pl2.caPrevMois, mensuel: pl2.mensuel || {}, lastPaid: pl2.lastPaid || [], factureMois: pl2.factureMois || 0, facturePrevMois: pl2.facturePrevMois || 0, factMensuel: pl2.factMensuel || {}, lateN: pl2.lateN || 0, lateSum: pl2.lateSum || 0, upcomN: pl2.upcomN || 0, upcomSum: pl2.upcomSum || 0, error: pl2.error, annee: new Date().getFullYear() } : { connected: false },
     roadmap: o.roadmap || [], axes: RM_AXES, rmStatuts: RM_STATUTS, arbTypes: ARB_TYPES,
     arbitrages: (o.arbitrages || []).filter((a) => a.statut === "en attente").sort((a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999")) });
 });
