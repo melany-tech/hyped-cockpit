@@ -398,7 +398,10 @@ app.get("/api/dirigeant", auth, async (req, res) => {
         const late = mine.filter((t) => t.echeance && t.echeance < today).length;
         const mails = (store.proposals || []).filter((p) => (p.status === "pending" || p.status === "ready") && String(p.cpEmail || "").toLowerCase() === String(u.email).toLowerCase()).length;
         const last = acts.filter((a) => normName(a.cp) === normName(u.name)).sort((a, b) => (b.at || 0) - (a.at || 0))[0] || null;
+        const rhO = loadRh();
+        const absNow = (rhO.absences || []).find((x) => x.statut === "validée" && normName(x.who) === normName(u.name) && x.du <= today && today <= x.au) || null;
         return { name: u.name, role: u.role, open: mine.length, late, mails,
+          absence: absNow ? { type: absNow.type, au: absNow.au } : null,
           lastAct: last ? { type: last.type, creator: last.creator, at: last.at } : null };
       });
     res.json({ members, today });
@@ -542,14 +545,36 @@ function saveRh(o) { try { fs.writeFileSync(RH_STORE, JSON.stringify(o, null, 2)
 function rhSlackTo(email) { return (COPILOT.slackIds || {})[String(email || "").toLowerCase()] || ""; }
 function dmyFr(d) { return String(d).split("-").reverse().join("/"); }
 const RH_TYPES = ["Congés payés", "Sans solde", "Maladie", "Télétravail", "Autre"];
+const RH_DEFAULT_QUOTA = 25; // jours de congés payés par an, modifiable par la direction et par personne
+function rhWorkDays(du, au) { // jours OUVRÉS (lun-ven) inclus entre deux dates ISO
+  let n = 0; const d = new Date(du + "T12:00:00Z"), end = new Date(au + "T12:00:00Z");
+  while (d <= end) { const wd = d.getUTCDay(); if (wd !== 0 && wd !== 6) n++; d.setUTCDate(d.getUTCDate() + 1); }
+  return n;
+}
+function rhLeave(o, name) { // congés payés VALIDÉS de l'année en cours (clippés à l'année)
+  const year = new Date().getFullYear();
+  const y0 = year + "-01-01", y1 = year + "-12-31";
+  let taken = 0;
+  (o.absences || []).forEach((a) => {
+    if (a.type !== "Congés payés" || a.statut !== "validée" || normName(a.who) !== normName(name)) return;
+    const du = a.du > y0 ? a.du : y0, au = a.au < y1 ? a.au : y1;
+    if (au >= du) taken += rhWorkDays(du, au);
+  });
+  const quota = Number(((o.quotas || {})[normName(name)])) || RH_DEFAULT_QUOTA;
+  return { quota, taken, left: quota - taken };
+}
 app.get("/api/rh", auth, (req, res) => {
   const o = loadRh(); const sup = req.user.role === "supervisor";
   const me = normName(req.user.name);
   const abs = (o.absences || []).filter((a) => sup || normName(a.who) === me);
   const docs = (o.docs || []).filter((x) => sup || normName(x.who) === me);
+  const leave = sup
+    ? USERS.filter((u) => !COPILOT.departed.includes(String(u.email).toLowerCase()) && normName(u.name) !== "kendia").map((u) => ({ who: u.name, ...rhLeave(o, u.name) }))
+    : [{ who: req.user.name, ...rhLeave(o, req.user.name) }];
   res.json({ ok: true, supervisor: sup, types: RH_TYPES,
     absences: abs.slice().sort((a, b) => String(b.du).localeCompare(String(a.du))),
     docs: docs.slice().sort((a, b) => (b.at || 0) - (a.at || 0)),
+    leave, year: new Date().getFullYear(),
     team: sup ? USERS.filter((u) => u.role !== "supervisor").map((u) => u.name) : [] });
 });
 app.post("/api/rh/absence", auth, async (req, res) => {
@@ -585,6 +610,13 @@ app.post("/api/rh/absence/:id/del", auth, (req, res) => {
   if (!a) return res.status(404).json({ error: "introuvable" });
   if (req.user.role !== "supervisor" && (normName(a.who) !== normName(req.user.name) || a.statut !== "en attente")) return res.status(403).json({ error: "plus modifiable" });
   o.absences = (o.absences || []).filter((x) => x.id !== a.id); saveRh(o);
+  res.json({ ok: true });
+});
+app.post("/api/rh/quota", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  const who = String(req.body?.who || ""); const days = Number(req.body?.days);
+  if (!who || !(days >= 0 && days <= 60)) return res.status(400).json({ error: "quota invalide (0 à 60 jours)" });
+  const o = loadRh(); o.quotas = o.quotas || {}; o.quotas[normName(who)] = days; saveRh(o);
   res.json({ ok: true });
 });
 app.post("/api/rh/doc", auth, async (req, res) => {

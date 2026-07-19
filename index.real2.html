@@ -826,11 +826,20 @@ async function renderRhView(){
   const sup=!!d.supervisor;
   const dmy=(x)=>String(x||'').split('-').reverse().join('/');
   const st=(s)=>s==='validée'?'<span class="bgd-badge" style="background:#E4F0EA;color:#2C9087">validée ✅</span>':(s==='refusée'?'<span class="bgd-badge" style="background:#F8E3DC;color:#C2553B">refusée ❌</span>':'<span class="bgd-badge" style="background:#FBEBDD;color:#C77F2A">en attente ⏳</span>');
-  const form='<div class="bgd-card" style="margin-bottom:12px"><div class="bgd-h">🏖️ Demander une absence</div>'
+  const lv=(d.leave||[]);
+  const cptH='<div class="bgd-card" style="margin-bottom:12px"><div class="bgd-h">🧮 Congés payés '+(d.year||'')+'</div>'
+    +lv.map(x=>'<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid #F0F3F3">'
+      +(sup?('<b style="min-width:90px">'+esc(x.who)+'</b>'):'')
+      +'<span class="fs">pris : '+x.taken+' j ouvré(s)</span>'
+      +'<span class="bgd-badge" style="background:'+(x.left<=0?'#F8E3DC':'#E4F0EA')+';color:'+(x.left<=0?'#C2553B':'#2C9087')+'">restant : '+x.left+' j / '+x.quota+'</span>'
+      +(sup?('<span style="margin-left:auto;display:flex;gap:6px;align-items:center"><label class="fs">quota</label><input type="number" min="0" max="60" value="'+x.quota+'" class="rhin" style="width:70px" data-rhquota="'+esc(x.who)+'"><button class="lk" data-rhquotasave="'+esc(x.who)+'">💾</button></span>'):'')
+      +'</div>').join('')
+    +'<div class="fs" style="margin-top:6px">Seuls les congés payés VALIDÉS comptent, en jours ouvrés (lun-ven), sur l\'année en cours.</div></div>';
+  const form=cptH+'<div class="bgd-card" style="margin-bottom:12px"><div class="bgd-h">🏖️ Demander une absence</div>'
     +'<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px">'
     +'<select id="rhtype" class="rhin">'+(d.types||[]).map(x=>'<option>'+esc(x)+'</option>').join('')+'</select>'
     +'<label class="fs">du</label><input type="date" id="rhdu" class="rhin"><label class="fs">au</label><input type="date" id="rhau" class="rhin">'
-    +'<input id="rhnote" class="rhin" style="flex:1;min-width:160px" placeholder="commentaire (optionnel)">'
+    +'<input id="rhnote" class="rhin" style="flex:1;min-width:160px" placeholder="un petit mot pour expliquer (optionnel) : ex. « ma mère se marie, j\'ai besoin du vendredi » 🤍">'
     +'<button class="lk primary" id="rhgo">Envoyer la demande</button></div>'
     +'<div class="fs" style="margin-top:6px">La direction est prévenue sur Slack et la réponse arrive ici et sur Slack.</div></div>';
   const abs=(d.absences||[]);
@@ -872,6 +881,13 @@ async function renderRhView(){
     if(!r.ok)alert(dd.error||'Erreur, réessaie.');
     renderRhView();
   };
+  box.querySelectorAll('[data-rhquotasave]').forEach(b=>b.onclick=async()=>{
+    const inp=box.querySelector('input[data-rhquota="'+CSS.escape(b.dataset.rhquotasave)+'"]');
+    if(!inp)return; b.disabled=true;
+    const r=await api('/api/rh/quota',{method:'POST',body:JSON.stringify({who:b.dataset.rhquotasave,days:Number(inp.value)})});
+    if(!r.ok){const dd=await r.json().catch(()=>({}));alert(dd.error||'Erreur');}
+    renderRhView();
+  });
   box.querySelectorAll('[data-rhdec]').forEach(b=>b.onclick=async()=>{
     let comment='';
     if(b.dataset.rhdec==='refusee'){ comment=prompt('Un petit mot pour expliquer (optionnel) :')||''; }
@@ -1470,11 +1486,13 @@ async function loadDirigeant(){
     const bg=(v,ic,t,warn)=>'<span title="'+esc(t)+'" style="font-size:12px;font-weight:700;padding:3px 8px;border-radius:12px;white-space:nowrap;background:'+((warn&&v>0)?'#F8E3DC':'#EFF4F4')+';color:'+((warn&&v>0)?'#C2553B':'#33475C')+'">'+ic+' '+v+'</span>';
     $('dirbox').innerHTML=(d.members||[]).map(m=>{
       const la=m.lastAct?((actLbl[m.lastAct.type]||m.lastAct.type)+' '+(m.lastAct.creator||'')+' · '+fnoteDate(m.lastAct.at)):'pas d\'action récente';
+      const dmyA=(x)=>String(x||'').split('-').reverse().join('/');
+      const absB=m.absence?('<span style="font-size:12px;font-weight:700;padding:3px 8px;border-radius:12px;white-space:nowrap;background:#F5EFE2;color:#B98A12">🏖️ '+esc(m.absence.type)+' jusqu\'au '+dmyA(m.absence.au)+'</span>'):'';
       return '<div class="dirrow" data-n="'+esc(m.name)+'" title="Ouvrir la vue pilotage de '+esc(m.name)+'" style="display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid #EEF2F2;cursor:pointer">'
         +'<div style="width:34px;height:34px;flex:0 0 34px;border-radius:50%;background:#E4F0EA;color:#2C9087;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">'+esc(ini(m.name))+'</div>'
         +'<div style="flex:1;min-width:0"><div style="font-weight:700">'+esc(m.name)+(m.role==='team'?' <span style="font-weight:600;font-size:11px;color:#6A7A7A">· social média</span>':'')+'</div>'
         +'<div style="font-size:12px;color:#6A7A7A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(la)+'</div></div>'
-        +bg(m.open,'🗒️','tâches ouvertes',false)+bg(m.late,'🔴','tâches en retard',true)+bg(m.mails,'✉️','mails créateurs en attente de décision',true)
+        +absB+bg(m.open,'🗒️','tâches ouvertes',false)+bg(m.late,'🔴','tâches en retard',true)+bg(m.mails,'✉️','mails créateurs en attente de décision',true)
         +'</div>';
     }).join('')||'<div class="state2" style="padding:10px">Personne dans l\'équipe pour l\'instant.</div>';
     $('dirbox').querySelectorAll('.dirrow').forEach(el=>el.onclick=()=>{
