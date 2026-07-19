@@ -836,15 +836,20 @@ app.post("/api/ceo/assist", auth, async (req, res) => {
         return res.json({ ok: true, msg: "✅ Créé : " + done.map((x) => "« " + x.tache + " » → " + x.responsable + (x.echeance ? " (" + dmyFr(x.echeance) + ")" : "")).join(" · ") });
       }
     }
-    return res.json({ ok: true, msg: "Je n'ai pas su transformer ça en action. Essaie : « ajoute [tâche] à Najem », « Amena doit contacter untel », « refuse les décisions de Rozenn »." });
+    // 3) question libre : réponse courte basée UNIQUEMENT sur les données réelles
+    try {
+      const faits = await ceoFacts();
+      const sys2 = "Tu es l'assistante de direction de Mélany (agence Hyped). Réponds à sa question en 1 à 3 phrases, UNIQUEMENT à partir des FAITS fournis. N'invente rien : si l'info n'y est pas, dis-le simplement. Pas de tiret quadratin.";
+      const ctx2 = "FAITS :\n" + (faits.length ? faits.map((f) => f.t).join("\n") : "(rien d'urgent : pas d'arbitrage, pas de retard critique, budgets sous contrôle)") + "\n\nQUESTION : " + txt;
+      const out2 = process.env.OPENAI_API_KEY ? await callOpenAI(sys2, ctx2, 400) : (process.env.ANTHROPIC_API_KEY ? await callAnthropic(sys2, ctx2, 400) : null);
+      if (out2 && out2.ok) return res.json({ ok: true, msg: out2.body });
+    } catch (e) {}
+    return res.json({ ok: true, msg: "Je n'ai pas su transformer ça en action ni y répondre. Essaie : « ajoute [tâche] à Najem », « refuse les décisions de Rozenn », « quelles tâches sont en retard ? »." });
   } catch (e) { res.status(500).json({ error: String((e && e.message) || e).slice(0, 120) }); }
 });
 // Brief IA quotidien : synthèse des DONNÉES EXISTANTES uniquement, avec cache 1 h
 let CEO_BRIEF_CACHE = { at: 0, text: "" };
-app.get("/api/ceo/brief", auth, async (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
-  if (Date.now() - CEO_BRIEF_CACHE.at < 3600000 && CEO_BRIEF_CACHE.text && !req.query.force) return res.json({ ok: true, text: CEO_BRIEF_CACHE.text, at: CEO_BRIEF_CACHE.at, faits: CEO_BRIEF_CACHE.faits || [] });
-  try {
+async function ceoFacts() {
     const today = new Date().toISOString().slice(0, 10);
     const o = loadCeo(); const rhO = loadRh(); const cop = loadCopilot();
     const tasks = DEMO ? [] : await fetchAllTasks();
@@ -872,6 +877,13 @@ app.get("/api/ceo/brief", auth, async (req, res) => {
         if (bd && bd.budgetMensuel > 0 && bd.total >= 0.8 * bd.budgetMensuel) faits.push({ go: "budget", t: b + " a consommé " + Math.round(100 * bd.total / bd.budgetMensuel) + " % de son budget mensuel (" + bd.total + " € / " + bd.budgetMensuel + " €)" });
       }
     } catch (e) {}
+    return faits;
+}
+app.get("/api/ceo/brief", auth, async (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  if (Date.now() - CEO_BRIEF_CACHE.at < 3600000 && CEO_BRIEF_CACHE.text && !req.query.force) return res.json({ ok: true, text: CEO_BRIEF_CACHE.text, at: CEO_BRIEF_CACHE.at, faits: CEO_BRIEF_CACHE.faits || [] });
+  try {
+    const faits = await ceoFacts();
     if (!faits.length) { CEO_BRIEF_CACHE = { at: Date.now(), text: "Rien d'urgent aujourd'hui : pas d'arbitrage ni de décision en attente, pas de retard critique, budgets sous contrôle. Profites-en pour avancer sur la roadmap ✨", faits: [] }; return res.json({ ok: true, text: CEO_BRIEF_CACHE.text, at: CEO_BRIEF_CACHE.at, faits: [] }); }
     const sys = "Tu es l'assistante de direction de Mélany (agence Hyped). À partir des FAITS fournis (et RIEN d'autre : n'invente aucun chiffre), écris un brief matinal en français : 3 à 6 phrases courtes, priorités d'abord, ton direct et chaleureux, sans tiret quadratin, sans liste à puces.";
     const out = process.env.OPENAI_API_KEY ? await callOpenAI(sys, faits.map((f) => f.t).join("\n"), 600) : (process.env.ANTHROPIC_API_KEY ? await callAnthropic(sys, faits.map((f) => f.t).join("\n"), 600) : null);
