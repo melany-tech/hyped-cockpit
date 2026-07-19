@@ -1628,9 +1628,13 @@ async function loadCeoPanel(){
     const rmStC={'À venir':['#EFF4F4','#33475C'],'En cours':['#E7F0F8','#1C3A44'],'À risque':['#FBEBDD','#C77F2A'],'Bloqué':['#F8E3DC','#C2553B'],'Terminé':['#E4F0EA','#2C9087']};
     // ================= rendu =================
     const kpi=(html)=>'<div class="bgd-card" style="min-width:0">'+html+'</div>';
-    const k1=kpi('<div class="bgd-klbl">🏦 Trésorerie disponible <a class="lk" id="ceotreso" title="Saisir la trésorerie (Pennylane en V2)">✎</a></div><div class="bgd-kval">'+(treso?eur(treso.amount):'à renseigner')+'</div><div class="bgd-ksub">'+(treso?(esc(treso.source||'saisie manuelle')+' · '+fresh(treso.at)):'clique ✎ pour la saisir · Pennylane en V2')+'</div>');
-    const pct=(ca&&ca.objectif>0)?Math.round(100*ca.encaisse/ca.objectif):null;
-    const k2=kpi('<div class="bgd-klbl">📈 CA encaissé / objectif ('+esc((ca&&ca.periode)||'année')+') <a class="lk" id="ceoca" title="Saisir le CA encaissé et l\'objectif">✎</a></div><div class="bgd-kval">'+(ca?(eur(ca.encaisse)+' <span class="fs">/ '+eur(ca.objectif)+'</span>'):'à renseigner')+'</div>'+(pct!==null?('<div class="ceobar"><div style="width:'+Math.min(100,pct)+'%;background:'+(pct>=70?'#2C9087':'#C77F2A')+'"></div></div><div class="bgd-ksub">'+pct+' % de l\'objectif · encaissé uniquement · '+fresh(ca.at)+'</div>'):'<div class="bgd-ksub">encaissé uniquement, jamais le facturé</div>'));
+    const pl=(ceo&&ceo.pennylane)||{connected:false};
+    const plOn=pl.connected&&!pl.error&&pl.treso!==null&&pl.treso!==undefined;
+    const k1=kpi('<div class="bgd-klbl">🏦 Trésorerie disponible'+(plOn?'':' <a class="lk" id="ceotreso" title="Saisir la trésorerie (ou branche Pennylane)">✎</a>')+'</div><div class="bgd-kval">'+(plOn?eur(pl.treso):(treso?eur(treso.amount):'à renseigner'))+'</div><div class="bgd-ksub">'+(plOn?('🟢 Pennylane · '+fresh(pl.at)):(pl.connected&&pl.error?('⚠️ Pennylane en erreur ('+esc(pl.error)+') · '+(treso?('valeur manuelle : '+fresh(treso.at)):'clique ✎')):(treso?(esc(treso.source||'saisie manuelle')+' · '+fresh(treso.at)):'clique ✎ pour la saisir · ou branche Pennylane (clé API dans Render)')))+'</div>');
+    const encV=plOn&&pl.ca!==null?pl.ca:(ca?ca.encaisse:null);
+    const objV=ca&&ca.objectif>0?ca.objectif:null;
+    const pct=(encV!==null&&objV)?Math.round(100*encV/objV):null;
+    const k2=kpi('<div class="bgd-klbl">📈 CA encaissé / objectif ('+(plOn?(pl.annee||'année'):esc((ca&&ca.periode)||'année'))+') <a class="lk" id="ceoca" title="'+(plOn?'Saisir l\'objectif':'Saisir le CA encaissé et l\'objectif')+'">✎</a></div><div class="bgd-kval">'+(encV!==null?(eur(encV)+(objV?(' <span class="fs">/ '+eur(objV)+'</span>'):' <span class="fs">/ objectif à saisir ✎</span>')):'à renseigner')+'</div>'+(pct!==null?('<div class="ceobar"><div style="width:'+Math.min(100,pct)+'%;background:'+(pct>=70?'#2C9087':'#C77F2A')+'"></div></div>'):'')+'<div class="bgd-ksub">'+(plOn?('🟢 Pennylane · factures payées uniquement (HT) · '+fresh(pl.at)):'encaissé uniquement, jamais le facturé')+(pct!==null?(' · '+pct+' %'):'')+'</div>');
     const k3=kpi('<div class="bgd-klbl">⚖️ Projets à arbitrer</div><div class="bgd-kval">'+(arbs.length+props.length)+'</div><div class="bgd-ksub">'+((arbs.length||props.length)?esc([].concat(Object.entries(arbByType).map(function(e2){return e2[1]+' '+e2[0].toLowerCase();}),props.length?[props.length+' décision(s) copilote']:[]).join(' · ')):'rien à trancher : l\'équipe escalade via ⚖️ dans sa to-do')+'</div>');
     const k4=kpi('<div class="bgd-klbl">👥 Clients à surveiller</div><div class="bgd-kval">'+nWatch+'</div><div class="bgd-ksub">compte(s) avec au moins une alerte budget</div>');
     const k5=kpi('<div class="bgd-klbl">⚡ Bande passante équipe</div><div class="bgd-kval">'+Math.max(0,100-band)+' %</div><div class="bgd-ksub" title="Règle v1 explicite : charge = 8 % par tâche ouverte + 12 % par tâche en retard, congés affichés. Pour du vrai temps, il faudra estimer les tâches en heures (V2).">capacité restante · approximation basée sur les tâches</div>');
@@ -1685,10 +1689,11 @@ async function loadCeoPanel(){
       if(!r.ok){const dd=await r.json().catch(()=>({}));alert(dd.error||'Erreur');} loadCeoPanel();
     };
     const cE=$('ceoca'); if(cE)cE.onclick=async()=>{
-      const enc=prompt('CA ENCAISSÉ (factures payées uniquement, en €) :',ca?String(ca.encaisse):''); if(enc===null)return;
+      let encN=ca?ca.encaisse:0;
+      if(!plOn){ const enc=prompt('CA ENCAISSÉ (factures payées uniquement, en €) :',ca?String(ca.encaisse):''); if(enc===null)return; encN=Number(String(enc).replace(/[^\d.,]/g,'').replace(',','.')); }
       const obj=prompt('Objectif (en €) :',ca?String(ca.objectif):''); if(obj===null)return;
-      const per=prompt('Période (mois, trimestre ou année) :',(ca&&ca.periode)||'année')||'année';
-      const r=await api('/api/ceo/config',{method:'POST',body:JSON.stringify({ca:Number(String(enc).replace(/[^\d.,]/g,'').replace(',','.')),objectif:Number(String(obj).replace(/[^\d.,]/g,'').replace(',','.')),periode:per})});
+      const per=plOn?'année':(prompt('Période (mois, trimestre ou année) :',(ca&&ca.periode)||'année')||'année');
+      const r=await api('/api/ceo/config',{method:'POST',body:JSON.stringify({ca:encN,objectif:Number(String(obj).replace(/[^\d.,]/g,'').replace(',','.')),periode:per})});
       if(!r.ok){const dd=await r.json().catch(()=>({}));alert(dd.error||'Erreur');} loadCeoPanel();
     };
     p.querySelectorAll('[data-rmq]').forEach(b=>b.onclick=()=>{try{localStorage.setItem('hc_rmq',b.dataset.rmq);}catch(e){}loadCeoPanel();});

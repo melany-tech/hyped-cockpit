@@ -666,10 +666,56 @@ function saveCeo(o) { try { fs.writeFileSync(CEO_STORE, JSON.stringify(o, null, 
 const ARB_TYPES = ["Validation", "Budget", "Prestataire", "Recrutement", "Client sensible", "Autre"];
 const RM_AXES = ["Offre & positionnement", "Croissance & acquisition", "Excellence opérationnelle", "Équipe & recrutement", "Rentabilité & finance", "Marque & contenu"];
 const RM_STATUTS = ["À venir", "En cours", "À risque", "Bloqué", "Terminé"];
-app.get("/api/ceo", auth, (req, res) => {
+// --- Pennylane (V2 finances) : trésorerie réelle + CA encaissé ---------------
+// S'active automatiquement quand PENNYLANE_API_KEY est présent dans l'environnement
+// (clé générée et collée par Mélany elle-même dans Render). Cache 30 min.
+const PL_KEY = () => process.env.PENNYLANE_API_KEY || "";
+let PL_CACHE = { at: 0, treso: null, ca: null, error: null };
+async function plGet(pathUrl) {
+  const r = await fetch("https://app.pennylane.com/api/external/v2" + pathUrl, { headers: { "Authorization": "Bearer " + PL_KEY(), "Accept": "application/json" } });
+  if (!r.ok) throw new Error("Pennylane HTTP " + r.status);
+  return r.json();
+}
+async function pennylaneSnapshot() {
+  if (!PL_KEY()) return null;
+  if (Date.now() - PL_CACHE.at < 30 * 60 * 1000 && (PL_CACHE.treso !== null || PL_CACHE.error)) return PL_CACHE;
+  try {
+    // 1) Trésorerie disponible = somme des soldes de TOUS les comptes bancaires synchronisés
+    let treso = 0, cursor = "";
+    do {
+      const d = await plGet("/bank_accounts?limit=100" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""));
+      (d.items || []).forEach((a) => { treso += parseFloat(a.balance) || 0; });
+      cursor = d.has_more ? (d.next_cursor || "") : "";
+    } while (cursor);
+    // 2) CA ENCAISSÉ de l'année (HT, factures clients réellement payées, jamais le facturé)
+    const y0 = new Date().getFullYear() + "-01-01";
+    let enc = 0; cursor = ""; let pages = 0, stop = false;
+    do {
+      const d = await plGet("/customer_invoices?limit=100&sort=-date" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""));
+      for (const iv of (d.items || [])) {
+        if (iv.date && iv.date < y0) { stop = true; break; } // trié par date desc : on a dépassé l'année
+        if (iv.draft) continue;
+        if (iv.paid) {
+          const ht = (parseFloat(iv.currency_amount_before_tax) || 0) * (parseFloat(iv.exchange_rate) || 1);
+          enc += ht; // les avoirs payés sont négatifs et se déduisent naturellement
+        }
+      }
+      cursor = (!stop && d.has_more) ? (d.next_cursor || "") : "";
+      pages++;
+    } while (cursor && pages < 60);
+    PL_CACHE = { at: Date.now(), treso: Math.round(treso * 100) / 100, ca: Math.round(enc * 100) / 100, error: null };
+  } catch (e) {
+    PL_CACHE = { at: Date.now(), treso: PL_CACHE.treso, ca: PL_CACHE.ca, error: String((e && e.message) || e).slice(0, 100) };
+    try { console.error("[pennylane]", PL_CACHE.error); } catch (e2) {}
+  }
+  return PL_CACHE;
+}
+app.get("/api/ceo", auth, async (req, res) => {
   if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
   const o = loadCeo();
+  let pl2 = null; try { pl2 = await pennylaneSnapshot(); } catch (e) {}
   res.json({ ok: true, treso: o.treso || null, ca: o.ca || null,
+    pennylane: pl2 ? { connected: true, at: pl2.at, treso: pl2.treso, ca: pl2.ca, error: pl2.error, annee: new Date().getFullYear() } : { connected: false },
     roadmap: o.roadmap || [], axes: RM_AXES, rmStatuts: RM_STATUTS, arbTypes: ARB_TYPES,
     arbitrages: (o.arbitrages || []).filter((a) => a.statut === "en attente").sort((a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999")) });
 });
