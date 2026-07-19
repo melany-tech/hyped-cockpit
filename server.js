@@ -704,7 +704,9 @@ async function pennylaneSnapshot() {
       for (const iv of (d.items || [])) {
         if (iv.date && iv.date < l0) { stop = true; break; } // trié par date desc : on a dépassé 12 mois
         if (iv.draft) continue;
-        const ht = (parseFloat(iv.currency_amount_before_tax) || 0) * (parseFloat(iv.exchange_rate) || 1);
+        // HT en EUR : on prend les montants société DÉJÀ convertis par Pennylane (amount TTC EUR - tax EUR).
+        // Jamais de conversion maison : les factures en devises (ex : Orchard en USD) étaient faussées.
+        const ht = (parseFloat(iv.amount) || 0) - (parseFloat(iv.tax) || 0);
         const mk2 = String(iv.date || "").slice(0, 7);
         // FACTURÉ : toutes les factures émises, avoirs en négatif (une facture annulée par avoir se neutralise)
         if (mk2) factMensuel[mk2] = (factMensuel[mk2] || 0) + ht;
