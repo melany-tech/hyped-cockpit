@@ -519,6 +519,8 @@ body.ceomode #mailpanel{display:none !important}
 .cplegende .lggris{background:#F2F4F4;border-color:#E2E7E7}
 .mailhead{font-weight:700;font-size:14px;margin:16px 0 4px}
 .mailhead .cpsub{font-weight:500;color:#56666D;font-size:11.5px;margin-left:8px}
+.cpsect{font-weight:700;font-size:13px;margin:12px 0 6px;padding-top:8px;border-top:1px dashed #E4E0D5}
+.cpsect .cpsub{font-weight:500;color:#56666D;font-size:11.5px;margin-left:6px}
 /* deltas vs hier */
 .scard .dl{font-size:11px;font-weight:700;margin-top:5px}
 .dl.chg{color:var(--teal)}.dl.eq{color:#9aa6a8}
@@ -2093,8 +2095,11 @@ async function loadCopilotBox(who){
     const fparts=(VIEWER&&VIEWER.role==='supervisor')?cpSelParts():[];
     if(fparts.length) ps=ps.filter(p=>fparts.some(x=>nlow(x)===nlow(p.cpName||'')));
     if(!ps.length){box.innerHTML='';show(box,false);return;}
-    box.innerHTML='<div class="cphead">🤖 Zone copilote · '+ps.length+' fil(s) où il te demande ou te propose quelque chose<div class="cplegende"><span class="lg lgsable">encadré sable = le message reçu</span><span class="lg lggris">bloc gris = notre brouillon, à relire avant envoi</span><span class="lg">mêmes choix que sur Slack</span></div></div>'
-      +ps.map(p=>{
+    // Regroupement : d'abord tout ce qui ATTEND UNE DÉCISION (ça bloque), puis les réponses PRÊTES À PARTIR.
+    const psDec=ps.filter(p=>p.categorie==='decision'&&p.status==='pending');
+    const psPre=ps.filter(p=>!(p.categorie==='decision'&&p.status==='pending'));
+    ps=[...psDec,...psPre];
+    const renderCard=(p)=>{
         const disp=p.creator||p.fromLabel||p.to||'expéditeur inconnu';
         const who2=esc(disp), br=p.brand?(' · '+esc(p.brand)):'';
         const mailTag=(p.to&&nlow(p.to)!==nlow(disp))?(' <span class="cpmail">'+esc(p.to)+'</span>'):'';
@@ -2117,7 +2122,10 @@ async function loadCopilotBox(who){
         const rew=p.reply?('<div class="cprew"><input class="cprewin" placeholder="🪄 Pas comme tu l\'aurais dit ? Dis-moi quoi changer : « plus court », « moins d\'emojis », « propose un appel »…"><button class="lk" data-id="'+p.id+'" data-cpact="rework">Reformuler</button></div>'):'';
         return '<div class="cpcard" id="cpc-'+esc(p.id)+'">'+head+'<div class="cpq">'+esc(p.resume||'')+'</div><div class="cplab">'+lab+'</div>'+rep+rew
           +'<div class="cpbtns">'+(p.reply?('<button class="lk" data-id="'+p.id+'" data-cpact="send">📤 Envoyer</button>'):'')+'<button class="lk" data-id="'+p.id+'" data-cpact="self">✍️ Je gère moi-même</button><button class="lk" data-id="'+p.id+'" data-cpact="seen">👁️ Vu, rien à répondre</button></div></div>';
-      }).join('');
+      };
+    box.innerHTML='<div class="cphead">🤖 Zone copilote · '+ps.length+' fil(s) où il te demande ou te propose quelque chose<div class="cplegende"><span class="lg lgsable">encadré sable = le message reçu</span><span class="lg lggris">bloc gris = notre brouillon, à relire avant envoi</span><span class="lg">mêmes choix que sur Slack</span></div></div>'
+      +(psDec.length?('<div class="cpsect">🗳️ À décider ('+psDec.length+') <span class="cpsub">le copilote attend ta réponse avant d\'écrire</span></div>'+psDec.map(renderCard).join('')):'')
+      +(psPre.length?('<div class="cpsect">📤 Prêtes à envoyer ('+psPre.length+') <span class="cpsub">brouillons rédigés : relis, reformule si besoin, envoie</span></div>'+psPre.map(renderCard).join('')):'');
     show(box,true);
     box.querySelectorAll('a.cpqui:not(.cpthread)').forEach(a=>a.onclick=()=>quiEstCe(a.dataset.qui));
     box.querySelectorAll('.cprewin').forEach(i=>i.onkeydown=(e)=>{ if(e.key==='Enter'){ e.preventDefault(); const btn=i.closest('.cpcard').querySelector('button[data-cpact="rework"]'); if(btn)btn.click(); } });
