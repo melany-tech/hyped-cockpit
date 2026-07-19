@@ -794,6 +794,48 @@ app.post("/api/ceo/arbitrage/:id/decide", auth, async (req, res) => {
   try { const su = rhSlackTo(a.parEmail); if (su) await copilotNotify({ slackUser: su, text: (d === "valide" ? "✅ Arbitrage validé" : "❌ Arbitrage refusé") + " par " + req.user.name + " : « " + a.sujet + " »" + (a.comment ? " · " + a.comment : "") + "." }); } catch (e) {}
   res.json({ ok: true });
 });
+// Assistant IA du Cockpit CEO : une barre de chat qui AGIT sur les données
+// (création de tâches en langage libre, décisions copilote en bloc). Direction uniquement.
+app.post("/api/ceo/assist", auth, async (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  const txt = String(req.body?.text || "").trim().slice(0, 500);
+  if (!txt) return res.status(400).json({ error: "dis-moi quoi faire 🙂" });
+  const low0 = normName(txt);
+  try {
+    // 1) décisions copilote en bloc : « refuse / accepte les décisions (de Rozenn) »
+    const mDec = low0.match(/(refuse|accepte|valide)r?s?\s+(toutes?\s+)?(les\s+)?(decisions?|cartes?|propositions?|cp)(\s+(de|d)\s*([a-z]+))?/);
+    if (mDec) {
+      const action = mDec[1] === "refuse" ? "refuse" : "accept";
+      const who = mDec[7] ? USERS.map((u) => u.name).find((n) => normName(n).startsWith(mDec[7])) : null;
+      const store = loadCopilot();
+      const targets = (store.proposals || []).filter((p) => p.categorie === "decision" && p.status === "pending" && (!who || normName(p.cpName || "") === normName(who))).slice(0, 10);
+      if (!targets.length) return res.json({ ok: true, msg: "Aucune décision en attente" + (who ? " pour " + who : "") + "." });
+      let okN = 0;
+      for (const p of targets) { try { const r2 = await copilotExecute(p.id, action, undefined); if (r2 && r2.code === 200) okN++; } catch (e) {} }
+      return res.json({ ok: true, msg: (action === "refuse" ? "❌ Refusé" : "✅ Accepté") + " : " + okN + " décision(s)" + (who ? " de " + who : "") + ". L'IA a rédigé les réponses dans ce sens, les CP relisent et envoient." });
+    }
+    // 2) sinon : création / attribution de tâches en langage libre (même moteur que le Hypedbot)
+    const taches = await taskExtractFromDm(txt, req.user.name);
+    if (taches && taches.length) {
+      const done = [];
+      for (const x of taches.slice(0, 10)) {
+        const respName = USERS.map((u) => u.name).find((n) => normName(n) === normName(x.responsable)) || req.user.name;
+        const props = { "Tâche": { title: [{ text: { content: String(x.tache || "").slice(0, 200) } }] }, "Statut": { select: { name: "À faire" } }, "Responsable": { select: { name: respName } } };
+        if (x.echeance && /^\d{4}-\d{2}-\d{2}$/.test(String(x.echeance))) props["Échéance"] = { date: { start: x.echeance } };
+        try { await notion.pages.create({ parent: { database_id: TASKS_DB }, properties: props }); done.push({ ...x, responsable: respName }); } catch (e) {}
+      }
+      if (done.length) {
+        invalidateTasksCache();
+        for (const x of done) {
+          if (normName(x.responsable) === normName(req.user.name)) continue;
+          try { const em = emailOf(x.responsable); const su = em ? (COPILOT.slackIds || {})[em.toLowerCase()] : ""; if (su) await copilotNotify({ slackUser: su, text: "🆕 " + req.user.name + " t'a ajouté une tâche : « " + x.tache + " »" + (x.echeance ? " (pour le " + dmyFr(x.echeance) + ")" : "") + ". Elle est dans ta to-do du cockpit ✨" }); } catch (e) {}
+        }
+        return res.json({ ok: true, msg: "✅ Créé : " + done.map((x) => "« " + x.tache + " » → " + x.responsable + (x.echeance ? " (" + dmyFr(x.echeance) + ")" : "")).join(" · ") });
+      }
+    }
+    return res.json({ ok: true, msg: "Je n'ai pas su transformer ça en action. Essaie : « ajoute [tâche] à Najem », « Amena doit contacter untel », « refuse les décisions de Rozenn »." });
+  } catch (e) { res.status(500).json({ error: String((e && e.message) || e).slice(0, 120) }); }
+});
 // Brief IA quotidien : synthèse des DONNÉES EXISTANTES uniquement, avec cache 1 h
 let CEO_BRIEF_CACHE = { at: 0, text: "" };
 app.get("/api/ceo/brief", auth, async (req, res) => {

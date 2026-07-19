@@ -1591,7 +1591,7 @@ async function loadCeoPanel(){
   try{
     const month=new Date().toISOString().slice(0,7);
     const gj=async(u)=>{try{const r=await api(u);return r.ok?await r.json():null;}catch(e){return null;}};
-    const [ceo,dg,cb,ps,rh]=await Promise.all([gj('/api/ceo'),gj('/api/dirigeant'),gj('/api/copilot/box'),gj('/api/perso'),gj('/api/rh')]);
+    const [ceo,dg,cb,ps,rh,td]=await Promise.all([gj('/api/ceo'),gj('/api/dirigeant'),gj('/api/copilot/box'),gj('/api/perso'),gj('/api/rh'),gj('/api/todos?view='+encodeURIComponent(VIEWER.name))]);
     const brands=['In Haircare','Doucéa','Curls Matter','LIVA'];
     const buds=(await Promise.all(brands.map(b=>gj('/api/budget/'+encodeURIComponent(b)+'?month='+month).then(d=>d?{brand:b,...d}:null)))).filter(Boolean);
     const today=new Date().toISOString().slice(0,10);
@@ -1602,7 +1602,7 @@ async function loadCeoPanel(){
     const treso=ceo&&ceo.treso, ca=ceo&&ceo.ca;
     // ---- arbitrages équipe + décisions copilote ----
     const arbs=(ceo&&ceo.arbitrages)||[];
-    const props=((cb&&cb.proposals)||[]).filter(x=>x.categorie==='decision'&&x.status==='pending');
+    const props=((cb&&cb.proposals)||[]).filter(x=>x.categorie==='decision'&&x.status==='pending'&&nlow(x.cpName||'')===nlow(VIEWER.name));
     const arbByType={}; arbs.forEach(a=>{arbByType[a.type]=(arbByType[a.type]||0)+1;});
     // ---- clients à surveiller : par marque, jamais cumulés ----
     const watch=[];buds.forEach(d=>{const bm=d.budgetMensuel||0,tot=d.total||0;
@@ -1627,17 +1627,17 @@ async function loadCeoPanel(){
     const rmItems=rm.filter(x=>x.q===rmQ);
     const rmStC={'À venir':['#EFF4F4','#33475C'],'En cours':['#E7F0F8','#1C3A44'],'À risque':['#FBEBDD','#C77F2A'],'Bloqué':['#F8E3DC','#C2553B'],'Terminé':['#E4F0EA','#2C9087']};
     // ================= rendu =================
-    const kpi=(html)=>'<div class="bgd-card" style="min-width:0">'+html+'</div>';
+    const kpi=(ic,bgc,html)=>'<div class="bgd-card" style="min-width:0;display:flex;gap:12px;align-items:flex-start"><div style="background:'+bgc+';width:44px;height:44px;flex:0 0 44px;border-radius:14px;font-size:19px;display:flex;align-items:center;justify-content:center">'+ic+'</div><div style="min-width:0;flex:1">'+html+'</div></div>';
     const pl=(ceo&&ceo.pennylane)||{connected:false};
     const plOn=pl.connected&&!pl.error&&pl.treso!==null&&pl.treso!==undefined;
-    const k1=kpi('<div class="bgd-klbl">🏦 Trésorerie disponible'+(plOn?'':' <a class="lk" id="ceotreso" title="Saisir la trésorerie (ou branche Pennylane)">✎</a>')+'</div><div class="bgd-kval">'+(plOn?eur(pl.treso):(treso?eur(treso.amount):'à renseigner'))+'</div><div class="bgd-ksub">'+(plOn?('🟢 Pennylane · '+fresh(pl.at)):(pl.connected&&pl.error?('⚠️ Pennylane en erreur ('+esc(pl.error)+') · '+(treso?('valeur manuelle : '+fresh(treso.at)):'clique ✎')):(treso?(esc(treso.source||'saisie manuelle')+' · '+fresh(treso.at)):'clique ✎ pour la saisir · ou branche Pennylane (clé API dans Render)')))+'</div>');
+    const k1=kpi('🏦','#E4F0EA','<div class="bgd-klbl">Trésorerie disponible'+(plOn?'':' <a class="lk" id="ceotreso" title="Saisir la trésorerie (ou branche Pennylane)">✎</a>')+'</div><div class="bgd-kval">'+(plOn?eur(pl.treso):(treso?eur(treso.amount):'à renseigner'))+'</div><div class="bgd-ksub">'+(plOn?('🟢 Pennylane · '+fresh(pl.at)):(pl.connected&&pl.error?('⚠️ Pennylane en erreur ('+esc(pl.error)+') · '+(treso?('valeur manuelle : '+fresh(treso.at)):'clique ✎')):(treso?(esc(treso.source||'saisie manuelle')+' · '+fresh(treso.at)):'clique ✎ pour la saisir · ou branche Pennylane (clé API dans Render)')))+'</div>');
     const encV=plOn&&pl.ca!==null?pl.ca:(ca?ca.encaisse:null);
     const objV=ca&&ca.objectif>0?ca.objectif:null;
     const pct=(encV!==null&&objV)?Math.round(100*encV/objV):null;
-    const k2=kpi('<div class="bgd-klbl">📈 CA encaissé / objectif ('+(plOn?(pl.annee||'année'):esc((ca&&ca.periode)||'année'))+') <a class="lk" id="ceoca" title="'+(plOn?'Saisir l\'objectif':'Saisir le CA encaissé et l\'objectif')+'">✎</a></div><div class="bgd-kval">'+(encV!==null?(eur(encV)+(objV?(' <span class="fs">/ '+eur(objV)+'</span>'):' <span class="fs">/ objectif à saisir ✎</span>')):'à renseigner')+'</div>'+(pct!==null?('<div class="ceobar"><div style="width:'+Math.min(100,pct)+'%;background:'+(pct>=70?'#2C9087':'#C77F2A')+'"></div></div>'):'')+'<div class="bgd-ksub">'+(plOn?('🟢 Pennylane · factures payées uniquement (HT) · '+fresh(pl.at)):'encaissé uniquement, jamais le facturé')+(pct!==null?(' · '+pct+' %'):'')+'</div>');
-    const k3=kpi('<div class="bgd-klbl">⚖️ Projets à arbitrer</div><div class="bgd-kval">'+(arbs.length+props.length)+'</div><div class="bgd-ksub">'+((arbs.length||props.length)?esc([].concat(Object.entries(arbByType).map(function(e2){return e2[1]+' '+e2[0].toLowerCase();}),props.length?[props.length+' décision(s) copilote']:[]).join(' · ')):'rien à trancher : l\'équipe escalade via ⚖️ dans sa to-do')+'</div>');
-    const k4=kpi('<div class="bgd-klbl">👥 Clients à surveiller</div><div class="bgd-kval">'+nWatch+'</div><div class="bgd-ksub">compte(s) avec au moins une alerte budget</div>');
-    const k5=kpi('<div class="bgd-klbl">⚡ Bande passante équipe</div><div class="bgd-kval">'+Math.max(0,100-band)+' %</div><div class="bgd-ksub" title="Règle v1 explicite : charge = 8 % par tâche ouverte + 12 % par tâche en retard, congés affichés. Pour du vrai temps, il faudra estimer les tâches en heures (V2).">capacité restante · approximation basée sur les tâches</div>');
+    const k2=kpi('📈','#E7F0F8','<div class="bgd-klbl">CA encaissé / objectif ('+(plOn?(pl.annee||'année'):esc((ca&&ca.periode)||'année'))+') <a class="lk" id="ceoca" title="'+(plOn?'Saisir l\'objectif':'Saisir le CA encaissé et l\'objectif')+'">✎</a></div><div class="bgd-kval">'+(encV!==null?(eur(encV)+(objV?(' <span class="fs">/ '+eur(objV)+'</span>'):' <span class="fs">/ objectif à saisir ✎</span>')):'à renseigner')+'</div>'+(pct!==null?('<div class="ceobar"><div style="width:'+Math.min(100,pct)+'%;background:'+(pct>=70?'#2C9087':'#C77F2A')+'"></div></div>'):'')+'<div class="bgd-ksub">'+(plOn?('🟢 Pennylane · factures payées uniquement (HT) · '+fresh(pl.at)):'encaissé uniquement, jamais le facturé')+(pct!==null?(' · '+pct+' %'):'')+'</div>');
+    const k3=kpi('⚖️','#EDE7F5','<div class="bgd-klbl">Projets à arbitrer</div><div class="bgd-kval">'+(arbs.length+props.length)+'</div><div class="bgd-ksub">'+((arbs.length||props.length)?esc([].concat(Object.entries(arbByType).map(function(e2){return e2[1]+' '+e2[0].toLowerCase();}),props.length?[props.length+' décision(s) copilote']:[]).join(' · ')):'rien à trancher : l\'équipe escalade via ⚖️ dans sa to-do')+'</div>');
+    const k4=kpi('👥','#FBEBDD','<div class="bgd-klbl">Clients à surveiller</div><div class="bgd-kval">'+nWatch+'</div><div class="bgd-ksub">compte(s) avec au moins une alerte budget</div>');
+    const k5=kpi('⚡','#F8E3DC','<div class="bgd-klbl">Bande passante équipe</div><div class="bgd-kval">'+Math.max(0,100-band)+' %</div><div class="bgd-ksub" title="Règle v1 explicite : charge = 8 % par tâche ouverte + 12 % par tâche en retard, congés affichés. Pour du vrai temps, il faudra estimer les tâches en heures (V2).">capacité restante · approximation basée sur les tâches</div>');
     const calH='<div class="bgd-card" style="height:100%"><div class="bgd-h">📅 Calendrier éditorial CEO <a class="lk ceogo" data-go="__perso" style="float:right">tout voir →</a></div>'
       +(nextPosts.length?nextPosts.map(x=>{const c=pstatCol[x.statut]||pstatCol['A faire'];return '<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #F0F3F3"><b style="min-width:46px">'+dmy(x.date).slice(0,5)+'</b><span class="fs" style="min-width:64px">'+esc(x.format||'')+'</span><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(x.titre)+'</span><span class="bgd-badge" style="background:'+c[0]+';color:'+c[1]+'">'+esc(pstatLbl[x.statut]||x.statut)+'</span></div>';}).join(''):'<div class="fs" style="padding:6px 0">rien de prévu : importe ton calendrier dans Personal brand</div>')
       +'</div>';
@@ -1656,16 +1656,27 @@ async function loadCeoPanel(){
       +'<div style="display:flex;gap:6px;margin:6px 0">'+['Q1','Q2','Q3','Q4'].map(q=>'<button class="lk'+(q===rmQ?' primary':'')+'" data-rmq="'+q+'">'+q+'</button>').join('')+'</div>'
       +(rmItems.length?rmItems.map(x=>{const c=rmStC[x.statut]||rmStC['À venir'];return '<div style="padding:7px 0;border-bottom:1px solid #F0F3F3"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1;min-width:0">'+esc(x.nom)+'</b><span class="bgd-badge" data-rmst="'+esc(x.id)+'" title="clique pour changer le statut" style="cursor:pointer;background:'+c[0]+';color:'+c[1]+'">'+esc(x.statut)+'</span><a class="lk" data-rmdel="'+esc(x.id)+'" title="supprimer">✕</a></div><div class="fs">'+esc(x.axe)+(x.resp?(' · '+esc(x.resp)):'')+(x.cible?(' · cible '+esc(x.cible)):'')+(x.next?(' · prochaine étape : '+esc(x.next)):'')+'</div></div>';}).join(''):'<div class="fs" style="padding:6px 0">aucune initiative sur '+rmQ+' : clique ＋ pour en ajouter</div>')
       +'</div>';
-    const decH='<div class="bgd-card"><div class="bgd-h">🗳️ Décisions du jour</div>'
+    const tasks=((td&&td.tasks)||[]);
+    const plab=(x)=>{if(!x.echeance)return '<span class="fs">cette semaine</span>';if(x.echeance<today)return '<b style="color:#C2553B;font-size:12px">En retard</b>';if(x.echeance===today)return '<b style="color:#C77F2A;font-size:12px">Aujourd\'hui</b>';return '<span class="fs">'+esc(dmy(x.echeance))+'</span>';};
+    const todoH='<div class="bgd-card" style="height:100%"><div class="bgd-h">🎯 Ma to-do <a class="lk ceogo" data-go="todo" style="float:right">tout voir →</a></div>'
+      +'<div style="margin:6px 0"><input id="ceotodoin" class="rhin" style="width:100%;box-sizing:border-box" placeholder="Ajouter une tâche pour toi… puis Entrée"></div>'
+      +(tasks.length?tasks.slice(0,6).map(x=>'<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid #F0F3F3"><input type="checkbox" class="ceodone" data-id="'+esc(x.id)+'" style="width:15px;height:15px;flex:0 0 15px"><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(x.task)+'</span>'+plab(x)+'</div>').join(''):'<div class="state2" style="padding:8px">To-do à jour ✨</div>')
+      +(tasks.length>6?('<div class="fs" style="margin-top:5px">+ '+(tasks.length-6)+' autre(s) dans l\'onglet To-do</div>'):'')
+      +'</div>';
+    const decH='<div class="bgd-card" style="height:100%"><div class="bgd-h">🗳️ Décisions du jour</div>'
       +((arbs.length||props.length)?(
         arbs.map(a=>'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #F0F3F3"><span class="bgd-badge" style="background:#EDE7F5;color:#1C3A44">'+esc(a.type)+'</span><span style="flex:1;min-width:160px">'+esc(a.sujet)+(a.projet?(' <span class="fs">· '+esc(a.projet)+'</span>'):'')+'</span>'+(a.montant?('<b>'+eur(a.montant)+'</b>'):'')+(a.deadline?('<span class="bgd-badge" style="background:'+(a.deadline<=today?'#F8E3DC':'#FBEBDD')+';color:'+(a.deadline<=today?'#C2553B':'#C77F2A')+'">'+(a.deadline<=today?'urgent · ':'')+dmy(a.deadline)+'</span>'):'')+'<span class="fs">par '+esc(a.par)+'</span>'+(a.impact?('<span title="Impact si rien n\'est décidé : '+esc(a.impact)+'">ℹ️</span>'):'')+'<span style="display:flex;gap:5px"><button class="lk" data-ceoarb="valide" data-id="'+esc(a.id)+'">✅ Valider</button><button class="lk" data-ceoarb="refuse" data-id="'+esc(a.id)+'">❌</button><button class="lk" data-ceoarb="precisions" data-id="'+esc(a.id)+'" title="Demander des précisions">💬</button></span></div>').join('')
         +props.slice(0,5).map(x=>'<div class="ceogo" data-go="messages" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #F0F3F3;cursor:pointer"><span class="bgd-badge" style="background:#E4F0EA;color:#2C9087">Copilote</span><span style="flex:1;min-width:0">'+esc(String(x.question||x.resume||'').slice(0,110))+'</span><span style="color:#B7C2C6">›</span></div>').join('')
       ):'<div class="fs" style="padding:6px 0">aucune décision en attente ✅</div>')
-      +'<div class="fs" style="margin-top:6px">Uniquement ton rôle de dirigeante : tes tâches perso restent dans la to-do. L\'équipe escalade via « ⚖️ Arbitrage CEO » (onglet To-do).</div></div>';
+      +'<div class="fs" style="margin-top:6px">Arbitrages de l\'équipe + décisions de TES boîtes. Celles des CP restent chez elles. Astuce : dis à l\'assistant « refuse les décisions de Rozenn ».</div></div>';
     const cptH='<div class="bgd-card"><div class="bgd-h">🏷️ Marques & comptes <a class="lk ceogo" data-go="budget" style="float:right">budgets →</a></div>'
-      +watch.map(w=>'<div class="ceogo" data-go="budget" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #F0F3F3;cursor:pointer"><b style="flex:1">'+esc(w.brand)+'</b>'+(w.restant!==null?('<span class="fs">restant '+eur(w.restant)+'</span>'):'')+'<span class="bgd-badge" style="background:'+(w.warn===2?'#F8E3DC':(w.warn===1?'#FBEBDD':'#E4F0EA'))+';color:'+(w.warn===2?'#C2553B':(w.warn===1?'#C77F2A':'#2C9087'))+'">'+esc(w.label)+'</span></div>').join('')
+      +watch.map(w=>'<div class="ceogo" data-go="budget" style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #F0F3F3;cursor:pointer"><b style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(w.brand)+'</b><span class="fs" style="min-width:112px;text-align:right;font-variant-numeric:tabular-nums">'+(w.restant!==null?('restant '+eur(w.restant)):'·')+'</span><span class="bgd-badge" style="min-width:118px;text-align:center;background:'+(w.warn===2?'#F8E3DC':(w.warn===1?'#FBEBDD':'#E4F0EA'))+';color:'+(w.warn===2?'#C2553B':(w.warn===1?'#C77F2A':'#2C9087'))+'">'+esc(w.label)+'</span></div>').join('')
       +'<div class="fs" style="margin-top:6px">Par client, jamais additionnés. Marges et échéances viendront avec Pennylane (V2).</div></div>';
-    const iaH='<div class="bgd-card" id="ceobriefcard" style="height:100%"><div class="bgd-h">🤖 Assistant IA <span class="cpsub">données réelles uniquement</span></div><div id="ceobrieftxt" class="fs" style="font-size:13.5px;line-height:1.55">Chargement du brief du jour…</div><div id="ceobriefdet" style="margin-top:8px"></div></div>';
+    window.CEO_CHAT=window.CEO_CHAT||[];
+    const iaH='<div class="bgd-card" id="ceobriefcard"><div class="bgd-h">🤖 Assistant IA <span class="cpsub">il lit tes données réelles ET il agit : tâches, décisions</span></div>'
+      +'<div id="ceobrieftxt" class="fs" style="font-size:13.5px;line-height:1.55">Chargement du brief du jour…</div><div id="ceobriefdet" style="margin-top:6px"></div>'
+      +'<div id="ceochatlog">'+window.CEO_CHAT.map(m=>'<div style="padding:6px 10px;border-radius:10px;background:#F5F3EE;margin:6px 0 2px;font-size:13px"><b>Toi :</b> '+esc(m.q)+'</div><div style="padding:6px 10px;border-radius:10px;background:#EFF4F4;margin:2px 0;font-size:13px">'+esc(m.a)+'</div>').join('')+'</div>'
+      +'<div style="display:flex;gap:6px;margin-top:8px"><input id="ceochatin" class="rhin" style="flex:1" placeholder="💬 « ajoute … à Najem » · « Amena doit contacter … » · « refuse les décisions de Rozenn »…"><button class="lk primary" id="ceochatgo">Envoyer</button></div></div>';
     const quick='<div style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px">'
       +[['🗳️ Demandes à valider','ceocard-dec'],['📅 Calendrier éditorial','ceocard-cal'],['🧑‍🤝‍🧑 Recrutement','ceocard-dec'],['🏷️ Points clients sensibles','ceocard-cpt']].map(x=>'<a class="lk ceoanch" data-a="'+x[1]+'">'+x[0]+'</a>').join('')
       +'<a class="lk ceogo" data-go="roadmap">🗺️ Roadmap annuelle</a></div>';
@@ -1673,7 +1684,8 @@ async function loadCeoPanel(){
       +quick
       +'<div class="bgd-kpis" style="grid-template-columns:repeat(auto-fit,minmax(215px,1fr))">'+k1+k2+k3+k4+k5+'</div>'
       +'<div class="bgd-grid ceogrid" style="grid-template-columns:minmax(0,1fr) minmax(0,1.05fr) minmax(0,1.4fr);margin-bottom:12px"><div id="ceocard-cal">'+calH+'</div><div id="ceocard-chg">'+chargeH+'</div><div id="ceocard-rm">'+rmH+'</div></div>'
-      +'<div class="bgd-grid ceogrid" style="grid-template-columns:minmax(0,1.15fr) minmax(0,0.85fr) minmax(0,1fr);margin-bottom:12px"><div id="ceocard-dec">'+decH+'</div><div id="ceocard-cpt">'+cptH+'</div><div id="ceocard-ia">'+iaH+'</div></div>'
+      +'<div class="bgd-grid ceogrid" style="grid-template-columns:minmax(0,1fr) minmax(0,1.15fr) minmax(0,0.9fr);margin-bottom:12px"><div id="ceocard-todo">'+todoH+'</div><div id="ceocard-dec">'+decH+'</div><div id="ceocard-cpt">'+cptH+'</div></div>'
+      +'<div id="ceocard-ia" style="margin-bottom:12px">'+iaH+'</div>'
       +'<button class="lk primary" id="ceofull" style="width:100%;margin-top:2px;padding:11px;border-radius:11px;font-size:13.5px">Ouvrir le cockpit complet →</button>';
     // ---------- interactions ----------
     const go=(g)=>{ if(!g)return;
@@ -1727,6 +1739,19 @@ async function loadCeoPanel(){
       await api('/api/ceo/arbitrage/'+encodeURIComponent(b.dataset.id)+'/decide',{method:'POST',body:JSON.stringify({decision:b.dataset.ceoarb,comment})});
       loadCeoPanel();
     });
+    p.querySelectorAll('.ceodone').forEach(c=>c.onchange=async()=>{await api('/api/todos/'+encodeURIComponent(c.dataset.id)+'/done',{method:'POST'});loadCeoPanel();});
+    const ti=$('ceotodoin'); if(ti)ti.onkeydown=async(e)=>{ if(e.key==='Enter'&&ti.value.trim()){ e.preventDefault(); const v=ti.value.trim(); ti.disabled=true; await api('/api/todos',{method:'POST',body:JSON.stringify({task:v})}); loadCeoPanel(); } };
+    const cg=$('ceochatgo');
+    const runChat=async()=>{
+      const inp=$('ceochatin'); const q=inp?inp.value.trim():''; if(!q){if(inp)inp.focus();return;}
+      if(cg){cg.disabled=true;cg.textContent='…';}
+      let a2='Erreur, réessaie.';
+      try{const r=await api('/api/ceo/assist',{method:'POST',body:JSON.stringify({text:q})});const dd=await r.json().catch(()=>({}));a2=dd.msg||dd.error||a2;}catch(e){}
+      window.CEO_CHAT.push({q,a:a2}); if(window.CEO_CHAT.length>6)window.CEO_CHAT.shift();
+      loadCeoPanel();
+    };
+    if(cg)cg.onclick=runChat;
+    const ci=$('ceochatin'); if(ci)ci.onkeydown=(e)=>{ if(e.key==='Enter'){ e.preventDefault(); runChat(); } };
     show(p,true);
     // brief IA en différé (peut prendre quelques secondes) : texte + recommandations cliquables
     gj('/api/ceo/brief').then(b=>{
