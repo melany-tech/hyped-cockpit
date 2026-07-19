@@ -510,6 +510,7 @@ body.ceomode #onbpanel,body.ceomode #statcards,body.ceomode #agendapanel,body.ce
 body.ceomode #pipelinepanel,body.ceomode #dirpanel,body.ceomode #brandpanel,body.ceomode #weeklypanel,
 body.ceomode #persopanel,body.ceomode #fillpanel,body.ceomode #srcpanel,body.ceomode #listpanel,
 body.ceomode #mailpanel{display:none !important}
+body.ceomode #filterbar{display:none !important}
 .cprew{display:flex;gap:6px;margin-top:7px}
 .cprewin{flex:1;font-family:inherit;font-size:12.5px;padding:8px 10px;border:1px solid #E4E0D5;border-radius:8px;background:#fff}
 .cprewin:focus{outline:none;border-color:#2C9087}
@@ -524,6 +525,7 @@ body.ceomode #mailpanel{display:none !important}
 .rhin{font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid #E4E0D5;border-radius:8px;background:#fff}
 .ceobar{height:7px;background:#EFF2F2;border-radius:99px;overflow:hidden;min-width:60px}
 .ceobar>div{height:100%;border-radius:99px}
+@media(max-width:1150px){.ceogrid{grid-template-columns:1fr !important}}
 /* deltas vs hier */
 .scard .dl{font-size:11px;font-weight:700;margin-top:5px}
 .dl.chg{color:var(--teal)}.dl.eq{color:#9aa6a8}
@@ -625,6 +627,7 @@ body.ceomode #mailpanel{display:none !important}
       <a class="nav" data-go="contenus"><span class="ni">🎬</span> Contenus</a>
       <a class="nav" data-go="marques"><span class="ni">🏷️</span> Marques</a>
       <a class="nav" data-go="todo"><span class="ni">✅</span> To-do</a>
+      <a class="nav" data-go="roadmap"><span class="ni">🗺️</span> Roadmap</a>
       <a class="nav" data-go="budget"><span class="ni">💶</span> Budget</a>
       <a class="nav" data-go="rh"><span class="ni">🌴</span> RH</a>
       <!-- Onglet Contacts masqué à la demande de Mélany (13/07/2026) : l'annuaire faisait
@@ -748,6 +751,7 @@ body.ceomode #mailpanel{display:none !important}
     <section id="processview" style="display:none"><p class="pt"><span class="pi">📚</span> Process &amp; documents de référence</p><div class="panelhint">Tout ce qu'il faut lire ou renvoyer : guides, fiches de process, modèles. Ajoute un document, il est visible par toute l'équipe.</div><div id="processbox"><div class="state">Chargement…</div></div></section>
     <section id="budgetview" style="display:none"><p class="pt"><span class="pi">💶</span> Budgets du mois</p><div class="panelhint">Toutes les marques d'un coup d'œil : engagé, restant, dépassements. Le budget mensuel se règle dans la fiche de chaque marque (onglet Marques), l'engagé vient du calendrier Notion. Export Excel par marque pour le reporting client.</div><div id="budgetallbox"><div class="state">Chargement…</div></div></section>
     <section id="rhview" style="display:none"><p class="pt"><span class="pi">🌴</span> RH · absences &amp; documents</p><div class="panelhint">Demande tes congés ou absences ici (la direction valide, tu es prévenue sur Slack), et retrouve tes documents : fiches de paie pour les salariées, factures pour les freelances. Chacune ne voit que les siens.</div><div id="rhbox"><div class="state">Chargement…</div></div></section>
+    <section id="roadmapview" style="display:none"><p class="pt"><span class="pi">🗺️</span> Roadmap annuelle</p><div class="panelhint">Ton espace stratégie : les grands chantiers de l'année, trimestre par trimestre, organisés par axe. Clique un statut pour le faire évoluer, ✎ pour éditer, ＋ pour ajouter. Visible uniquement par la direction.</div><div id="roadmapbox"><div class="state">Chargement…</div></div></section>
     <section id="rapportsview" style="display:none"><p class="pt"><span class="pi">📊</span> Rapports</p><div id="rapportsbox"><div class="state">Chargement…</div></div></section>
     <section id="calendrierview" style="display:none"><p class="pt"><span class="pi">📅</span> Calendrier</p><div id="calendrierbox"><div class="state">Chargement…</div></div></section>
     <section id="todoview" style="display:none"><p class="pt"><span class="pi">✅</span> To-do</p><div class="panelhint">Tes tâches à faire, marque par marque. Une case cochée = statut « Fait » dans Notion, tout est synchronisé.</div><div id="todowrap"><div class="state">Chargement…</div></div></section>
@@ -805,8 +809,8 @@ function statCardGo(act){
   else { navToView('cockpit'); setTimeout(()=>{const el=$('todopanel'); if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},220); } // à traiter / relances → priorités
 }
 let CURRENT_VIEW='cockpit';
-const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview',historique:'historiqueview',marques:'marquesview',todo:'todoview',processus:'processview',budget:'budgetview',rh:'rhview'};
-function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','historiqueview','marquesview','todoview','processview','budgetview','rhview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
+const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview',historique:'historiqueview',marques:'marquesview',todo:'todoview',processus:'processview',budget:'budgetview',rh:'rhview',roadmap:'roadmapview'};
+function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','historiqueview','marquesview','todoview','processview','budgetview','rhview','roadmapview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
 function refreshCustomView(){
   if(CURRENT_VIEW==='campagnes')renderCampagnes();
   else if(CURRENT_VIEW==='contacts')renderContacts();
@@ -818,6 +822,60 @@ function refreshCustomView(){
   else if(CURRENT_VIEW==='processus')renderProcess();
   else if(CURRENT_VIEW==='budget')renderBudgetView();
   else if(CURRENT_VIEW==='rh')renderRhView();
+  else if(CURRENT_VIEW==='roadmap')renderRoadmapView();
+}
+// ===== Page Roadmap annuelle (direction) : 4 trimestres, axes, statuts ======
+async function renderRoadmapView(){
+  const box=$('roadmapbox'); if(!box)return;
+  if(!VIEWER||VIEWER.role!=='supervisor'){box.innerHTML='<div class="state">Réservé à la direction.</div>';return;}
+  let d=null; try{const r=await api('/api/ceo'); if(r.ok)d=await r.json();}catch(e){}
+  if(!d||!d.ok){box.innerHTML='<div class="state">Roadmap indisponible, réessaie.</div>';return;}
+  const rm=d.roadmap||[], axes=d.axes||[], sts=d.rmStatuts||[];
+  let fAxe=''; try{fAxe=localStorage.getItem('hc_rmaxe')||'';}catch(e){}
+  const stC={'À venir':['#EFF4F4','#33475C'],'En cours':['#E7F0F8','#1C3A44'],'À risque':['#FBEBDD','#C77F2A'],'Bloqué':['#F8E3DC','#C2553B'],'Terminé':['#E4F0EA','#2C9087']};
+  const items=fAxe?rm.filter(x=>x.axe===fAxe):rm;
+  const nDone=rm.filter(x=>x.statut==='Terminé').length;
+  const head='<div class="bgd-card" style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">'
+    +'<b>'+new Date().getFullYear()+'</b><span class="fs">'+rm.length+' initiative(s) · '+nDone+' terminée(s)</span>'
+    +'<select id="rmaxef" class="rhin" style="margin-left:auto"><option value="">Tous les axes</option>'+axes.map(x=>'<option'+(x===fAxe?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select></div>';
+  const col=(q)=>{
+    const qi=items.filter(x=>x.q===q);
+    return '<div class="bgd-card" style="min-width:0"><div class="bgd-h" style="display:flex;align-items:center">'+q+' <span class="fs" style="margin-left:6px">'+qi.length+'</span><a class="lk" data-rmaddq="'+q+'" style="margin-left:auto">＋</a></div>'
+      +(qi.length?qi.map(x=>{const c=stC[x.statut]||stC['À venir'];return '<div style="padding:8px 0;border-bottom:1px solid #F0F3F3">'
+        +'<div style="display:flex;align-items:center;gap:7px"><b style="flex:1;min-width:0">'+esc(x.nom)+'</b><a class="lk" data-rmedit="'+esc(x.id)+'">✎</a><a class="lk" data-rmdel2="'+esc(x.id)+'">✕</a></div>'
+        +'<div style="display:flex;align-items:center;gap:7px;margin-top:4px"><span class="bgd-badge" data-rmst2="'+esc(x.id)+'" title="clique pour faire évoluer le statut" style="cursor:pointer;background:'+c[0]+';color:'+c[1]+'">'+esc(x.statut)+'</span>'
+        +(x.progression?('<div class="ceobar" style="flex:1"><div style="width:'+x.progression+'%;background:#2C9087"></div></div><span class="fs">'+x.progression+' %</span>'):'')
+        +'</div>'
+        +'<div class="fs" style="margin-top:3px">'+esc(x.axe)+(x.resp?(' · '+esc(x.resp)):'')+(x.cible?(' · cible '+esc(x.cible)):'')+'</div>'
+        +(x.next?('<div class="fs">→ '+esc(x.next)+'</div>'):'')
+        +'</div>';}).join(''):'<div class="fs" style="padding:6px 0">rien pour l\'instant</div>')
+      +'</div>';
+  };
+  box.innerHTML=head+'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px">'+['Q1','Q2','Q3','Q4'].map(col).join('')+'</div>';
+  const sel=$('rmaxef'); if(sel)sel.onchange=()=>{try{localStorage.setItem('hc_rmaxe',sel.value);}catch(e){}renderRoadmapView();};
+  const cycle=sts.length?sts:['À venir','En cours','À risque','Bloqué','Terminé'];
+  box.querySelectorAll('[data-rmaddq]').forEach(a2=>a2.onclick=async()=>{
+    const nom=prompt('Nom de l\'initiative ('+a2.dataset.rmaddq+') :'); if(!nom||!nom.trim())return;
+    const axe=prompt('Axe :\n'+axes.join('\n'),fAxe||axes[1]||'')||'';
+    const resp=prompt('Responsable :',VIEWER.name)||VIEWER.name;
+    const cible=prompt('Date cible (libre) :','')||'';
+    const next=prompt('Prochaine étape (optionnel) :','')||'';
+    const r=await api('/api/ceo/roadmap',{method:'POST',body:JSON.stringify({q:a2.dataset.rmaddq,nom,axe,resp,cible,next,statut:'À venir'})});
+    if(!r.ok){const dd=await r.json().catch(()=>({}));alert(dd.error||'Erreur');} renderRoadmapView();
+  });
+  box.querySelectorAll('[data-rmst2]').forEach(el=>el.onclick=async()=>{
+    const it=rm.find(x=>x.id===el.dataset.rmst2); if(!it)return;
+    const nx=cycle[(cycle.indexOf(it.statut)+1)%cycle.length];
+    await api('/api/ceo/roadmap',{method:'POST',body:JSON.stringify({id:it.id,statut:nx})}); renderRoadmapView();
+  });
+  box.querySelectorAll('[data-rmedit]').forEach(el=>el.onclick=async()=>{
+    const it=rm.find(x=>x.id===el.dataset.rmedit); if(!it)return;
+    const nom=prompt('Nom :',it.nom); if(nom===null)return;
+    const next=prompt('Prochaine étape :',it.next||''); if(next===null)return;
+    const prog=prompt('Progression (0 à 100) :',String(it.progression||0)); if(prog===null)return;
+    await api('/api/ceo/roadmap',{method:'POST',body:JSON.stringify({id:it.id,nom:nom||it.nom,next,progression:Number(prog)||0})}); renderRoadmapView();
+  });
+  box.querySelectorAll('[data-rmdel2]').forEach(el=>el.onclick=async()=>{ if(!confirm('Supprimer cette initiative ?'))return; await api('/api/ceo/roadmap',{method:'POST',body:JSON.stringify({del:el.dataset.rmdel2})}); renderRoadmapView(); });
 }
 // ===== Vue RH : demandes d'absence + documents (paie, factures) =============
 async function renderRhView(){
@@ -1330,6 +1388,7 @@ async function load(){
   }else show($('filterbar'),false);
   // Rôle « team » (ex. social media manager) : espace allégé, centré sur la to-do.
   // On masque les outils créateurs (profils, mails, campagnes, marques, contacts, rapports).
+  if(VIEWER.role!=='supervisor'){const rmn=document.querySelector('.sb-nav .nav[data-go="roadmap"]');if(rmn)rmn.style.display='none';}
   if(VIEWER.role==='team'){
     ['profils','campagnes','contenus','marques','contacts','messages','rapports','budget'].forEach(g=>{const a=document.querySelector('.sb-nav .nav[data-go="'+g+'"]');if(a)a.style.display='none';});
     ['srcpanel','mailpanel','pipelinepanel','brandpanel','fillpanel','listpanel','statcards'].forEach(id=>{const e=$(id);if(e){e.classList.add('hidden');e.style.display='none';}});
@@ -1589,7 +1648,7 @@ async function loadCeoPanel(){
       +'<div class="bgd-h" style="margin-top:10px;font-size:13px">🏖️ Congés à valider'+(absP.length?(' ('+absP.length+')'):'')+'</div>'
       +(absP.length?absP.map(a=>'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:7px;padding:6px 0;border-bottom:1px solid #F0F3F3"><b>'+esc(a.who)+'</b><span class="fs">'+esc(a.type)+' · '+dmy(a.du)+' → '+dmy(a.au)+'</span>'+(a.note?('<span class="fs">« '+esc(a.note)+' »</span>'):'')+'<span style="margin-left:auto;display:flex;gap:6px"><button class="lk" data-ceoabs="validee" data-id="'+esc(a.id)+'">✅</button><button class="lk" data-ceoabs="refusee" data-id="'+esc(a.id)+'">❌</button></span></div>').join(''):'<div class="fs" style="padding:4px 0">aucune demande en attente</div>')
       +'</div>';
-    const rmH='<div class="bgd-card" style="height:100%"><div class="bgd-h">🗺️ Roadmap '+new Date().getFullYear()+' <a class="lk" id="rmadd" style="float:right">＋ initiative</a></div>'
+    const rmH='<div class="bgd-card" style="height:100%"><div class="bgd-h">🗺️ Roadmap '+new Date().getFullYear()+' <span style="float:right;display:flex;gap:8px"><a class="lk" id="rmadd">＋ initiative</a><a class="lk ceogo" data-go="roadmap">voir la roadmap complète →</a></span></div>'
       +'<div style="display:flex;gap:6px;margin:6px 0">'+['Q1','Q2','Q3','Q4'].map(q=>'<button class="lk'+(q===rmQ?' primary':'')+'" data-rmq="'+q+'">'+q+'</button>').join('')+'</div>'
       +(rmItems.length?rmItems.map(x=>{const c=rmStC[x.statut]||rmStC['À venir'];return '<div style="padding:7px 0;border-bottom:1px solid #F0F3F3"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1;min-width:0">'+esc(x.nom)+'</b><span class="bgd-badge" data-rmst="'+esc(x.id)+'" title="clique pour changer le statut" style="cursor:pointer;background:'+c[0]+';color:'+c[1]+'">'+esc(x.statut)+'</span><a class="lk" data-rmdel="'+esc(x.id)+'" title="supprimer">✕</a></div><div class="fs">'+esc(x.axe)+(x.resp?(' · '+esc(x.resp)):'')+(x.cible?(' · cible '+esc(x.cible)):'')+(x.next?(' · prochaine étape : '+esc(x.next)):'')+'</div></div>';}).join(''):'<div class="fs" style="padding:6px 0">aucune initiative sur '+rmQ+' : clique ＋ pour en ajouter</div>')
       +'</div>';
@@ -1602,16 +1661,16 @@ async function loadCeoPanel(){
     const cptH='<div class="bgd-card"><div class="bgd-h">🏷️ Marques & comptes <a class="lk ceogo" data-go="budget" style="float:right">budgets →</a></div>'
       +watch.map(w=>'<div class="ceogo" data-go="budget" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #F0F3F3;cursor:pointer"><b style="flex:1">'+esc(w.brand)+'</b>'+(w.restant!==null?('<span class="fs">restant '+eur(w.restant)+'</span>'):'')+'<span class="bgd-badge" style="background:'+(w.warn===2?'#F8E3DC':(w.warn===1?'#FBEBDD':'#E4F0EA'))+';color:'+(w.warn===2?'#C2553B':(w.warn===1?'#C77F2A':'#2C9087'))+'">'+esc(w.label)+'</span></div>').join('')
       +'<div class="fs" style="margin-top:6px">Par client, jamais additionnés. Marges et échéances viendront avec Pennylane (V2).</div></div>';
-    const iaH='<div class="bgd-card" id="ceobriefcard"><div class="bgd-h">🤖 Assistant IA <span class="cpsub">synthèse des données réelles du cockpit, rien d\'inventé</span></div><div id="ceobrieftxt" class="fs" style="font-size:13.5px;line-height:1.55">Chargement du brief du jour…</div></div>';
+    const iaH='<div class="bgd-card" id="ceobriefcard" style="height:100%"><div class="bgd-h">🤖 Assistant IA <span class="cpsub">données réelles uniquement</span></div><div id="ceobrieftxt" class="fs" style="font-size:13.5px;line-height:1.55">Chargement du brief du jour…</div><div id="ceobriefdet" style="margin-top:8px"></div></div>';
     const quick='<div style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px">'
-      +[['🗳️ Demandes à valider','ceocard-dec'],['🗺️ Roadmap','ceocard-rm'],['📅 Calendrier édito','ceocard-cal'],['🏖️ Congés','ceocard-chg'],['🏷️ Clients sensibles','ceocard-cpt']].map(x=>'<a class="lk ceoanch" data-a="'+x[1]+'">'+x[0]+'</a>').join('')+'</div>';
+      +[['🗳️ Demandes à valider','ceocard-dec'],['📅 Calendrier éditorial','ceocard-cal'],['🧑‍🤝‍🧑 Recrutement','ceocard-dec'],['🏷️ Points clients sensibles','ceocard-cpt']].map(x=>'<a class="lk ceoanch" data-a="'+x[1]+'">'+x[0]+'</a>').join('')
+      +'<a class="lk ceogo" data-go="roadmap">🗺️ Roadmap annuelle</a></div>';
     p.innerHTML='<div style="margin-bottom:10px"><div style="font-weight:800;font-size:24px;color:#1C3A44">Cockpit CEO</div><div style="color:#2C9087;font-weight:700;font-size:12.5px;letter-spacing:1px">HYPED AGENCY · '+esc(new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}).toUpperCase())+'</div></div>'
       +quick
       +'<div class="bgd-kpis" style="grid-template-columns:repeat(auto-fit,minmax(215px,1fr))">'+k1+k2+k3+k4+k5+'</div>'
-      +'<div class="bgd-grid" style="grid-template-columns:repeat(auto-fit,minmax(330px,1fr));margin-bottom:12px"><div id="ceocard-cal">'+calH+'</div><div id="ceocard-chg">'+chargeH+'</div><div id="ceocard-rm">'+rmH+'</div></div>'
-      +'<div class="bgd-grid" style="grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);margin-bottom:12px"><div id="ceocard-dec">'+decH+'</div><div id="ceocard-cpt">'+cptH+'</div></div>'
-      +iaH
-      +'<button class="lk primary" id="ceofull" style="width:100%;margin-top:12px;padding:11px;border-radius:11px;font-size:13.5px">Ouvrir le cockpit complet →</button>';
+      +'<div class="bgd-grid ceogrid" style="grid-template-columns:minmax(0,1fr) minmax(0,1.05fr) minmax(0,1.4fr);margin-bottom:12px"><div id="ceocard-cal">'+calH+'</div><div id="ceocard-chg">'+chargeH+'</div><div id="ceocard-rm">'+rmH+'</div></div>'
+      +'<div class="bgd-grid ceogrid" style="grid-template-columns:minmax(0,1.15fr) minmax(0,0.85fr) minmax(0,1fr);margin-bottom:12px"><div id="ceocard-dec">'+decH+'</div><div id="ceocard-cpt">'+cptH+'</div><div id="ceocard-ia">'+iaH+'</div></div>'
+      +'<button class="lk primary" id="ceofull" style="width:100%;margin-top:2px;padding:11px;border-radius:11px;font-size:13.5px">Ouvrir le cockpit complet →</button>';
     // ---------- interactions ----------
     const go=(g)=>{ if(!g)return;
       if(g==='__perso'){setCeoMode(false);setTimeout(()=>{const e=$('persopanel');if(e)e.scrollIntoView({behavior:'smooth',block:'start'});},300);return;}
@@ -1664,8 +1723,20 @@ async function loadCeoPanel(){
       loadCeoPanel();
     });
     show(p,true);
-    // brief IA en différé (peut prendre quelques secondes)
-    gj('/api/ceo/brief').then(b=>{const e=$('ceobrieftxt');if(e)e.textContent=(b&&b.text)?b.text:'Brief indisponible pour le moment.';});
+    // brief IA en différé (peut prendre quelques secondes) : texte + recommandations cliquables
+    gj('/api/ceo/brief').then(b=>{
+      const e=$('ceobrieftxt'); if(e)e.textContent=(b&&b.text)?b.text:'Brief indisponible pour le moment.';
+      const det=$('ceobriefdet');
+      if(det&&b&&Array.isArray(b.faits)&&b.faits.length){
+        det.innerHTML=b.faits.slice(0,6).map((f,i)=>'<a class="lk ceofait" data-i="'+i+'" style="display:block;padding:5px 0;border-top:1px solid #F0F3F3;font-size:12.5px">→ '+esc(String(f.t).slice(0,110))+'</a>').join('');
+        det.querySelectorAll('.ceofait').forEach(a2=>a2.onclick=()=>{
+          const f=b.faits[Number(a2.dataset.i)]; if(!f)return;
+          if(f.go==='dec'||f.go==='chg'){const e2=document.getElementById('ceocard-'+f.go);if(e2){e2.scrollIntoView({behavior:'smooth',block:'center'});e2.style.boxShadow='0 0 0 3px #2C9087';setTimeout(()=>{e2.style.boxShadow='';},1500);}}
+          else if(f.go==='__perso'){setCeoMode(false);setTimeout(()=>{const e3=$('persopanel');if(e3)e3.scrollIntoView({behavior:'smooth',block:'start'});},300);}
+          else if(f.go)navToView(f.go);
+        });
+      }
+    });
   }catch(e){show(p,false);}
 }
 // --- Perso branding de Mélany : calendrier éditorial Instagram ---------------

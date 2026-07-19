@@ -752,36 +752,40 @@ app.post("/api/ceo/arbitrage/:id/decide", auth, async (req, res) => {
 let CEO_BRIEF_CACHE = { at: 0, text: "" };
 app.get("/api/ceo/brief", auth, async (req, res) => {
   if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
-  if (Date.now() - CEO_BRIEF_CACHE.at < 3600000 && CEO_BRIEF_CACHE.text && !req.query.force) return res.json({ ok: true, text: CEO_BRIEF_CACHE.text, at: CEO_BRIEF_CACHE.at });
+  if (Date.now() - CEO_BRIEF_CACHE.at < 3600000 && CEO_BRIEF_CACHE.text && !req.query.force) return res.json({ ok: true, text: CEO_BRIEF_CACHE.text, at: CEO_BRIEF_CACHE.at, faits: CEO_BRIEF_CACHE.faits || [] });
   try {
     const today = new Date().toISOString().slice(0, 10);
     const o = loadCeo(); const rhO = loadRh(); const cop = loadCopilot();
     const tasks = DEMO ? [] : await fetchAllTasks();
-    const faits = [];
+    const faits = []; // chaque fait est typé et pointe vers sa source (recommandations cliquables)
     const arb = (o.arbitrages || []).filter((a) => a.statut === "en attente");
-    if (arb.length) faits.push(arb.length + " arbitrage(s) en attente : " + arb.map((a) => a.sujet + (a.montant ? " (" + a.montant + " €)" : "")).slice(0, 5).join(" ; "));
+    if (arb.length) faits.push({ go: "dec", t: arb.length + " arbitrage(s) en attente : " + arb.map((a) => a.sujet + (a.montant ? " (" + a.montant + " €)" : "")).slice(0, 5).join(" ; ") });
     const dec = (cop.proposals || []).filter((p) => p.categorie === "decision" && p.status === "pending");
-    if (dec.length) faits.push(dec.length + " décision(s) copilote en attente : " + dec.map((p) => p.question || p.resume).slice(0, 4).join(" ; "));
+    if (dec.length) faits.push({ go: "messages", t: dec.length + " décision(s) copilote en attente : " + dec.map((p) => p.question || p.resume).slice(0, 4).join(" ; ") });
     const absP = (rhO.absences || []).filter((a) => a.statut === "en attente");
-    if (absP.length) faits.push(absP.length + " demande(s) de congés à valider : " + absP.map((a) => a.who + " du " + dmyFr(a.du) + " au " + dmyFr(a.au)).join(" ; "));
+    if (absP.length) faits.push({ go: "chg", t: absP.length + " demande(s) de congés à valider : " + absP.map((a) => a.who + " du " + dmyFr(a.du) + " au " + dmyFr(a.au)).join(" ; ") });
     for (const u of USERS.filter((x) => !COPILOT.departed.includes(String(x.email).toLowerCase()) && normName(x.name) !== "kendia")) {
       const mine = tasks.filter((t) => t.statut !== "Fait" && normName(t.responsable) === normName(u.name));
       const late = mine.filter((t) => t.echeance && t.echeance < today);
-      if (late.length >= 3) faits.push(u.name + " a " + late.length + " tâches en retard (" + late.slice(0, 3).map((t) => t.task).join(" ; ") + ")");
+      if (late.length >= 3) faits.push({ go: "chg", t: u.name + " a " + late.length + " tâches en retard (" + late.slice(0, 3).map((t) => t.task).join(" ; ") + ")" });
       const absNow = (rhO.absences || []).find((x) => x.statut === "validée" && normName(x.who) === normName(u.name) && x.du <= today && today <= x.au);
-      if (absNow) faits.push(u.name + " est absente (" + absNow.type + ") jusqu'au " + dmyFr(absNow.au));
+      if (absNow) faits.push({ go: "chg", t: u.name + " est absente (" + absNow.type + ") jusqu'au " + dmyFr(absNow.au) });
     }
+    try {
+      const persoP = (loadPerso().posts || []).filter((x) => x.statut !== "Posté" && x.date && x.date <= new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10));
+      if (persoP.length) faits.push({ go: "__perso", t: "Contenu personnel à préparer : " + persoP.map((x) => "« " + x.titre + " » pour le " + dmyFr(x.date)).slice(0, 2).join(" ; ") });
+    } catch (e) {}
     try {
       for (const b of ["In Haircare", "Doucéa", "Curls Matter", "LIVA"]) {
         const bd = await budgetForBrand(b, new Date().toISOString().slice(0, 7));
-        if (bd && bd.budgetMensuel > 0 && bd.total >= 0.8 * bd.budgetMensuel) faits.push(b + " a consommé " + Math.round(100 * bd.total / bd.budgetMensuel) + " % de son budget mensuel (" + bd.total + " € / " + bd.budgetMensuel + " €)");
+        if (bd && bd.budgetMensuel > 0 && bd.total >= 0.8 * bd.budgetMensuel) faits.push({ go: "budget", t: b + " a consommé " + Math.round(100 * bd.total / bd.budgetMensuel) + " % de son budget mensuel (" + bd.total + " € / " + bd.budgetMensuel + " €)" });
       }
     } catch (e) {}
-    if (!faits.length) { CEO_BRIEF_CACHE = { at: Date.now(), text: "Rien d'urgent aujourd'hui : pas d'arbitrage ni de décision en attente, pas de retard critique, budgets sous contrôle. Profites-en pour avancer sur la roadmap ✨" }; return res.json({ ok: true, text: CEO_BRIEF_CACHE.text, at: CEO_BRIEF_CACHE.at }); }
+    if (!faits.length) { CEO_BRIEF_CACHE = { at: Date.now(), text: "Rien d'urgent aujourd'hui : pas d'arbitrage ni de décision en attente, pas de retard critique, budgets sous contrôle. Profites-en pour avancer sur la roadmap ✨", faits: [] }; return res.json({ ok: true, text: CEO_BRIEF_CACHE.text, at: CEO_BRIEF_CACHE.at, faits: [] }); }
     const sys = "Tu es l'assistante de direction de Mélany (agence Hyped). À partir des FAITS fournis (et RIEN d'autre : n'invente aucun chiffre), écris un brief matinal en français : 3 à 6 phrases courtes, priorités d'abord, ton direct et chaleureux, sans tiret quadratin, sans liste à puces.";
-    const out = process.env.OPENAI_API_KEY ? await callOpenAI(sys, faits.join("\n"), 600) : (process.env.ANTHROPIC_API_KEY ? await callAnthropic(sys, faits.join("\n"), 600) : null);
-    const text = (out && out.ok) ? out.body : ("À traiter aujourd'hui : " + faits.slice(0, 5).join(" · "));
-    CEO_BRIEF_CACHE = { at: Date.now(), text };
+    const out = process.env.OPENAI_API_KEY ? await callOpenAI(sys, faits.map((f) => f.t).join("\n"), 600) : (process.env.ANTHROPIC_API_KEY ? await callAnthropic(sys, faits.map((f) => f.t).join("\n"), 600) : null);
+    const text = (out && out.ok) ? out.body : ("À traiter aujourd'hui : " + faits.slice(0, 5).map((f) => f.t).join(" · "));
+    CEO_BRIEF_CACHE = { at: Date.now(), text, faits };
     res.json({ ok: true, text, at: CEO_BRIEF_CACHE.at, faits });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
