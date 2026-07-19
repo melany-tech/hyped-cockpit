@@ -811,6 +811,32 @@ app.get("/api/ceo/pennylane/raw", auth, async (req, res) => {
     res.json({ ok: true, items });
   } catch (e) { res.json({ ok: false, error: String((e && e.message) || e).slice(0, 200) }); }
 });
+// Missions (Suivi projets v2, brief UX de Mélany) : une mission = une prestation vendue, pas une liste de tâches
+app.get("/api/missions", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  const o = loadCeo(); res.json({ ok: true, missions: o.missions || [] });
+});
+app.post("/api/missions", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  const S = (v, n) => String(v == null ? "" : v).slice(0, n);
+  const o = loadCeo(); o.missions = o.missions || [];
+  const b = req.body || {};
+  if (b.op === "del") { o.missions = o.missions.filter((m) => m.id !== b.id); }
+  else if (b.op === "create") {
+    if (!S(b.client, 60)) return res.status(400).json({ error: "client requis" });
+    o.missions.push({ id: "M" + Date.now().toString(36), at: Date.now(), client: S(b.client, 60), nom: S(b.nom, 90), offre: S(b.offre, 40) || "Influence",
+      roleCeo: S(b.roleCeo, 70), next: S(b.next, 140), echeance: S(b.echeance, 10), sante: S(b.sante, 10) || "vert", statut: "en cours",
+      montant: Number(b.montant) || 0, debut: S(b.debut, 10), fin: S(b.fin, 10), phase: S(b.phase, 50),
+      equipe: {}, etapes: [], livrables: [], blocages: [] });
+  } else if (b.op === "update") {
+    const m = o.missions.find((x) => x.id === b.id); if (!m) return res.status(404).json({ error: "mission introuvable" });
+    ["client","nom","offre","roleCeo","next","echeance","sante","statut","debut","fin","phase"].forEach((k) => { if (b[k] !== undefined) m[k] = S(b[k], 140); });
+    if (b.montant !== undefined) m.montant = Number(b.montant) || 0;
+    if (b.equipe && typeof b.equipe === "object") m.equipe = { ...(m.equipe || {}), ...b.equipe };
+    ["etapes","livrables","blocages"].forEach((k) => { if (Array.isArray(b[k])) m[k] = b[k].slice(0, 40); });
+  } else return res.status(400).json({ error: "op inconnue" });
+  saveCeo(o); res.json({ ok: true });
+});
 // Roadmap annuelle : initiatives par trimestre et par axe, gérées par la direction
 app.post("/api/ceo/roadmap", auth, (req, res) => {
   if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
@@ -1382,7 +1408,7 @@ async function claudeReply({ cp, creator, brand, category, received, subject, tr
     "EMOJIS de Kendia (légers, UNIQUEMENT si positif) : ✨ 🤍 🫶 🫶🏽 😊 😌 😍 🥰 ;) 🎀 🌟. Jamais d'excès, jamais si le ton est délicat.",
     "Ne JAMAIS écrire de signature complète type 'Kendia Koffi / Cheffe de projet / Hyped Agency' : juste le prénom (la signature mail s'ajoute automatiquement).",
     "",
-    "STYLE : n'utilise JAMAIS de tiret quadratin, c'est-à-dire le caractère « — », dans tes réponses : préfère une virgule, deux-points ou une nouvelle phrase.",
+    "STYLE : n'utilise JAMAIS de tiret quadratin, c'est-à-dire le caractère « · », dans tes réponses : préfère une virgule, deux-points ou une nouvelle phrase.",
     "LANGUE (PRIORITÉ ABSOLUE) : tu réponds TOUJOURS dans la LANGUE du dernier message reçu. Mail en anglais = réponse ENTIÈREMENT en anglais (même chaleur, mêmes règles, salutation adaptée type 'Hi [prénom],'). Mail en français = réponse en français. Ne mélange jamais les deux.",
     "RÈGLE D'OR : tu réponds VRAIMENT au contenu du dernier message : tu reprends ses points, réponds à ses questions, rebondis sur ce qu'il dit. JAMAIS de réponse générique.",
     "SENS DES ÉCHANGES (NE JAMAIS INVERSER) : c'est L'AGENCE (nous) qui envoie au créateur le contrat, le brief et les produits ; c'est le CRÉATEUR qui les reçoit. Ne dis JAMAIS « j'ai bien reçu le contrat / le brief / les produits » : c'est LUI qui les reçoit, pas toi. Ce que TOI tu reçois de lui : previews, contenus, factures, infos postales, stats.",
@@ -1969,7 +1995,7 @@ app.post("/api/contact/message", auth, async (req, res) => {
     "TRAME, dans cet ordre, fluide et naturel : salutation avec le prénom · qui tu es (ton prénom, cheffe de projet chez Hyped Agency) · présentation de la marque et de son univers en 2-3 phrases APPUYÉES SUR L'HISTOIRE FOURNIE (bénéfices produits concrets, où la trouver si l'info existe) · compliment sincère sur son contenu et son énergie, en lien avec les valeurs de la marque, SANS inventer de détail précis sur ses posts · proposition : lui envoyer les produits à découvrir et créer " + (disp || "du contenu") + " dans le cadre d'une collaboration · question ouverte pour savoir si ça lui plairait · clôture chaleureuse + ton prénom.",
     "RÈGLE D'OR ABSOLUE : ne JAMAIS proposer de budget, tarif ou rémunération en premier. Ne parle pas d'argent du tout : c'est le créateur qui annonce ses tarifs s'il y a lieu.",
     "TON (voix Hyped) : chaleureux, enthousiaste, tutoiement, emojis légers (✨ 🤍 🫶, 2-3 max).",
-    "STYLE : jamais de tiret quadratin « — ». 6 à 10 lignes. Réponds UNIQUEMENT par le corps du message, sans objet, sans guillemets, sans commentaire.",
+    "STYLE : jamais de tiret quadratin « · ». 6 à 10 lignes. Réponds UNIQUEMENT par le corps du message, sans objet, sans guillemets, sans commentaire.",
     lang === "en" ? "LANGUE : écris le message ENTIÈREMENT en anglais."
       : lang === "fr" ? "LANGUE : français."
       : "LANGUE : déduis-la de la MARQUE : si son histoire ou les consignes montrent une marque / audience anglophone (marché UK ou US, communication en anglais), écris TOUT le message en anglais ; sinon en français.",
@@ -2222,7 +2248,7 @@ function digestLine(p) {
   if (p.categorie === "decision" && p.status === "pending")
     return "• 🔔 *" + who + "*" + brand + " : " + String(p.question || p.resume || "").slice(0, 150)
       + "\n    <" + copilotLink(p.id, "accept") + "|✅ Oui> · <" + copilotLink(p.id, "refuse") + "|❌ Non> · <" + copilotLink(p.id, "directive") + "|💬 Consigne> · <" + copilotLink(p.id, "self") + "|✍️ Je gère> · <" + copilotLink(p.id, "seen") + "|👁️ Vu>";
-  return "• ✉️ *" + who + "*" + brand + " : réponse prête à relire" + (p.resume ? (" — " + String(p.resume).slice(0, 110)) : "")
+  return "• ✉️ *" + who + "*" + brand + " : réponse prête à relire" + (p.resume ? (" · " + String(p.resume).slice(0, 110)) : "")
     + "\n    " + (p.reply ? ("<" + copilotLink(p.id, "send") + "|📤 Envoyer> · ") : "") + "<" + copilotLink(p.id, "self") + "|✍️ Je gère> · <" + copilotLink(p.id, "seen") + "|👁️ Vu>";
 }
 async function flushNotifDigests(store) {

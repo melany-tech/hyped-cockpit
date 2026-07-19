@@ -1042,45 +1042,131 @@ async function renderCommercialView(){
   });
   box.querySelectorAll('[data-crmdel]').forEach(a2=>a2.onclick=async()=>{ if(!confirm('Supprimer ce deal ?'))return; await api('/api/crm',{method:'POST',body:JSON.stringify({del:a2.dataset.crmdel})}); renderCommercialView(); });
 }
-// ===== Suivi de projets (direction) : par marque et par personne =============
+// ===== Suivi projets v2 (brief UX Mélany) : missions = prestations vendues ===
+window.PJ_TAB=window.PJ_TAB||'ceo'; window.PJ_SEL=window.PJ_SEL||null;
 async function renderProjetsView(){
-  const box=$('projetsbox'); if(!box)return;
-  if(!VIEWER||VIEWER.role!=='supervisor'){box.innerHTML='<div class="state">Réservé à la direction.</div>';return;}
-  const gj=async(u)=>{try{const r=await api(u);return r.ok?await r.json():null;}catch(e){return null;}};
-  const month=new Date().toISOString().slice(0,7);
-  const brands=['In Haircare','Doucéa','Curls Matter','LIVA'];
-  const [dg,buds]=await Promise.all([gj('/api/dirigeant'),Promise.all(brands.map(b=>gj('/api/budget/'+encodeURIComponent(b)+'?month='+month).then(x=>x?{brand:b,...x}:null))).then(a=>a.filter(Boolean))]);
-  const eur=(n)=>((Number(n)||0).toLocaleString('fr-FR')+' €');
-  const dmy=(x)=>String(x||'').split('-').reverse().join('/');
-  const cards=buds.map(d=>{
-    const bm=d.budgetMensuel||0,tot=d.total||0;const pc=bm?Math.min(100,Math.round(100*tot/bm)):0;
-    const cps={};(d.entries||[]).forEach(e=>{if(e.cp)cps[e.cp]=(cps[e.cp]||0)+1;});
-    const cpsTxt=Object.entries(cps).map(([n,c])=>esc(n)+' ('+c+')').join(' · ')||'à assigner';
-    const col=pc>=100?'#D4483B':(pc>=80?'#C77F2A':'#2E9E6B');
-    return '<div class="bgd-card" style="min-width:0"><div style="display:flex;align-items:center;gap:9px"><span style="width:30px;height:30px;border-radius:9px;background:#1F2430;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:11px">'+esc(String(d.brand).split(' ').map(s=>s[0]).join('').slice(0,2).toUpperCase())+'</span><b style="flex:1">'+esc(d.brand)+'</b>'
-      +(bm?('<span class="bgd-badge" style="background:'+(pc>=100?'#FBE5E0':(pc>=80?'#FDF0E0':'#E7F5EC'))+';color:'+col+'">'+pc+' %</span>'):'<span class="bgd-badge" style="background:#EFF1F3;color:#7A828C">budget à définir</span>')+'</div>'
-      +(bm?('<div class="ceobar" style="margin:9px 0 4px"><div style="width:'+pc+'%;background:'+col+'"></div></div><div class="fs">'+eur(tot)+' engagés / '+eur(bm)+' · restant '+eur(bm-tot)+'</div>'):'')
-      +'<div class="fs" style="margin-top:6px">🎬 '+(d.entries||[]).length+' collab(s) ce mois-ci</div>'
-      +'<div class="fs" style="margin-top:3px">👥 '+cpsTxt+'</div>'
-      +'<div style="margin-top:8px"><a class="lk pjgo" data-go="budget">budget →</a> <a class="lk pjgo" data-go="calendrier">calendrier →</a></div>'
+  const bx=$('projetsbox')||$('pjbox')||document.getElementById('projetsview').querySelector('div[id]')||null;
+  const host=bx||document.getElementById('projetsview');
+  try{
+    const V='#7C5CFA';
+    const r=await api('/api/missions'); if(!r.ok){host.innerHTML='<div class="state">Réservé à la direction.</div>';return;}
+    const d=await r.json(); const ms=(d.missions||[]);
+    const dmy=(x)=>String(x||'').split('-').reverse().join('/');
+    const eur=(n)=>((Math.round(Number(n)||0)).toLocaleString('fr-FR')+' €');
+    const today=new Date().toISOString().slice(0,10);
+    const OF={'Storytelling':['#E7F5EC','#1F8A5D'],'Influence':['#E7F0FA','#2F6DB5'],'Social Media':['#F4F2FB','#4C3BB8'],'360°':['#FBE5E0','#D4483B']};
+    const ofB=(o2)=>{const c=OF[o2]||['#F4F2FB','#4C3BB8'];return '<span class="bgd-badge" style="background:'+c[0]+';color:'+c[1]+';font-size:10.5px">'+esc(o2||'·')+'</span>';};
+    const SD={'vert':'#2E9E6B','orange':'#E8933A','rouge':'#D4483B'};
+    const sDot=(s2)=>'<span style="width:10px;height:10px;border-radius:50%;background:'+(SD[s2]||'#C9CED4')+';display:inline-block"></span>';
+    const actives=ms.filter(m=>m.statut!=='terminée');
+    const inWeek=(dd)=>{if(!dd)return false;const t2=new Date(dd),n=new Date();const mon=new Date(n);mon.setDate(n.getDate()-((n.getDay()+6)%7));const sun=new Date(mon);sun.setDate(mon.getDate()+6);return t2>=new Date(mon.toISOString().slice(0,10))&&t2<=sun;};
+    const ceoM=actives.filter(m=>m.roleCeo);
+    const interv=ceoM.filter(m=>m.echeance&&inWeek(m.echeance));
+    const livAval=actives.reduce((s2,m)=>s2+((m.livrables||[]).filter(l=>l.statut==='à valider').length),0);
+    const risque=actives.filter(m=>m.sante==='rouge'||m.sante==='orange'||(m.echeance&&m.echeance<today)||(m.blocages||[]).length);
+    // ---------- filtres ----------
+    const tabs=[['ceo','Vue CEO'],['all','Toutes les missions'],['Storytelling','Storytelling'],['Influence','Influence'],['Social Media','Social Media'],['360°','360°']];
+    const tabH='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">'+tabs.map(([k,l])=>'<button class="lk pjtab" data-t="'+k+'" style="border-radius:999px;padding:9px 16px;font-weight:700;'+(window.PJ_TAB===k?('background:'+V+';color:#fff;border-color:'+V):'background:#fff')+'">'+l+'</button>').join('')
+      +'<button class="lk" id="pjadd" style="margin-left:auto;border-radius:999px;padding:9px 16px;background:#EEEBFB;color:#4C3BB8;border-color:#EEEBFB;font-weight:700">＋ Ajouter une mission</button></div>';
+    let list=window.PJ_TAB==='ceo'?ceoM:(window.PJ_TAB==='all'?actives:actives.filter(m=>m.offre===window.PJ_TAB));
+    list=list.slice().sort((a,b2)=>String(a.echeance||'9999').localeCompare(String(b2.echeance||'9999')));
+    // ---------- KPIs (4, sobres) ----------
+    const kpi=(ic,bg,lbl,val,sub,subc)=>'<div class="bgd-card" style="min-width:0"><div style="display:flex;gap:12px;align-items:center"><div style="width:48px;height:48px;flex:0 0 48px;border-radius:14px;background:'+bg+';display:flex;align-items:center;justify-content:center;font-size:20px">'+ic+'</div><div style="min-width:0"><div class="bgd-klbl">'+lbl+'</div><div class="bgd-kval" style="font-size:23px">'+val+'</div><div class="bgd-ksub"'+(subc?(' style="color:'+subc+';font-weight:700"'):'')+'>'+sub+'</div></div></div></div>';
+    const kpis='<div class="bgd-kpis" style="grid-template-columns:repeat(auto-fit,minmax(215px,1fr));margin-bottom:14px">'
+      +kpi('🗂️','#EEEBFB','Missions actives',String(actives.length),'en production')
+      +kpi('👤','#E7F0FA','Interventions CEO',String(interv.length),'cette semaine')
+      +kpi('📄','#E7F5EC','Livrables à valider',String(livAval),'internes & clients')
+      +kpi('⚠️','#FDF0E0','Missions à risque',String(risque.length),risque.length?'nécessitent attention':'tout va bien',risque.length?'#D4483B':'')
       +'</div>';
-  }).join('');
-  const mem=((dg&&dg.members)||[]);
-  const chCol=(c)=>c>100?'#D4483B':(c>=85?'#C77F2A':(c>=70?'#B98A12':'#2E9E6B'));
-  const AVC=['#6D5AE0','#E8865D','#2C9087','#B98A12','#4A7FB5'];
-  const persH='<div class="bgd-card" style="margin-top:14px"><div class="bgd-h">👥 Par personne</div>'
-    +(mem.length?mem.map((m,mi)=>{
-      return '<div style="display:grid;grid-template-columns:26px minmax(90px,max-content) minmax(0,1fr) max-content max-content max-content;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid #F0F1F6">'
-      +'<span style="width:26px;height:26px;border-radius:50%;background:'+AVC[mi%AVC.length]+';color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:11px">'+esc(String(m.name).slice(0,1).toUpperCase())+'</span>'
-      +'<b>'+esc(m.name)+'</b>'
-      +'<span>'+chDeclBadge(m.checkin)+'</span>'
-      +'<span class="fs">'+(m.open||0)+' tâche(s)</span>'
-      +(m.late?('<span class="bgd-badge" style="background:#FBE5E0;color:#D4483B">'+m.late+' retard(s)</span>'):'<span class="bgd-badge" style="background:#E7F5EC;color:#2E9E6B">à jour</span>')
-      +(m.absence?('<span class="bgd-badge" style="background:#F5EFE2;color:#B98A12">🏖️ → '+dmy(m.absence.au)+'</span>'):'<span></span>')
-      +'</div>';}).join(''):'<div class="fs">équipe introuvable</div>')
-    +'</div>';
-  box.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px">'+cards+'</div>'+persH;
-  box.querySelectorAll('.pjgo').forEach(a2=>a2.onclick=()=>navToView(a2.dataset.go));
+    // ---------- fiche détaillée ----------
+    const sel=ms.find(m=>m.id===window.PJ_SEL);
+    if(sel){
+      const eq=sel.equipe||{};
+      const eqCard=(lbl,k)=>'<div style="border:1px solid #EDF0F2;border-radius:12px;padding:10px;min-width:0"><div class="fs" style="font-size:10.5px">'+lbl+'</div><div style="font-weight:700;margin-top:2px">'+(eq[k]?esc(eq[k]):'<span style="opacity:.5">·</span>')+'</div></div>';
+      const ovCard=(lbl,val)=>'<div style="border:1px solid #EDF0F2;border-radius:12px;padding:10px;min-width:0"><div class="fs" style="font-size:10.5px">'+lbl+'</div><div style="font-weight:700;margin-top:2px">'+val+'</div></div>';
+      const etH=(sel.etapes||[]).map((e2,i2)=>'<span class="pjet" data-i="'+i2+'" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;font-size:12px;font-weight:600;background:'+(e2.done?'#E7F5EC':'#F5F6F8')+';color:'+(e2.done?'#1F8A5D':'#5D6D74')+'">'+(e2.done?'✓ ':'')+esc(e2.nom)+'</span>').join('<span style="color:#C9CED4;align-self:center">→</span>')||'<span class="fs">aucune étape · ＋ pour en ajouter</span>';
+      const lvH=(sel.livrables||[]).map((l,i2)=>'<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #F0F1F6;flex-wrap:wrap"><b style="font-size:13px;flex:1;min-width:140px">'+esc(l.nom)+'</b><span class="fs">'+esc(l.resp||'·')+'</span><span class="fs">'+(l.date?dmy(l.date):'')+'</span><button class="lk pjlst" data-i="'+i2+'" style="font-size:11px">'+esc(l.statut||'à faire')+'</button><button class="lk pjlvi" data-i="'+i2+'" style="font-size:11px;'+(l.valInt?'background:#E7F5EC;color:#1F8A5D;border-color:#E7F5EC':'')+'">'+(l.valInt?'✓ interne':'valid. interne')+'</button><button class="lk pjlvc" data-i="'+i2+'" style="font-size:11px;'+(l.valCli?'background:#E7F5EC;color:#1F8A5D;border-color:#E7F5EC':'')+'">'+(l.valCli?'✓ client':'valid. client')+'</button></div>').join('')||'<div class="fs" style="padding:6px 0">aucun livrable pour l\'instant</div>';
+      const blH=(sel.blocages||[]).map((b2,i2)=>'<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F0F1F6"><span>⛔️</span><span style="flex:1;font-size:13px">'+esc(b2)+'</span><button class="lk pjbldel" data-i="'+i2+'">✕</button></div>').join('')||'<div class="fs" style="padding:6px 0">aucun blocage déclaré ✨</div>';
+      host.innerHTML='<button class="lk" id="pjback" style="margin-bottom:12px">← Retour au suivi projets</button>'
+        +'<div class="bgd-card" style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b style="font-size:18px">'+esc(sel.client)+' · '+esc(sel.nom||sel.offre)+'</b>'+ofB(sel.offre)+sDot(sel.sante)+'<span style="margin-left:auto;display:flex;gap:6px"><button class="lk" id="pjedit">✎ Modifier</button><button class="lk" id="pjdone">'+(sel.statut==='terminée'?'Rouvrir':'Terminer ✓')+'</button><button class="lk" id="pjdel">🗑</button></span></div>'
+        +'<div style="width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin-top:12px">'
+        +ovCard('MONTANT',sel.montant?eur(sel.montant):'·')+ovCard('DÉBUT → FIN',(sel.debut?dmy(sel.debut):'·')+' → '+(sel.fin?dmy(sel.fin):'·'))+ovCard('PHASE',esc(sel.phase||'·'))+ovCard('PROCHAINE ACTION',esc(sel.next||'·'))+ovCard('ÉCHÉANCE',sel.echeance?dmy(sel.echeance):'·')+'</div></div>'
+        +'<div class="bgd-grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr);margin-bottom:14px">'
+        +'<div class="bgd-card"><div class="bgd-h">👥 Équipe & responsabilités <a class="lk" id="pjeq" style="float:right">✎</a></div><div style="width:100%;display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:8px">'+eqCard('LEAD STRATÉGIQUE','leadStrat')+eqCard('LEAD OPÉRATIONNEL','leadOps')+eqCard('CONTRIBUTEURS','contrib')+eqCard('VALIDATEUR FINAL','valid')+'</div>'
+        +'<div class="bgd-h" style="margin-top:14px;font-size:14px">👤 Rôle CEO</div><div style="margin-top:4px">'+esc(sel.roleCeo||'·')+'</div></div>'
+        +'<div class="bgd-card"><div class="bgd-h">🗺️ Roadmap <a class="lk" id="pjetadd" style="float:right">＋ étape</a></div><div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:10px">'+etH+'</div><div class="fs" style="margin-top:8px">clique une étape pour la passer faite / à faire</div>'
+        +'<div class="bgd-h" style="margin-top:14px;font-size:14px">⛔️ Blocages & dépendances client <a class="lk" id="pjbladd" style="float:right">＋</a></div>'+blH+'</div></div>'
+        +'<div class="bgd-card"><div class="bgd-h">📄 Livrables <a class="lk" id="pjlvadd" style="float:right">＋ livrable</a></div>'+lvH+'</div>';
+      const save=async(patch)=>{await api('/api/missions',{method:'POST',body:JSON.stringify({op:'update',id:sel.id,...patch})});renderProjetsView();};
+      $('pjback').onclick=()=>{window.PJ_SEL=null;renderProjetsView();};
+      $('pjdel').onclick=async()=>{if(!confirm('Supprimer cette mission ?'))return;await api('/api/missions',{method:'POST',body:JSON.stringify({op:'del',id:sel.id})});window.PJ_SEL=null;renderProjetsView();};
+      $('pjdone').onclick=()=>save({statut:sel.statut==='terminée'?'en cours':'terminée'});
+      $('pjedit').onclick=()=>{const c2=prompt('Client :',sel.client);if(c2===null)return;const n2=prompt('Intitulé de la mission :',sel.nom||'');if(n2===null)return;const o2=prompt('Offre (Storytelling / Influence / Social Media / 360°) :',sel.offre);if(o2===null)return;const rc=prompt('Rôle CEO :',sel.roleCeo||'');if(rc===null)return;const nx=prompt('Prochaine action :',sel.next||'');if(nx===null)return;const ec=prompt('Échéance (AAAA-MM-JJ) :',sel.echeance||'');if(ec===null)return;const sa=prompt('Santé (vert / orange / rouge) :',sel.sante);if(sa===null)return;const mo=prompt('Montant (€) :',sel.montant||'');if(mo===null)return;const ph=prompt('Phase actuelle :',sel.phase||'');if(ph===null)return;save({client:c2,nom:n2,offre:o2,roleCeo:rc,next:nx,echeance:ec,sante:sa,montant:mo,phase:ph});};
+      $('pjeq').onclick=()=>{const a2=prompt('Lead stratégique :',(sel.equipe||{}).leadStrat||'');if(a2===null)return;const b2=prompt('Lead opérationnel :',(sel.equipe||{}).leadOps||'');if(b2===null)return;const c2=prompt('Contributeurs :',(sel.equipe||{}).contrib||'');if(c2===null)return;const d2=prompt('Validateur final :',(sel.equipe||{}).valid||'');if(d2===null)return;save({equipe:{leadStrat:a2,leadOps:b2,contrib:c2,valid:d2}});};
+      $('pjetadd').onclick=()=>{const n2=prompt('Nom de l\'étape (ex : Interviews, Rédaction, Sourcing…) :');if(!n2)return;save({etapes:[...(sel.etapes||[]),{nom:n2,done:false}]});};
+      host.querySelectorAll('.pjet').forEach(e2=>e2.onclick=()=>{const et=[...(sel.etapes||[])];et[Number(e2.dataset.i)].done=!et[Number(e2.dataset.i)].done;save({etapes:et});});
+      $('pjlvadd').onclick=()=>{const n2=prompt('Nom du livrable :');if(!n2)return;const rp=prompt('Responsable :')||'';const dt=prompt('Date (AAAA-MM-JJ) :')||'';save({livrables:[...(sel.livrables||[]),{nom:n2,resp:rp,date:dt,statut:'à faire',valInt:false,valCli:false}]});};
+      const lvmut=(i2,fn)=>{const lv=[...(sel.livrables||[])];fn(lv[i2]);save({livrables:lv});};
+      host.querySelectorAll('.pjlst').forEach(b2=>b2.onclick=()=>lvmut(Number(b2.dataset.i),(l)=>{l.statut=l.statut==='à faire'?'en cours':(l.statut==='en cours'?'à valider':(l.statut==='à valider'?'livré':'à faire'));}));
+      host.querySelectorAll('.pjlvi').forEach(b2=>b2.onclick=()=>lvmut(Number(b2.dataset.i),(l)=>{l.valInt=!l.valInt;}));
+      host.querySelectorAll('.pjlvc').forEach(b2=>b2.onclick=()=>lvmut(Number(b2.dataset.i),(l)=>{l.valCli=!l.valCli;}));
+      $('pjbladd').onclick=()=>{const n2=prompt('Blocage / dépendance client (ex : feedback en attente, produit non reçu…) :');if(!n2)return;save({blocages:[...(sel.blocages||[]),n2]});};
+      host.querySelectorAll('.pjbldel').forEach(b2=>b2.onclick=()=>{const bl=[...(sel.blocages||[])];bl.splice(Number(b2.dataset.i),1);save({blocages:bl});});
+      return;
+    }
+    // ---------- tableau missions (6 max) ----------
+    const HC='padding:7px 0;border-bottom:1px solid #F0F1F6';
+    const DC='padding:10px 0;border-bottom:1px solid #F0F1F6;display:flex;align-items:center;min-width:0;gap:8px;cursor:pointer';
+    const AVB=['#17252B','#6D5AE0','#2C9087','#B98A12','#4A7FB5'];
+    const rows=list.slice(0,6).map((m,i2)=>{const cell=(inner)=>'<span class="pjopen" data-id="'+m.id+'" style="'+DC+'">'+inner+'</span>';
+      return cell('<span style="width:28px;height:28px;flex:0 0 28px;border-radius:9px;background:'+AVB[i2%AVB.length]+';color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:11px">'+esc(String(m.client||'?').slice(0,2).toUpperCase())+'</span><b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(m.client)+(m.nom?(' <span class="fs">· '+esc(m.nom)+'</span>'):'')+'</b>')
+      +cell(ofB(m.offre))
+      +cell('<span class="fs" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(m.roleCeo||'·')+'</span>')
+      +cell('<span style="font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(m.next||'·')+'</span>')
+      +cell('<span class="fs" style="white-space:nowrap;'+((m.echeance&&m.echeance<today)?'color:#D4483B;font-weight:700':'')+'">'+(m.echeance?dmy(m.echeance).slice(0,5):'·')+'</span>')
+      +cell(sDot(m.sante));}).join('');
+    const tableH='<div class="bgd-card" style="min-width:0"><div class="bgd-h">Missions en cours</div>'
+      +(list.length?('<div style="width:100%;display:grid;grid-template-columns:minmax(0,1.7fr) max-content minmax(0,1fr) minmax(0,1.2fr) max-content 16px;column-gap:10px;align-items:center">'
+      +'<span class="fs" style="'+HC+'">Client / Mission</span><span class="fs" style="'+HC+'">Offre</span><span class="fs" style="'+HC+'">Rôle CEO</span><span class="fs" style="'+HC+'">Prochaine action</span><span class="fs" style="'+HC+'">Échéance</span><span style="'+HC+'"></span>'
+      +rows+'</div>'+(list.length>6?('<div class="fs" style="margin-top:8px;text-align:center">'+(list.length-6)+' autre(s) mission(s) · filtre par offre pour les voir</div>'):''))
+      :'<div style="text-align:center;padding:26px 8px"><div style="font-size:38px">🗂️✨</div><div style="font-weight:700;margin-top:8px">Aucune mission ici pour l\'instant</div><div class="fs" style="margin-top:6px">« ＋ Ajouter une mission » : une mission = une prestation vendue (ex : Evocore · Storytelling de marque).</div></div>')
+      +'</div>';
+    // ---------- à surveiller (4 max) ----------
+    const al=[];
+    actives.filter(m=>m.sante==='rouge').forEach(m=>al.push({ic:'❗',c:'#D4483B',t:esc(m.client)+' : '+esc(m.next||m.nom||'intervention urgente'),s:'santé rouge'+(m.echeance?(' · '+dmy(m.echeance).slice(0,5)):''),id:m.id}));
+    actives.filter(m=>m.echeance&&m.echeance<today&&m.sante!=='rouge').forEach(m=>al.push({ic:'⏰',c:'#C77F2A',t:esc(m.client)+' : '+esc(m.next||'échéance dépassée'),s:'en retard → impact possible',id:m.id}));
+    actives.filter(m=>(m.blocages||[]).length).forEach(m=>al.push({ic:'⛔️',c:'#C77F2A',t:esc(m.client)+' : '+esc((m.blocages||[])[0]),s:'dépendance client',id:m.id}));
+    actives.filter(m=>m.sante==='orange'&&!(m.blocages||[]).length&&!(m.echeance&&m.echeance<today)).forEach(m=>al.push({ic:'🟠',c:'#C77F2A',t:esc(m.client)+' : '+esc(m.next||m.nom||'vigilance'),s:m.echeance?('avant le '+dmy(m.echeance).slice(0,5)):'vigilance',id:m.id}));
+    const survH='<div class="bgd-card" style="min-width:0"><div class="bgd-h">À surveiller</div>'
+      +(al.length?al.slice(0,4).map(a2=>'<div class="pjopen" data-id="'+a2.id+'" style="display:flex;gap:9px;padding:9px 0;border-bottom:1px solid #F0F1F6;cursor:pointer"><span>'+a2.ic+'</span><div style="min-width:0"><b style="font-size:12.5px;color:'+a2.c+'">'+a2.t+'</b><div class="fs">'+a2.s+'</div></div></div>').join('')
+      :'<div style="text-align:center;padding:22px 8px"><div style="font-size:36px">🧘</div><div class="fs" style="margin-top:6px">Rien d\'inquiétant : les alertes réelles (santé rouge, retards, blocages) arrivent ici.</div></div>')+'</div>';
+    // ---------- bas : interventions semaine + échéances ----------
+    const JN=['dim.','lun.','mar.','mer.','jeu.','ven.','sam.'];
+    const intervH='<div class="bgd-card" style="min-width:0"><div class="bgd-h">📅 Mes interventions cette semaine</div>'
+      +(interv.length?interv.slice(0,6).map(m=>'<div class="pjopen" data-id="'+m.id+'" style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #F0F1F6;cursor:pointer;flex-wrap:wrap"><b style="color:'+V+';font-size:12.5px;min-width:76px">'+JN[new Date(m.echeance).getDay()]+' '+dmy(m.echeance).slice(0,5)+'</b><b style="font-size:13px">'+esc(m.client)+'</b><span class="fs" style="flex:1;min-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(m.next||'·')+'</span>'+(m.roleCeo?('<span class="bgd-badge" style="background:#F4F2FB;color:#4C3BB8;font-size:10.5px">'+esc(String(m.roleCeo).split(/[\/·,]/)[0].trim())+'</span>'):'')+'</div>').join('')
+      :'<div class="fs" style="padding:10px 0">Rien qui t\'attende cette semaine dans les missions 🎉</div>')+'</div>';
+    const ech2=[];
+    actives.forEach(m=>{(m.livrables||[]).forEach(l=>{if(l.date&&l.date>=today)ech2.push({d:l.date,client:m.client,t:l.nom,ty:l.statut==='à valider'?'Validation':'Livrable',id:m.id});});if(m.echeance&&m.echeance>=today)ech2.push({d:m.echeance,client:m.client,t:m.next||m.nom,ty:'Échéance',id:m.id});});
+    ech2.sort((a2,b2)=>String(a2.d).localeCompare(String(b2.d)));
+    const echH='<div class="bgd-card" style="min-width:0"><div class="bgd-h">🗓️ Échéances à venir</div>'
+      +(ech2.length?ech2.slice(0,6).map(e2=>'<div class="pjopen" data-id="'+e2.id+'" style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #F0F1F6;cursor:pointer"><b style="color:#2E9E6B;font-size:12.5px;min-width:46px">'+dmy(e2.d).slice(0,5)+'</b><b style="font-size:13px">'+esc(e2.client)+'</b><span class="fs" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(e2.t)+'</span><span class="bgd-badge" style="background:#E7F5EC;color:#1F8A5D;font-size:10.5px">'+e2.ty+'</span></div>').join('')
+      :'<div class="fs" style="padding:10px 0">Les dates des missions et livrables apparaîtront ici.</div>')+'</div>';
+    host.innerHTML=tabH+kpis
+      +'<div class="bgd-grid" style="grid-template-columns:minmax(0,2.4fr) minmax(0,1fr);margin-bottom:14px">'+tableH+survH+'</div>'
+      +'<div class="bgd-grid" style="grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)">'+intervH+echH+'</div>';
+    host.querySelectorAll('.pjtab').forEach(b2=>b2.onclick=()=>{window.PJ_TAB=b2.dataset.t;renderProjetsView();});
+    host.querySelectorAll('.pjopen').forEach(el=>el.onclick=()=>{window.PJ_SEL=el.dataset.id;renderProjetsView();});
+    const ad=$('pjadd'); if(ad)ad.onclick=async()=>{
+      const c2=prompt('Client (ex : Evocore) :');if(!c2)return;
+      const n2=prompt('Intitulé de la mission (ex : Storytelling de marque) :')||'';
+      const o2=prompt('Offre (Storytelling / Influence / Social Media / 360°) :','Influence')||'Influence';
+      const rc=prompt('Ton rôle CEO (ex : Autrice / Lead stratégique · vide si aucun) :')||'';
+      const nx=prompt('Prochaine action concrète :')||'';
+      const ec=prompt('Échéance de la prochaine étape (AAAA-MM-JJ) :')||'';
+      await api('/api/missions',{method:'POST',body:JSON.stringify({op:'create',client:c2,nom:n2,offre:o2,roleCeo:rc,next:nx,echeance:ec})});
+      renderProjetsView();
+    };
+  }catch(e){host.innerHTML='<div class="state">Erreur de chargement.</div>';}
 }
 // ===== Vue RH : dashboard absences + documents (mock-up de Mélany du 19/07) ==
 // Codes visuels de la page Budget : cartes blanches arrondies, pastilles pastel,
