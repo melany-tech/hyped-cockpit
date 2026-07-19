@@ -818,6 +818,8 @@ function statCardGo(act){
   else if(act==='contenus') navToView('contenus');
   else { navToView('cockpit'); setTimeout(()=>{const el=$('todopanel'); if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},220); } // à traiter / relances → priorités
 }
+function chDecl(ci){ if(!ci||!ci.at||(Date.now()-ci.at)>8*86400000) return {lbl:'charge non renseignée',bg:'#EFF1F3',fg:'#7A828C',lvl:0}; return ci.level===3?{lbl:'débordée 🔴',bg:'#FBE5E0',fg:'#D4483B',lvl:3}:(ci.level===2?{lbl:'chargée 🟠',bg:'#FDF0E0',fg:'#C77F2A',lvl:2}:{lbl:'à l\'aise 🟢',bg:'#E7F5EC',fg:'#1F8A5D',lvl:1}); }
+function chDeclBadge(ci){const c=chDecl(ci);return '<span class="bgd-badge" style="background:'+c.bg+';color:'+c.fg+';font-size:10.5px">'+c.lbl+'</span>';}
 let CURRENT_VIEW='cockpit';
 const CUSTOM_VIEWS={campagnes:'campagnesview',contacts:'contactsview',rapports:'rapportsview',calendrier:'calendrierview',historique:'historiqueview',marques:'marquesview',todo:'todoview',processus:'processview',budget:'budgetview',rh:'rhview',roadmap:'roadmapview',finance:'financeview',commercial:'commercialview',projets:'projetsview'};
 function hideAllViews(){ ['campagnesview','contactsview','rapportsview','calendrierview','historiqueview','marquesview','todoview','processview','budgetview','rhview','roadmapview','financeview','commercialview','projetsview','soonview'].forEach(id=>{const e=$(id);if(e)e.style.display='none';}); }
@@ -1067,11 +1069,11 @@ async function renderProjetsView(){
   const chCol=(c)=>c>100?'#D4483B':(c>=85?'#C77F2A':(c>=70?'#B98A12':'#2E9E6B'));
   const AVC=['#6D5AE0','#E8865D','#2C9087','#B98A12','#4A7FB5'];
   const persH='<div class="bgd-card" style="margin-top:14px"><div class="bgd-h">👥 Par personne</div>'
-    +(mem.length?mem.map((m,mi)=>{const c=Math.min(150,(m.open||0)*8+(m.late||0)*12);
+    +(mem.length?mem.map((m,mi)=>{
       return '<div style="display:grid;grid-template-columns:26px minmax(90px,max-content) minmax(0,1fr) max-content max-content max-content;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid #F0F1F6">'
       +'<span style="width:26px;height:26px;border-radius:50%;background:'+AVC[mi%AVC.length]+';color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:11px">'+esc(String(m.name).slice(0,1).toUpperCase())+'</span>'
       +'<b>'+esc(m.name)+'</b>'
-      +'<div class="ceobar"><div style="width:'+Math.min(100,c)+'%;background:'+chCol(c)+'"></div></div>'
+      +'<span>'+chDeclBadge(m.checkin)+'</span>'
       +'<span class="fs">'+(m.open||0)+' tâche(s)</span>'
       +(m.late?('<span class="bgd-badge" style="background:#FBE5E0;color:#D4483B">'+m.late+' retard(s)</span>'):'<span class="bgd-badge" style="background:#E7F5EC;color:#2E9E6B">à jour</span>')
       +(m.absence?('<span class="bgd-badge" style="background:#F5EFE2;color:#B98A12">🏖️ → '+dmy(m.absence.au)+'</span>'):'<span></span>')
@@ -1242,8 +1244,8 @@ async function renderRhView(){
     +fdetH+'</div></div>'):'';
   let supTop='';
   if(sup){
-    const mem2=((dg&&dg.members)||[]).map(m=>({...m,charge:Math.min(150,(m.open||0)*8+(m.late||0)*12)}));
-    const band=mem2.length?Math.max(0,100-Math.round(mem2.reduce((s2,m)=>s2+Math.min(m.charge,100),0)/mem2.length)):0;
+    const mem2=((dg&&dg.members)||[]).map(m=>({...m,decl:chDecl(m.checkin),charge:Math.min(150,(m.open||0)*8+(m.late||0)*12)}));
+    const nBusy2=mem2.filter(m=>m.decl.lvl===3).length,nDecl2=mem2.filter(m=>m.decl.lvl>0).length;
     const chCol2=(c)=>c>100?'#D4483B':(c>=85?'#C77F2A':(c>=70?'#B98A12':'#2E9E6B'));
     const klink=(txt,id2)=>'<a class="lk rhjump" data-j="'+id2+'" style="border:none;background:none;padding:2px 0 0;color:#6D5AE0;font-weight:700;font-size:12px">'+txt+' →</a>';
     const kpi5=(ic,bg,lbl,val,sub)=>'<div class="bgd-card" style="min-width:0"><div style="display:flex;gap:12px;align-items:flex-start">'+kic(ic,bg)+'<div style="min-width:0;flex:1"><div class="bgd-klbl">'+lbl+'</div><div class="bgd-kval" style="font-size:22px">'+val+'</div>'+sub+'</div></div></div>';
@@ -1251,7 +1253,7 @@ async function renderRhView(){
       +kpi5('👥','#EEEBFB','Effectif',String(fiches.length),'<div class="bgd-ksub" style="color:#2E9E6B;font-weight:700">équipe au complet</div>')
       +kpi5('🏖️','#FDF0E0','Congés en attente',String(absPend.length),klink('Voir les demandes','rhcard-dem'))
       +kpi5('📅','#E7F0FA','Entretiens à planifier','0','<div class="bgd-ksub">à noter dans les fiches</div>')
-      +kpi5('💠','#EEEBFB','Capacité équipe',band+' %','<div class="bgd-ksub">Charge moyenne</div><div class="ceobar" style="margin-top:5px"><div style="width:'+(100-band)+'%;background:#2E9E6B"></div></div>')
+      +kpi5('💠','#EEEBFB','Charge déclarée',(nDecl2?(nBusy2?(nBusy2+' 🔴'):'ok 🟢'):'à sonder'),'<div class="bgd-ksub">'+(nDecl2?(nDecl2+'/'+mem2.length+' réponses cette semaine'):'check-in Slack le lundi 🧘')+'</div>')
       +kpi5('📄','#FBE5E0','Documents manquants',String(docsMissing),klink('Voir les documents','rhcard-doc'))
       +'</div>';
     const CT={'cdi':['#E7F0FA','#2F6DB5'],'cdd':['#FDF0E0','#C77F2A'],'alternance':['#F4F2FB','#4C3BB8'],'stage':['#F4F2FB','#4C3BB8'],'freelance':['#E7F5EC','#2E9E6B']};
@@ -1261,12 +1263,12 @@ async function renderRhView(){
     const chargeOf=(n)=>{const m=mem2.find(x=>nlow(x.name)===nlow(n));return m?m.charge:0;};
     const equipeH='<div class="bgd-card" style="min-width:0"><div class="bgd-h">Équipe ('+fiches.length+') <a class="lk rhjump" data-j="rhcard-fiches" style="float:right">Voir toute l\'équipe →</a></div>'
       +'<div style="width:100%;display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1.1fr) max-content max-content minmax(0,1fr) 22px;column-gap:9px;align-items:center">'
-      +'<span class="fs" style="'+HC+'">Collaborateur</span><span class="fs" style="'+HC+'">Poste</span><span class="fs" style="'+HC+'">Contrat</span><span class="fs" style="'+HC+'">Dispo</span><span class="fs" style="'+HC+'">Documents</span><span style="'+HC+'"></span>'
-      +fiches.map((f,i)=>{const ch=chargeOf(f.name);const dispo=Math.max(0,100-Math.min(100,ch));const dot=chCol2(ch);const dep=docState.find(x=>nlow(x.who)===nlow(f.name));
+      +'<span class="fs" style="'+HC+'">Collaborateur</span><span class="fs" style="'+HC+'">Poste</span><span class="fs" style="'+HC+'">Contrat</span><span class="fs" style="'+HC+'">Charge</span><span class="fs" style="'+HC+'">Documents</span><span style="'+HC+'"></span>'
+      +fiches.map((f,i)=>{const m3=mem2.find(x=>nlow(x.name)===nlow(f.name));const dc=chDecl(m3?m3.checkin:null);const dot=(dc.lvl===3?'#D4483B':(dc.lvl===2?'#C77F2A':(dc.lvl===1?'#2E9E6B':'#C9CED4')));const dep=docState.find(x=>nlow(x.who)===nlow(f.name));
         return '<span style="'+DC+'">'+avatar(f.name,i)+'<span style="width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:'+dot+'"></span><b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(f.name)+'</b></span>'
         +'<span style="'+DC+'"><span class="fs" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(f.role)+'</span></span>'
         +'<span style="'+DC+'">'+ctB(f.contrat)+'</span>'
-        +'<span style="'+DC+'"><b style="font-size:12px">'+dispo+' %</b></span>'
+        +'<span style="'+DC+'">'+chDeclBadge(m3?m3.checkin:null)+'</span>'
         +'<span style="'+DC+'">'+(f.role==='direction'?'<span class="fs">·</span>':(dep&&dep.dep?bOk('Documents OK'):bWarn('En attente')))+'</span>'
         +'<button class="lk rhopen" data-n="'+esc(f.name)+'" title="Ouvrir la fiche" style="border:none;background:none;padding:6px 0">…</button>';}).join('')
       +'</div></div>';
@@ -1284,8 +1286,8 @@ async function renderRhView(){
       +'<div class="fs" style="text-align:center;margin-bottom:10px">Chaque collaborateur dispose d\'une fiche RH complète et à jour.</div>'
       +CHK.map(x2=>'<div style="display:flex;align-items:center;gap:8px;padding:5px 0"><span style="width:16px;height:16px;flex:0 0 16px;border-radius:50%;background:#E7F5EC;color:#2E9E6B;font-size:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:800">✓</span><span style="font-size:12.5px">'+x2+'</span></div>').join('')
       +'<button class="lk rhjump" data-j="rhcard-fiches" style="margin-top:auto;width:100%;background:#6D5AE0;color:#fff;border-color:#6D5AE0;padding:11px;border-radius:12px;font-weight:700">Accéder aux fiches RH →</button></div>';
-    const chargeH2='<div class="bgd-card" style="min-width:0"><div class="bgd-h">Charge de travail <span class="cpsub">ce mois · approximatif</span></div>'
-      +mem2.map((m,i)=>'<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid #F0F1F6">'+avatar(m.name,i)+'<b style="min-width:74px;font-size:12.5px">'+esc(m.name)+'</b><div class="ceobar" style="flex:1"><div style="width:'+Math.min(100,m.charge)+'%;background:'+chCol2(m.charge)+'"></div></div><b style="color:'+chCol2(m.charge)+';min-width:44px;text-align:right;font-size:12.5px">'+m.charge+' %</b></div>').join('')
+    const chargeH2='<div class="bgd-card" style="min-width:0"><div class="bgd-h">Charge de travail <span class="cpsub">déclarée au check-in Slack du lundi</span></div>'
+      +mem2.map((m,i)=>'<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid #F0F1F6">'+avatar(m.name,i)+'<b style="min-width:74px;font-size:12.5px">'+esc(m.name)+'</b><span style="flex:1"></span>'+chDeclBadge(m.checkin)+(m.late?'<span class="bgd-badge" style="background:#FBE5E0;color:#D4483B;font-size:10.5px">'+m.late+' retard(s)</span>':'')+'</div>').join('')
       +'</div>';
     const ech=[];
     const jn=(dd)=>Math.ceil((new Date(dd)-new Date(today))/86400000);
@@ -2037,10 +2039,10 @@ async function loadCeoPanel(){
     const props=((cb&&cb.proposals)||[]).filter(x=>x.categorie==='decision'&&x.status==='pending'&&nlow(x.cpName||'')===nlow(VIEWER.name));
     const arbs=(ceo&&ceo.arbitrages)||[];
     const nDec=arbs.length+props.length;
-    const mem=((dg&&dg.members)||[]).map((m,i)=>({...m,charge:Math.min(150,(m.open||0)*8+(m.late||0)*12)}));
-    const band=mem.length?Math.max(0,100-Math.round(mem.reduce((s,m)=>s+Math.min(m.charge,100),0)/mem.length)):0;
+    const mem=((dg&&dg.members)||[]).map((m,i)=>({...m,decl:chDecl(m.checkin)}));
+    const nBusy=mem.filter(m=>m.decl.lvl===3).length,nDecl=mem.filter(m=>m.decl.lvl>0).length;
     const absP=((rh&&rh.absences)||[]).filter(a=>a.statut==='en attente');
-    const surcharge=mem.filter(m=>m.charge>100).length;
+    const surcharge=nBusy;
     // ---------- ligne 1 : 5 KPIs avec sparklines ----------
     const kpi=(ic,bgc,lbl,val,sub,extra,link,go,lc)=>'<div class="bgd-card" style="min-width:0;display:flex;flex-direction:column;gap:2px"><div style="display:flex;gap:12px;align-items:flex-start"><div style="width:48px;height:48px;flex:0 0 48px;border-radius:50%;background:'+bgc+';display:flex;align-items:center;justify-content:center;font-size:20px">'+ic+'</div><div style="min-width:0;flex:1"><div class="bgd-klbl">'+lbl+'</div><div class="bgd-kval" style="font-size:23px">'+val+'</div><div class="bgd-ksub">'+sub+'</div></div></div>'+(extra||'')+'<a class="lk ceogo" data-go="'+go+'" style="border:none;background:none;padding:4px 0 0;color:'+lc+';font-weight:700;font-size:12.5px">'+link+' →</a></div>';
     const kpis='<div class="bgd-kpis" style="grid-template-columns:repeat(auto-fit,minmax(225px,1fr));margin-bottom:14px">'
@@ -2048,7 +2050,7 @@ async function loadCeoPanel(){
       +kpi('💰','#EEEBFB','Encaissé ce mois',caMois!==null?eur(caMois):'à venir',caMois!==null?('vs mois dernier '+(caPct!==null?pctTxt(caPct):'· n/d')):'branche Pennylane pour le réel',spark(caSerie.some(v=>v>0)?caSerie:null,'#7C5CFA'),'Voir le détail finance','finance','#7C5CFA')
       +kpi('🔽','#E7F0FA','Pipeline commercial',eur(crmStats.pipeline),'prévisionnel en cours','<div style="margin-top:6px"><span style="color:'+V+';font-weight:700;font-size:12.5px">'+crmStats.actifs+' opportunité(s) active(s)</span></div>','Voir le pipeline','commercial','#2F6DB5')
       +kpi('🗳️','#FDF0E0','Projets à arbitrer',String(nDec),'décision(s) requise(s)','','Voir les décisions','__dec','#C77F2A')
-      +kpi('👥','#FBE5E0','Bande passante équipe',band+' %','capacité restante','<div style="margin-top:6px"><span class="fs">approximation basée sur les tâches</span></div>','Voir la charge','projets','#D4483B')
+      +kpi('👥','#FBE5E0','Charge équipe (déclarée)',(nDecl?(nBusy?(nBusy+' 🔴'):'ok 🟢'):'<span style="font-size:15px">à sonder</span>'),(nDecl?(nDecl+'/'+mem.length+' réponses au check-in Slack'):'check-in Slack chaque lundi 🧘'),'','Voir le détail','rh','#D4483B')
       +'</div>';
     // ---------- ligne 2 ----------
     const tasks=((td&&td.tasks)||[]);
@@ -2096,14 +2098,14 @@ async function loadCeoPanel(){
     const rhH='<div class="bgd-card" style="height:100%"><div class="bgd-h">👥 RH & équipe <a class="lk ceogo" data-go="rh" style="float:right">Voir la fiche équipe complète →</a></div>'
       +'<div style="width:100%;display:grid;grid-template-columns:1fr 1.4fr;gap:9px;margin:8px 0">'
       +'<div style="border:1px solid #F0F1F6;border-radius:12px;padding:10px"><div class="fs" style="font-size:11px">Effectif</div><div style="font-weight:800;font-size:20px">'+((dg&&dg.members)?dg.members.length+1:'·')+'</div><div class="fs">toi comprise</div></div>'
-      +'<div style="border:1px solid #F0F1F6;border-radius:12px;padding:10px"><div class="fs" style="font-size:11px">Capacité restante équipe</div><div style="font-weight:800;font-size:20px">'+band+' %</div><div class="ceobar" style="margin-top:5px"><div style="width:'+(100-band)+'%;background:'+chCol(100-band)+'"></div></div></div>'
+      +'<div style="border:1px solid #F0F1F6;border-radius:12px;padding:10px"><div class="fs" style="font-size:11px">Charge déclarée (check-in)</div><div style="font-weight:800;font-size:16px;margin-top:4px">'+(nDecl?(mem.filter(m=>m.decl.lvl===1).length+' 🟢 · '+mem.filter(m=>m.decl.lvl===2).length+' 🟠 · '+nBusy+' 🔴'):'à sonder lundi 🧘')+'</div></div>'
       +'</div>'
       +'<div style="width:100%;display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:8px">'
       +'<div class="ceogo" data-go="rh" style="border:1px solid #F0F1F6;border-radius:12px;padding:10px;cursor:pointer"><div class="fs" style="font-size:11px">🏖️ Congés en attente</div><div style="font-weight:800;font-size:18px">'+absP.length+'</div><div class="fs">demande(s)</div></div>'
       +'<div class="ceogo" data-go="projets" style="border:1px solid #F0F1F6;border-radius:12px;padding:10px;cursor:pointer"><div class="fs" style="font-size:11px">⚠️ À risque surcharge</div><div style="font-weight:800;font-size:18px">'+surcharge+'</div><div class="fs">collaborateur(s)</div></div>'
       +'</div>'
       +'<div class="fs" style="font-weight:700;margin:4px 0">Membres de l\'équipe</div>'
-      +mem.slice(0,4).map((m,i)=>'<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid #F0F1F6"><span style="width:26px;height:26px;flex:0 0 26px;border-radius:50%;background:'+AVC[i%AVC.length]+';color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:11px">'+esc(String(m.name).slice(0,1).toUpperCase())+'</span><div style="min-width:0;flex:1"><b style="font-size:12.5px">'+esc(m.name)+'</b><div class="fs" style="font-size:10.5px">'+esc(m.role==='team'?'Social Media Manager':'Cheffe de projet')+'</div></div><b style="color:'+chCol(m.charge)+';font-size:12px">'+m.charge+' %</b><div class="ceobar" style="width:74px"><div style="width:'+Math.min(100,m.charge)+'%;background:'+chCol(m.charge)+'"></div></div><a class="lk ceogo" data-go="rh" title="Fiche RH">📄</a></div>').join('')
+      +mem.slice(0,4).map((m,i)=>'<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid #F0F1F6"><span style="width:26px;height:26px;flex:0 0 26px;border-radius:50%;background:'+AVC[i%AVC.length]+';color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:11px">'+esc(String(m.name).slice(0,1).toUpperCase())+'</span><div style="min-width:0;flex:1"><b style="font-size:12.5px">'+esc(m.name)+'</b><div class="fs" style="font-size:10.5px">'+esc(m.role==='team'?'Social Media Manager':'Cheffe de projet')+'</div></div>'+chDeclBadge(m.checkin)+(m.late?'<span class="bgd-badge" style="background:#FBE5E0;color:#D4483B;font-size:10.5px">'+m.late+' retard(s)</span>':'')+'<a class="lk ceogo" data-go="rh" title="Fiche RH">📄</a></div>').join('')
       +'<div class="fs" style="margin-top:8px">🛡️ Chaque collaborateur dispose d\'une fiche RH complète (documents, RIB, congés, notes…).</div></div>';
     const decH='<div class="bgd-card" style="height:100%" id="ceocard-dec"><div class="bgd-h">🗳️ Décisions du jour</div><div class="fs" style="margin:2px 0 4px">Se remplit tout seul : ⚖️ quand une CP te demande un arbitrage (bouton « Arbitrage CEO » dans son cockpit) + 📬 quand tes boîtes mail attendent une décision.</div>'
       +((arbs.length||props.length)?(
@@ -3626,7 +3628,11 @@ async function addProfil(){
   const cp=($('srccp')&&$('srccp').value)?$('srccp').value:null;
   $('srcprofil').value='';
   const body={profil,marque}; if(cp)body.responsable=cp;
-  await api('/api/sourcing',{method:'POST',body:JSON.stringify(body)});
+  const r=await api('/api/sourcing',{method:'POST',body:JSON.stringify(body)});
+  if(!r.ok){const d=await r.json().catch(()=>({}));
+    if(d&&d.error==='doublon'&&d.doublon){alert('🚫 Doublon : ce profil est déjà dans la liste pour '+d.doublon.marque+' (chez '+d.doublon.qui+', statut « '+d.doublon.statut+' »).\n\nLe même profil pour une AUTRE marque reste possible : change la marque et réessaie 😉');}
+    else if(d&&d.error){alert(d.error);}
+  }
   loadSourcing(); loadDrafts();
 }
 async function markContacted(btn){

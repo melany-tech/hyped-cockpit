@@ -401,6 +401,7 @@ app.get("/api/dirigeant", auth, async (req, res) => {
         const rhO = loadRh();
         const absNow = (rhO.absences || []).find((x) => x.statut === "validée" && normName(x.who) === normName(u.name) && x.du <= today && today <= x.au) || null;
         return { name: u.name, role: u.role, open: mine.length, late, mails,
+          checkin: (rhO.checkin || {})[normName(u.name)] || null,
           absence: absNow ? { type: absNow.type, au: absNow.au } : null,
           lastAct: last ? { type: last.type, creator: last.creator, at: last.at } : null };
       });
@@ -2958,6 +2959,25 @@ app.post("/api/sourcing", auth, async (req, res) => {
   if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
   const profil = String(req.body?.profil || "").trim();
   if (!profil) return res.status(400).json({ error: "profil vide" });
+  // Anti-doublon (demande de Mélany) : même profil déjà posé pour la MÊME marque -> refus explicite,
+  // peu importe la CP. Le même profil sur une AUTRE marque reste autorisé.
+  const normHandle = (x) => {
+    const m1 = String(x || "").match(/instagram\.com\/([A-Za-z0-9._]+)/i); if (m1) return m1[1].toLowerCase();
+    const m2 = String(x || "").match(/@([A-Za-z0-9._]+)/); if (m2) return m2[1].toLowerCase();
+    return nlow(String(x || "").replace(/^contacter\s+/i, "")).trim();
+  };
+  const marqueIn = String(req.body?.marque || "");
+  const lienIn0 = req.body?.lien || (/^https?:\/\//i.test(profil) ? profil : null);
+  if (marqueIn) {
+    try {
+      const h = normHandle(lienIn0 || profil);
+      if (h && h.length > 2) {
+        const allT = await fetchAllTasks();
+        const dup = allT.find((t) => t.type === "Prise de contact" && String(t.projet || "") === marqueIn && normHandle(t.lien || t.task) === h);
+        if (dup) return res.status(409).json({ error: "doublon", doublon: { qui: dup.responsable || "à attribuer", statut: dup.statut || "?", marque: marqueIn } });
+      }
+    } catch (e) {}
+  }
   const props = {
     "Tâche": { title: [{ text: { content: profil } }] },
     "Type": { select: { name: "Prise de contact" } },
@@ -3521,9 +3541,25 @@ async function remindTick() {
     let slot = null;
     if (hm >= 630 && hm < 720) slot = "am";        // 10h30 → 12h00
     else if (hm >= 1050 && hm < 1080) slot = "pm"; // 17h30 → 17h59, jamais après 18h
-    if (!slot) return;
+    let ck = null;
+    if (day === 1 && hm >= 570 && hm < 720) ck = "mon";        // lundi 9h30 -> 12h : check-in de début de semaine
+    else if (day === 5 && hm >= 990 && hm < 1080) ck = "fri";  // vendredi 16h30 -> 18h : bilan
+    if (!slot && !ck) return;
     const today = now.toISOString().slice(0, 10);
     const st = loadRemind();
+    if (ck && st["last_ck_" + ck] !== today) {
+      const q = ck === "mon"
+        ? "🧘 *Check-in du lundi* ▸ comment tu te sens niveau charge cette semaine ?\nRéponds simplement : *1* = à l'aise 🟢 · *2* = chargée 🟠 · *3* = débordée 🔴\nTa réponse s'affiche dans le cockpit et aide Mélany à répartir ✨"
+        : "🧘 *Bilan de la semaine* ▸ c'était comment niveau charge ?\nRéponds : *1* = tranquille 🟢 · *2* = chargée 🟠 · *3* = débordée 🔴 🤍";
+      for (const u2 of USERS) {
+        if (COPILOT.departed.includes(String(u2.email || "").toLowerCase())) continue;
+        const sid2 = (COPILOT.slackIds || {})[String(u2.email || "").toLowerCase()];
+        if (!sid2) continue;
+        try { await copilotNotify({ slackUser: sid2, text: q }); } catch (e) {}
+      }
+      st["last_ck_" + ck] = today; saveRemind(st);
+    }
+    if (!slot) return;
     if (st["last_" + slot] === today) return;
     const all = await fetchAllTasks();
     for (const u of USERS) {
@@ -3544,7 +3580,7 @@ async function remindTick() {
           ? "Avant de partir 🌙 il reste « " + late[0].task + " » en retard. Si c'est réglé, réponds « c'est fait » et je m'occupe de Notion ✨"
           : "Avant de partir 🌙 petit point de fin de journée, il reste " + late.length + " tâches en retard :\n" + lignes + "\nSi certaines sont réglées, dis-le-moi et je mets Notion à jour ✨";
       }
-      await copilotNotify({ slackUser: sid, text: txt });
+      await copilotNotify({ slackUser: sid, text: "🔔 *Rappel auto*\n" + txt });
       st.byUser[sid] = { at: Date.now(), tasks: late.map((t) => ({ id: t.id, task: t.task })) };
     }
     st["last_" + slot] = today;
@@ -3609,6 +3645,21 @@ async function hypedbotTaskIntent(ev, who, raw, low, say) {
   }
   return true;
 }
+async function hypedbotChargeIntent(ev, who, low, say) {
+  const t = String(low || "").trim();
+  if (t.length > 45) return false;
+  let level = 0;
+  if (/^1$/.test(t) || /\baise\b|a l aise|tranquille/.test(t)) level = 1;
+  else if (/^2$/.test(t) || /chargee?\b/.test(t)) level = 2;
+  else if (/^3$/.test(t) || /debord|surchar/.test(t)) level = 3;
+  if (!level) return false;
+  const o = loadRh(); o.checkin = o.checkin || {};
+  o.checkin[normName(who.name)] = { level, at: Date.now() };
+  saveRh(o);
+  const lbl = level === 1 ? "à l'aise 🟢" : (level === 2 ? "chargée 🟠" : "débordée 🔴");
+  await say("Merci ! Charge notée : *" + lbl + "* · visible dans le cockpit. " + (level === 3 ? "Courage, Mélany va pouvoir ajuster 🤍" : "Belle journée ✨"));
+  return true;
+}
 async function hypedbotHandle(ev) {
   const channel = ev.channel;
   const say = (text) => copilotNotify({ slackUser: channel, text });
@@ -3620,6 +3671,7 @@ async function hypedbotHandle(ev) {
   const plain = raw.replace(/<[^>]*>/g, " ");
   const low = nlow(plain);
   // réponses aux relances (« c'est fait », merci…) : prioritaires sur le flux « ajout de profil »
+  if (!links.length) { try { if (await hypedbotChargeIntent(ev, who, low, say)) return; } catch (e) { try { console.error("[hypedbot charge]", e.message); } catch (e2) {} } }
   if (!links.length) { try { if (await hypedbotDoneIntent(ev, who, low, say)) return; } catch (e) { try { console.error("[hypedbot done]", e.message); } catch (e2) {} } }
   if (!links.length) { try { if (await hypedbotTaskIntent(ev, who, raw, low, say)) return; } catch (e) { try { console.error("[hypedbot tache]", e.message); } catch (e2) {} } }
   const brand = quickBrandsList().find((b) => low.includes(nlow(b))) || "";
