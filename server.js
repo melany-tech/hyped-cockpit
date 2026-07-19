@@ -698,7 +698,8 @@ async function pennylaneSnapshot(force) {
     // 2) CA ENCAISSÉ (HT, factures clients réellement payées) : 12 derniers mois + derniers encaissements
     const lim = new Date(); lim.setMonth(lim.getMonth() - 12); const l0 = lim.toISOString().slice(0, 10);
     const y0 = new Date().getFullYear() + "-01-01";
-    const mensuel = {}; const factMensuel = {}; const lastPaid = [];
+    const mensuel = {}; const factMensuel = {}; const lastPaid = []; const clients = {};
+    const curM = new Date().toISOString().slice(0, 7);
     let lateN = 0, lateSum = 0, upcomN = 0, upcomSum = 0;
     let enc = 0; cursor = ""; let pages = 0, stop = false;
     do {
@@ -712,6 +713,14 @@ async function pennylaneSnapshot(force) {
         const mk2 = String(iv.date || "").slice(0, 7);
         // FACTURÉ : toutes les factures émises, avoirs en négatif (une facture annulée par avoir se neutralise)
         if (mk2) factMensuel[mk2] = (factMensuel[mk2] || 0) + ht;
+        const cn = ((iv.customer && iv.customer.name) || "").trim();
+        if (cn) {
+          const ck2 = cn.toLowerCase();
+          const c3 = (clients[ck2] = clients[ck2] || { nom: cn, lateN: 0, lateSum: 0, moisN: 0, lastPaid: null });
+          if (mk2 === curM) c3.moisN++;
+          if (iv.status === "late") { c3.lateN++; c3.lateSum += ht; }
+          if (iv.status === "paid" && !c3.lastPaid && ht > 0) c3.lastPaid = { date: iv.date || "", montant: Math.round(ht) };
+        }
         if (iv.status === "late") { lateN++; lateSum += ht; }
         else if (iv.status === "upcoming") { upcomN++; upcomSum += ht; }
         // ENCAISSÉ : statut strictement "paid". Une facture annulée par avoir est "cancelled" avec paid=true : ce n'est PAS un encaissement.
@@ -731,7 +740,7 @@ async function pennylaneSnapshot(force) {
     PL_CACHE = { at: Date.now(), treso: Math.round(treso * 100) / 100, ca: Math.round(enc * 100) / 100,
       caMois: mensuel[moisK] || 0, caPrevMois: mensuel[prevK] || 0, mensuel, lastPaid,
       factureMois: factMensuel[moisK] || 0, facturePrevMois: factMensuel[prevK] || 0, factMensuel,
-      lateN, lateSum: Math.round(lateSum), upcomN, upcomSum: Math.round(upcomSum), error: null };
+      lateN, lateSum: Math.round(lateSum), upcomN, upcomSum: Math.round(upcomSum), clients, error: null };
   } catch (e) {
     PL_CACHE = { ...PL_CACHE, at: Date.now(), error: String((e && e.message) || e).slice(0, 100) };
     try { console.error("[pennylane]", PL_CACHE.error); } catch (e2) {}
@@ -754,7 +763,7 @@ app.get("/api/ceo", auth, async (req, res) => {
     }
   } catch (e) {}
   res.json({ ok: true, treso: o.treso || null, ca: o.ca || null, tresoHist: o.tresoHist || [],
-    pennylane: pl2 ? { connected: true, at: pl2.at, treso: pl2.treso, ca: pl2.ca, caMois: pl2.caMois, caPrevMois: pl2.caPrevMois, mensuel: pl2.mensuel || {}, lastPaid: pl2.lastPaid || [], factureMois: pl2.factureMois || 0, facturePrevMois: pl2.facturePrevMois || 0, factMensuel: pl2.factMensuel || {}, lateN: pl2.lateN || 0, lateSum: pl2.lateSum || 0, upcomN: pl2.upcomN || 0, upcomSum: pl2.upcomSum || 0, error: pl2.error, annee: new Date().getFullYear() } : { connected: false },
+    pennylane: pl2 ? { connected: true, at: pl2.at, treso: pl2.treso, ca: pl2.ca, caMois: pl2.caMois, caPrevMois: pl2.caPrevMois, mensuel: pl2.mensuel || {}, lastPaid: pl2.lastPaid || [], factureMois: pl2.factureMois || 0, facturePrevMois: pl2.facturePrevMois || 0, factMensuel: pl2.factMensuel || {}, lateN: pl2.lateN || 0, lateSum: pl2.lateSum || 0, upcomN: pl2.upcomN || 0, upcomSum: pl2.upcomSum || 0, clients: pl2.clients || {}, error: pl2.error, annee: new Date().getFullYear() } : { connected: false },
     roadmap: o.roadmap || [], axes: RM_AXES, rmStatuts: RM_STATUTS, arbTypes: ARB_TYPES,
     arbitrages: (o.arbitrages || []).filter((a) => a.statut === "en attente").sort((a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999")) });
 });
@@ -975,6 +984,17 @@ async function ceoFacts() {
       for (const b of ["In Haircare", "Doucéa", "Curls Matter", "LIVA"]) {
         const bd = await budgetForBrand(b, new Date().toISOString().slice(0, 7));
         if (bd && bd.budgetMensuel > 0 && bd.total >= 0.8 * bd.budgetMensuel) faits.push({ go: "budget", t: b + " a consommé " + Math.round(100 * bd.total / bd.budgetMensuel) + " % de son budget mensuel (" + bd.total + " € / " + bd.budgetMensuel + " €)" });
+      }
+    } catch (e) {}
+    // Facturation automatique : mission MENSUELLE sans facture émise ce mois + retards du client (Pennylane)
+    try {
+      const plc = (PL_CACHE && PL_CACHE.clients) || {};
+      const curM2 = new Date().toISOString().slice(0, 7);
+      for (const m of (o.missions || [])) {
+        if (m.statut === "terminée" || !m.client) continue;
+        const c4 = plc[String(m.client).toLowerCase()];
+        if (String(m.recurrence || "").toLowerCase() === "mensuelle" && (!c4 || !c4.moisN)) faits.push({ go: "projets", t: "Facturer " + m.client + " ce mois-ci (mission " + (m.nom || m.offre || "récurrente") + ")" });
+        if (c4 && c4.lateN) faits.push({ go: "projets", t: m.client + " : " + c4.lateN + " facture(s) en retard (" + Math.round(c4.lateSum) + " €)" });
       }
     } catch (e) {}
     return faits;
@@ -3570,7 +3590,7 @@ async function remindTick() {
     if (hm >= 630 && hm < 720) slot = "am";        // 10h30 → 12h00
     else if (hm >= 1050 && hm < 1080) slot = "pm"; // 17h30 → 17h59, jamais après 18h
     let ck = null;
-    if (day === 1 && hm >= 570 && hm < 720) ck = "mon";        // lundi 9h30 -> 12h : check-in de début de semaine
+    if (day === 1 && hm >= 630 && hm < 720) ck = "mon"; // 10h30 -> 12h (demande de Mélany)        // lundi 9h30 -> 12h : check-in de début de semaine
     else if (day === 5 && hm >= 990 && hm < 1080) ck = "fri";  // vendredi 16h30 -> 18h : bilan
     if (!slot && !ck) return;
     const today = now.toISOString().slice(0, 10);
