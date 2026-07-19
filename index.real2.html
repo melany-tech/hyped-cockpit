@@ -1202,6 +1202,7 @@ async function renderRhView(){
       +infoCard('📞','TÉLÉPHONE',fsel.tel?esc(fsel.tel):'<span style="opacity:.5">à renseigner</span>')
       +infoCard('🏦','RIB / IBAN',fsel.iban?esc(fsel.iban):'<span style="opacity:.5">à renseigner</span>','stocké sur le disque sécurisé du cockpit')
       +infoCard('📅','CHEZ HYPED DEPUIS',fsel.arrivee?dmy(fsel.arrivee):'<span style="opacity:.5">à renseigner</span>',fsel.arrivee?dureeTxt(fsel.arrivee):'')
+      +infoCard('📑','CONTRAT',fsel.contrat?esc(fsel.contrat):'<span style="opacity:.5">à renseigner</span>')
       +infoCard('🏖️','CONGÉS',fsel.conges.left+' / '+fsel.conges.quota+' jour(s)','restants cette année')
       +infoCard('📄','DOCUMENTS',String(fsel.docs)+' déposé(s)','paie / factures · carte Documents ci-dessus')
       +'</div>'
@@ -1212,11 +1213,89 @@ async function renderRhView(){
     +'<div style="width:100%;display:grid;grid-template-columns:205px minmax(0,1fr);gap:16px;margin-top:8px;align-items:start">'
     +'<div style="display:flex;flex-direction:column;gap:7px">'+fiches.map((f,i)=>'<button class="lk rhfsel" data-n="'+esc(f.name)+'" style="display:flex;align-items:center;gap:8px;text-align:left;border-radius:12px;padding:8px 11px;'+(f.name===window.RH_FICHE_SEL?'background:#EEEBFB;border-color:#D9D2F6;color:#4C3BB8;font-weight:700':'')+'">'+avatar(f.name,i)+'<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(f.name)+'</span>'+(f.absence?'<span style="margin-left:auto">🏖️</span>':'')+'</button>').join('')+'</div>'
     +fdetH+'</div></div>'):'';
-  box.innerHTML=kpis
+  let supTop='';
+  if(sup){
+    const mem2=((dg&&dg.members)||[]).map(m=>({...m,charge:Math.min(150,(m.open||0)*8+(m.late||0)*12)}));
+    const band=mem2.length?Math.max(0,100-Math.round(mem2.reduce((s2,m)=>s2+Math.min(m.charge,100),0)/mem2.length)):0;
+    const chCol2=(c)=>c>100?'#D4483B':(c>=85?'#C77F2A':(c>=70?'#B98A12':'#2E9E6B'));
+    const klink=(txt,id2)=>'<a class="lk rhjump" data-j="'+id2+'" style="border:none;background:none;padding:2px 0 0;color:#6D5AE0;font-weight:700;font-size:12px">'+txt+' →</a>';
+    const kpi5=(ic,bg,lbl,val,sub)=>'<div class="bgd-card" style="min-width:0"><div style="display:flex;gap:12px;align-items:flex-start">'+kic(ic,bg)+'<div style="min-width:0;flex:1"><div class="bgd-klbl">'+lbl+'</div><div class="bgd-kval" style="font-size:22px">'+val+'</div>'+sub+'</div></div></div>';
+    const kpis5='<div class="bgd-kpis" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-bottom:14px">'
+      +kpi5('👥','#EEEBFB','Effectif',String(fiches.length),'<div class="bgd-ksub" style="color:#2E9E6B;font-weight:700">équipe au complet</div>')
+      +kpi5('🏖️','#FDF0E0','Congés en attente',String(absPend.length),klink('Voir les demandes','rhcard-dem'))
+      +kpi5('📅','#E7F0FA','Entretiens à planifier','0','<div class="bgd-ksub">à noter dans les fiches</div>')
+      +kpi5('💠','#EEEBFB','Capacité équipe',band+' %','<div class="bgd-ksub">Charge moyenne</div><div class="ceobar" style="margin-top:5px"><div style="width:'+(100-band)+'%;background:#2E9E6B"></div></div>')
+      +kpi5('📄','#FBE5E0','Documents manquants',String(docsMissing),klink('Voir les documents','rhcard-doc'))
+      +'</div>';
+    const CT={'cdi':['#E7F0FA','#2F6DB5'],'cdd':['#FDF0E0','#C77F2A'],'alternance':['#F4F2FB','#4C3BB8'],'stage':['#F4F2FB','#4C3BB8'],'freelance':['#E7F5EC','#2E9E6B']};
+    const ctB=(c)=>{if(!c)return '<span class="bgd-badge" style="background:#EFF1F3;color:#7A828C;font-size:10.5px">à définir</span>';const k=CT[String(c).toLowerCase()]||['#F4F2FB','#4C3BB8'];return '<span class="bgd-badge" style="background:'+k[0]+';color:'+k[1]+';font-size:10.5px">'+esc(c)+'</span>';};
+    const HC='padding:7px 0;border-bottom:1px solid #F0F1F6';
+    const DC='padding:9px 0;border-bottom:1px solid #F0F1F6;display:flex;align-items:center;min-width:0;gap:8px';
+    const chargeOf=(n)=>{const m=mem2.find(x=>nlow(x.name)===nlow(n));return m?m.charge:0;};
+    const equipeH='<div class="bgd-card" style="min-width:0"><div class="bgd-h">Équipe ('+fiches.length+') <a class="lk rhjump" data-j="rhcard-fiches" style="float:right">Voir toute l\'équipe →</a></div>'
+      +'<div style="width:100%;display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1.1fr) max-content max-content minmax(0,1fr) 22px;column-gap:9px;align-items:center">'
+      +'<span class="fs" style="'+HC+'">Collaborateur</span><span class="fs" style="'+HC+'">Poste</span><span class="fs" style="'+HC+'">Contrat</span><span class="fs" style="'+HC+'">Dispo</span><span class="fs" style="'+HC+'">Documents</span><span style="'+HC+'"></span>'
+      +fiches.map((f,i)=>{const ch=chargeOf(f.name);const dispo=Math.max(0,100-Math.min(100,ch));const dot=chCol2(ch);const dep=docState.find(x=>nlow(x.who)===nlow(f.name));
+        return '<span style="'+DC+'">'+avatar(f.name,i)+'<span style="width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:'+dot+'"></span><b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(f.name)+'</b></span>'
+        +'<span style="'+DC+'"><span class="fs" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(f.role)+'</span></span>'
+        +'<span style="'+DC+'">'+ctB(f.contrat)+'</span>'
+        +'<span style="'+DC+'"><b style="font-size:12px">'+dispo+' %</b></span>'
+        +'<span style="'+DC+'">'+(f.role==='direction'?'<span class="fs">·</span>':(dep&&dep.dep?bOk('Documents OK'):bWarn('En attente')))+'</span>'
+        +'<button class="lk rhopen" data-n="'+esc(f.name)+'" title="Ouvrir la fiche" style="border:none;background:none;padding:6px 0">…</button>';}).join('')
+      +'</div></div>';
+    const futures2=absAll.filter(a2=>a2.statut==='validée'&&a2.au>=today).sort((x,y)=>String(x.du).localeCompare(String(y.du)));
+    const nbJ=(a2)=>{const d1=new Date(a2.du),d2=new Date(a2.au);return Math.max(1,Math.round((d2-d1)/86400000)+1);};
+    const TYB={'congés payés':['#E7F5EC','#2E9E6B'],'rtt':['#FDF0E0','#C77F2A'],'maladie':['#FBE5E0','#D4483B']};
+    const tyB=(ty)=>{const k=TYB[String(ty||'').toLowerCase()]||['#F4F2FB','#4C3BB8'];return '<span class="bgd-badge" style="background:'+k[0]+';color:'+k[1]+';font-size:10.5px">'+esc(ty)+'</span>';};
+    const absH='<div class="bgd-card" style="min-width:0"><div class="bgd-h">Absences & congés <a class="lk ceogo2" data-go="calendrier" style="float:right">Voir le calendrier →</a></div>'
+      +(futures2.length?futures2.slice(0,5).map((a2,i)=>'<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #F0F1F6;flex-wrap:wrap">'+avatar(a2.who,i)+'<b style="font-size:12.5px">'+esc(a2.who)+'</b>'+tyB(a2.type)+'<span class="fs" style="flex:1;min-width:0;white-space:nowrap">'+dmy(a2.du).slice(0,5)+' → '+dmy(a2.au).slice(0,5)+'</span><b style="white-space:nowrap">'+nbJ(a2)+'j</b></div>').join('')
+        :'<div style="text-align:center;padding:20px 8px"><div style="font-size:36px">☀️</div><div class="fs" style="margin-top:6px">Toute l\'équipe est là dans les prochaines semaines.</div></div>')
+      +'<a class="lk rhjump" data-j="rhcard-dem" style="border:none;background:none;padding:8px 0 0;color:#6D5AE0;font-weight:700;font-size:12.5px">Voir toutes les absences →</a></div>';
+    const CHK=['Informations personnelles','Contrat de travail','RIB','Date d\'arrivée & ancienneté','Documents (paie, factures)','Congés & absences','Notes RH'];
+    const fichesRhH='<div class="bgd-card" style="min-width:0;display:flex;flex-direction:column"><div class="bgd-h">Fiches RH</div>'
+      +'<div style="text-align:center;margin:10px 0 6px"><span style="display:inline-flex;width:78px;height:78px;border-radius:50%;background:#EEEBFB;align-items:center;justify-content:center;font-size:36px;position:relative">📁<span style="position:absolute;right:-2px;bottom:-2px;width:24px;height:24px;border-radius:50%;background:#2E9E6B;color:#fff;font-size:13px;display:flex;align-items:center;justify-content:center">✓</span></span></div>'
+      +'<div class="fs" style="text-align:center;margin-bottom:10px">Chaque collaborateur dispose d\'une fiche RH complète et à jour.</div>'
+      +CHK.map(x2=>'<div style="display:flex;align-items:center;gap:8px;padding:5px 0"><span style="width:16px;height:16px;flex:0 0 16px;border-radius:50%;background:#E7F5EC;color:#2E9E6B;font-size:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:800">✓</span><span style="font-size:12.5px">'+x2+'</span></div>').join('')
+      +'<button class="lk rhjump" data-j="rhcard-fiches" style="margin-top:auto;width:100%;background:#6D5AE0;color:#fff;border-color:#6D5AE0;padding:11px;border-radius:12px;font-weight:700">Accéder aux fiches RH →</button></div>';
+    const chargeH2='<div class="bgd-card" style="min-width:0"><div class="bgd-h">Charge de travail <span class="cpsub">ce mois · approximatif</span></div>'
+      +mem2.map((m,i)=>'<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid #F0F1F6">'+avatar(m.name,i)+'<b style="min-width:74px;font-size:12.5px">'+esc(m.name)+'</b><div class="ceobar" style="flex:1"><div style="width:'+Math.min(100,m.charge)+'%;background:'+chCol2(m.charge)+'"></div></div><b style="color:'+chCol2(m.charge)+';min-width:44px;text-align:right;font-size:12.5px">'+m.charge+' %</b></div>').join('')
+      +'</div>';
+    const ech=[];
+    const jn=(dd)=>Math.ceil((new Date(dd)-new Date(today))/86400000);
+    absPend.forEach(a2=>ech.push({ic:'🏖️',t:'Demande à valider',c:'#C77F2A',sub:a2.who+' · '+a2.type+' · '+dmy(a2.du),d:a2.du,j:'rhcard-dem'}));
+    futures2.slice(0,3).forEach(a2=>ech.push({ic:'🌴',t:'Retour de congés',c:'#2E9E6B',sub:a2.who+' · retour le '+dmy(a2.au),d:a2.au,j:'rhcard-dem'}));
+    if(docsMissing){const fin=new Date();fin.setMonth(fin.getMonth()+1);fin.setDate(0);const finK=fin.toISOString().slice(0,10);ech.push({ic:'📄',t:'Documents du mois',c:'#2F6DB5',sub:docsMissing+' document(s) à déposer avant fin '+moisLbl.split(' ')[0],d:finK,j:'rhcard-doc'});}
+    fiches.forEach(f=>{if(f.arrivee){const dj=jn(f.arrivee);if(dj>=-30&&dj<=60)ech.push({ic:'🌱',t:'Intégration',c:'#2E9E6B',sub:f.name+' · arrivée le '+dmy(f.arrivee),d:f.arrivee,j:'rhcard-fiches'});}});
+    ech.sort((x,y)=>String(x.d).localeCompare(String(y.d)));
+    const echH='<div class="bgd-card" style="min-width:0"><div class="bgd-h">Échéances RH</div>'
+      +(ech.length?ech.slice(0,6).map(e2=>{const n2=jn(e2.d);return '<div class="rhjump" data-j="'+e2.j+'" style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #F0F1F6;cursor:pointer"><span style="font-size:16px">'+e2.ic+'</span><div style="min-width:0;flex:1"><b style="font-size:12.5px;color:'+e2.c+'">'+e2.t+'</b><div class="fs" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(e2.sub)+'</div></div><span class="bgd-badge" style="background:'+(n2<0?'#FBE5E0':'#F4F2FB')+';color:'+(n2<0?'#D4483B':'#4C3BB8')+';font-size:10.5px">'+(n2>=0?('J-'+n2):('J+'+Math.abs(n2)))+'</span></div>';}).join('')
+        :'<div style="text-align:center;padding:20px 8px"><div style="font-size:36px">🎉</div><div class="fs" style="margin-top:6px">Rien à l\'horizon : demandes, retours de congés, documents et intégrations apparaissent ici.</div></div>')
+      +'</div>';
+    const obox=(n2,r2,hl)=>'<div style="border:1px solid '+(hl?'#6D5AE0':'#E4E0F7')+';border-radius:12px;padding:7px 13px;text-align:center;background:#fff'+(hl?';box-shadow:0 2px 8px rgba(109,90,224,.15)':'')+'"><b style="font-size:12px">'+esc(n2)+'</b><div class="fs" style="font-size:10px">'+esc(r2)+'</div></div>';
+    const cps=fiches.filter(f=>f.role==='cheffe de projet');
+    const sms=fiches.filter(f=>f.role==='social média');
+    const vline='<div style="width:1px;height:13px;background:#D9D2F6"></div>';
+    const orgH='<div class="bgd-card" style="min-width:0"><div class="bgd-h">Organisation de l\'équipe</div>'
+      +'<div style="display:flex;flex-direction:column;align-items:center;margin-top:10px">'
+      +obox('Mélany','CEO',true)+vline
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">'+cps.map(f=>obox(f.name,'Cheffe de projet',false)).join('')+'</div>'
+      +(sms.length?(vline+'<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">'+sms.map(f=>obox(f.name,'Social Media Manager',false)).join('')+'</div>'):'')
+      +'</div></div>';
+    supTop=kpis5
+      +'<div class="bgd-grid" style="grid-template-columns:minmax(0,2fr) minmax(0,1.15fr) minmax(0,0.95fr);margin-bottom:14px">'+equipeH+absH+fichesRhH+'</div>'
+      +'<div class="bgd-grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) minmax(0,1fr)">'+chargeH2+echH+orgH+'</div>';
+  }
+  box.innerHTML=sup?(supTop
+    +'<div class="bgd-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));margin-top:14px"><div id="rhcard-dem" style="min-width:0">'+demH+'</div><div id="rhcard-doc" style="min-width:0">'+docH+'</div></div>'
+    +'<div id="rhcard-fiches">'+fichesH+'</div>'
+    +'<div class="bgd-grid" style="grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);margin-top:14px">'+congesH+formH+'</div>')
+   :(kpis
     +'<div class="bgd-grid" style="grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);margin-bottom:14px">'+congesH+formH+'</div>'
     +'<div class="bgd-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">'+demH+docH+rapH+'</div>'
     +fichesH
-    +basH;
+    +basH);
+  box.querySelectorAll('.rhjump').forEach(el=>el.onclick=(ev)=>{ev.stopPropagation();const e2=document.getElementById(el.dataset.j);if(e2){e2.scrollIntoView({behavior:'smooth',block:'start'});e2.style.boxShadow='0 0 0 3px #6D5AE0';setTimeout(()=>{e2.style.boxShadow='';},1400);}});
+  box.querySelectorAll('.rhopen').forEach(b2=>b2.onclick=async()=>{window.RH_FICHE_SEL=b2.dataset.n;await renderRhView();const e2=document.getElementById('rhcard-fiches');if(e2)e2.scrollIntoView({behavior:'smooth',block:'start'});});
   // ---------- interactions ----------
   const g=$('rhgo'); if(g)g.onclick=async()=>{
     const du=$('rhdu').value,au=$('rhau').value||du;
@@ -1267,8 +1346,9 @@ async function renderRhView(){
     const tel=prompt('Téléphone de '+f.name+' :',f.tel||''); if(tel===null)return;
     const iban=prompt('IBAN / RIB de '+f.name+' (stocké uniquement sur le disque sécurisé du cockpit) :',f.iban||''); if(iban===null)return;
     const arrivee=prompt('Date d\'arrivée chez Hyped (AAAA-MM-JJ, ex : 2024-07-01) :',f.arrivee||''); if(arrivee===null)return;
-    const notes=prompt('Notes RH (contrat, particularités…) :',f.notes||''); if(notes===null)return;
-    const r=await api('/api/rh/profil',{method:'POST',body:JSON.stringify({who:f.name,tel,iban,notes,arrivee})});
+    const contrat=prompt('Type de contrat (CDI, CDD, Alternance, Freelance, Stage…) :',f.contrat||''); if(contrat===null)return;
+    const notes=prompt('Notes RH (particularités, points d\'attention…) :',f.notes||''); if(notes===null)return;
+    const r=await api('/api/rh/profil',{method:'POST',body:JSON.stringify({who:f.name,tel,iban,notes,arrivee,contrat})});
     if(!r.ok){const dd=await r.json().catch(()=>({}));alert(dd.error||'Erreur');} renderRhView();
   });
   box.querySelectorAll('.ceogo2').forEach(el=>el.onclick=()=>navToView(el.dataset.go));
