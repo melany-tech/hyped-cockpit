@@ -3533,7 +3533,7 @@ function renderTodo(tasks, showOwner, addFor){
   setTimeout(()=>{const ab=$('arbbtn');if(ab)ab.onclick=demanderArbitrage;},0);
   let rows;
   if(!tasks.length) rows='<div class="state" style="padding:14px">Rien à faire, to-do à jour ✨</div>';
-  else rows=tasks.map(t=>{
+  else { const rowsArr=tasks.map(t=>{
     const isLate=t.echeance&&t.echeance<today, due=t.echeance===today;
     if(isLate||due){ late++; lateItems.push({icon:isLate?'⚠️':'🔔',text:t.task,sub:(isLate?'en retard':'aujourd\'hui')+(t.projet?(' · '+t.projet):''),go:'todopanel'}); }
     const meta=[]; if(t.echeance)meta.push((isLate?'⚠ en retard · ':(due?'aujourd\'hui · ':''))+fmtDate(t.echeance)); if(t.projet)meta.push(esc(t.projet));
@@ -3544,11 +3544,13 @@ function renderTodo(tasks, showOwner, addFor){
     const hasDet=(t.commentaire||'').trim();
     return `<div class="todo" data-id="${t.id}"><button class="tcheck" title="Cliquer = terminé ✓"></button>
       <div class="info" title="Cliquer pour ajouter détails et échéance" style="cursor:pointer"><div class="t"><span class="ti-emoji">${taskIcon(t)}</span>${linkify(t.task)}${hasDet?' <span title="Cette tâche a des détails, clique pour les voir">📝</span>':''}</div><div class="s" style="${isLate?'color:#C2553B':''}">${meta.join(' · ')||'-'}</div></div>${msg}${own}${chip}</div>`;
-  }).join('');
+  });
+  rows=(window.PRIO_ALL?rowsArr:rowsArr.slice(0,7)).join('')+(tasks.length>7?('<div class="state prioshowall" style="padding:10px;cursor:pointer;color:#6D5AE0;font-weight:700;text-align:center">'+(window.PRIO_ALL?'▲ Réduire la liste':('▼ Tout dérouler · + '+(tasks.length-7)+' tâche(s)'))+'</div>'):''); }
   $('todobox').innerHTML=add+rows;
   window.TODO_BYID={}; tasks.forEach(t=>{TODO_BYID[t.id]=t;});
   NOTIF.late=late; NOTIF.lateItems=lateItems; updateBell();
   $('todobtn').onclick=addTask;
+  const psa=document.querySelector('.prioshowall'); if(psa)psa.onclick=()=>{window.PRIO_ALL=!window.PRIO_ALL;renderTodo(tasks,showOwner,addFor);};
   $('todoinput').onkeydown=(e)=>{if(e.key==='Enter')addTask();};
   document.querySelectorAll('#todobox .tcheck').forEach(b=>b.onclick=()=>doneTask(b));
   document.querySelectorAll('#todobox .todo .info').forEach(el=>el.onclick=()=>openTaskEdit(el.closest('.todo')));
