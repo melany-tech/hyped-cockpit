@@ -897,29 +897,39 @@ async function renderFinanceView(){
     } else {
       chartH='<div style="text-align:center;padding:26px 10px"><div style="font-size:34px">📈</div><div class="fs" style="margin-top:6px">La courbe se remplit dès la connexion Pennylane.</div></div>';
     }
-    // ---- Encaissé par SERVICE (croisement missions[offre] × encaissé Pennylane par client) ----
+    // ---- Encaissé par SERVICE : missions[offre] + ajustements manuels (fees vs pocket reversée) ----
     let svcCard='';
     try{
       const rm=await api('/api/missions'); const dm=rm.ok?await rm.json():{missions:[]};
       const missions=(dm&&dm.missions)||[];
+      const attr=(ceo.financeAttr)||{};
       const clients=(pl&&pl.clients)||{};
       const norm=(x)=>String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
-      const offreDe=(clientNom)=>{const cn=norm(clientNom);let best=null;missions.forEach(m=>{const mc=norm(m.client);if(mc&&(cn.includes(mc)||mc.includes(cn)))best=m.offre;});return best;};
-      const OFC={'Storytelling':'#2E9E6B','Influence':'#7C5CFA','Social Media':'#E8933A','360°':'#D4483B','Non attribué':'#C9CED4'};
-      const parSvc={};let totS=0;
-      Object.values(clients).forEach(c=>{const v=Math.round(c.caPaye||0);if(!(v>0))return;const off=offreDe(c.nom)||'Non attribué';parSvc[off]=(parSvc[off]||0)+v;totS+=v;});
+      const offreMission=(clientNom)=>{const cn=norm(clientNom);let best=null;missions.forEach(m=>{const mc=norm(m.client);if(mc&&(cn.includes(mc)||mc.includes(cn)))best=m.offre;});return best;};
+      const OFC={'Influence':'#7C5CFA','Storytelling':'#2E9E6B','Social Media':'#E8933A','360°':'#4A7FB5','Autre':'#B98A12','Pocket reversée aux influenceuses':'#C9CED4','Non attribué':'#C9CED4'};
+      const rows=Object.values(clients).map(c=>({nom:c.nom,ca:Math.round(c.caPaye||0)})).filter(x=>x.ca>0).sort((a2,b2)=>b2.ca-a2.ca);
+      const parSvc={};let totNet=0;
+      rows.forEach(x=>{const a2=attr[norm(x.nom)]||{};const pocket=Math.min(x.ca,Math.round(a2.pocket||0));const net=x.ca-pocket;const svc=a2.service||offreMission(x.nom)||'Non attribué';
+        if(net>0){parSvc[svc]=(parSvc[svc]||0)+net;totNet+=net;}
+        if(pocket>0)parSvc['Pocket reversée aux influenceuses']=(parSvc['Pocket reversée aux influenceuses']||0)+pocket;});
       const arr=Object.entries(parSvc).sort((a2,b2)=>b2[1]-a2[1]);
       const mx=Math.max(1,...arr.map(x=>x[1]));
-      if(arr.length){
-        const bars=arr.map(([k,v])=>{const col=OFC[k]||'#7C5CFA';const pc=totS?Math.round(100*v/totS):0;
-          return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0"><span style="flex:0 0 120px;font-weight:600;font-size:12.5px">'+esc(k)+'</span><div class="ceobar" style="flex:1;height:16px"><div style="width:'+Math.round(100*v/mx)+'%;background:'+col+'"></div></div><b style="flex:0 0 92px;text-align:right;white-space:nowrap">'+eur(v)+'</b><span class="fs" style="flex:0 0 40px;text-align:right">'+pc+' %</span></div>';}).join('');
-        const naN=parSvc['Non attribué']||0;
-        svcCard='<div class="bgd-card" style="margin-bottom:14px"><div class="bgd-h" style="display:flex;align-items:center">💼 Encaissé par service <span class="bgd-badge" style="margin-left:auto;background:#F4F2FB;color:#4C3BB8">'+yr+' · d\'après tes missions</span></div><div style="margin-top:8px">'+bars+'</div>'
-          +(naN>0?'<div class="fs" style="margin-top:8px;padding:8px 11px;border-radius:10px;background:#FDF0E0;color:#C77F2A">ℹ️ '+eur(naN)+' non attribués : crée une mission (onglet Projets) avec le nom du client tel qu\'il apparaît dans Pennylane et son offre, pour qu\'ils soient rangés dans le bon service.</div>':'')
-          +'</div>';
-      } else if(missions.length===0){
-        svcCard='<div class="bgd-card" style="margin-bottom:14px"><div class="bgd-h">💼 Encaissé par service</div><div class="fs" style="margin-top:8px">Crée tes missions dans l\'onglet Projets (chacune a une offre : Influence, Storytelling, Social Media, 360°) en mettant le nom du client tel qu\'il apparaît dans Pennylane. Cet histogramme montrera alors d\'où viennent tes encaissements par service.</div></div>';
-      }
+      const bars=arr.map(([k,v])=>{const col=OFC[k]||'#7C5CFA';const pc=totNet?Math.round(100*v/totNet):0;const pocketRow=(k==='Pocket reversée aux influenceuses');
+        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0"><span style="flex:0 0 150px;font-weight:600;font-size:12.5px;'+(pocketRow?'color:#8A9AA0':'')+'">'+esc(k)+'</span><div class="ceobar" style="flex:1;height:16px"><div style="width:'+Math.round(100*v/mx)+'%;background:'+col+'"></div></div><b style="flex:0 0 92px;text-align:right;white-space:nowrap;'+(pocketRow?'color:#8A9AA0':'')+'">'+eur(v)+'</b><span class="fs" style="flex:0 0 42px;text-align:right">'+(pocketRow?'reversé':pc+' %')+'</span></div>';}).join('');
+      // liste éditable par client
+      const SEL=['(auto)','Influence','Storytelling','Social Media','360°','Autre'];
+      const editRows=rows.slice(0,window.FIN_ALLCLI?999:8).map(x=>{const a2=attr[norm(x.nom)]||{};const key=esc(norm(x.nom));const open2=window.FIN_EDIT===norm(x.nom);
+        const badge=a2.service?('<span class="bgd-badge" style="background:#EEEBFB;color:#4C3BB8;font-size:10.5px">'+esc(a2.service)+'</span>'):(offreMission(x.nom)?('<span class="bgd-badge" style="background:#F4F2FB;color:#4C3BB8;font-size:10.5px">'+esc(offreMission(x.nom))+' (auto)</span>'):'<span class="bgd-badge" style="background:#FDF0E0;color:#C77F2A;font-size:10.5px">à attribuer</span>');
+        const pk=Math.round(a2.pocket||0);
+        let row='<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #F0F1F6;flex-wrap:wrap"><b style="flex:1;min-width:120px;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(x.nom)+'</b>'+badge+(pk>0?('<span class="fs">pocket '+eur(pk)+'</span>'):'')+'<b style="white-space:nowrap">'+eur(x.ca)+'</b><a class="lk finedit" data-k="'+key+'" data-nom="'+esc(x.nom)+'" style="border:none;background:'+(open2?'#EEEBFB':'none')+';padding:3px 8px;border-radius:8px">✎</a></div>';
+        if(open2)row+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px 0 12px 0;border-bottom:1px solid #F0F1F6"><span class="fs">Service :</span><select class="rhin finsvc" style="font-size:12.5px">'+SEL.map(o2=>'<option'+((o2==='(auto)'?'':o2)===(a2.service||'')?' selected':'')+' value="'+(o2==='(auto)'?'':o2)+'">'+o2+'</option>').join('')+'</select><span class="fs">Pocket reversée (€) :</span><input type="number" class="rhin finpk" value="'+pk+'" style="width:110px;padding:7px 9px;border-radius:9px"><button class="lk finsave" data-nom="'+esc(x.nom)+'" style="background:#6D5AE0;color:#fff;border-color:#6D5AE0">💾</button><span class="fs">le reste ('+eur(x.ca-pk)+') compte comme tes fees</span></div>';
+        return row;}).join('');
+      svcCard=arr.length||rows.length?('<div class="bgd-card" style="margin-bottom:14px"><div class="bgd-h" style="display:flex;align-items:center">💼 Encaissé par service <span class="bgd-badge" style="margin-left:auto;background:#F4F2FB;color:#4C3BB8">'+yr+' · tes fees, hors pocket reversée</span></div>'
+        +'<div style="margin-top:8px">'+(bars||'<div class="fs">Renseigne les services ci-dessous.</div>')+'</div>'
+        +'<div class="bgd-h" style="margin-top:14px;font-size:14px">Ajuster par client</div><div class="fs" style="margin:2px 0 4px">Pennylane ne connaît pas le détail : dis le service, et la part reversée aux influenceuses (pocket). Le reste = tes fees.</div>'
+        +editRows
+        +(rows.length>8?('<div style="text-align:center;padding:8px"><a class="lk finall" style="color:#6D5AE0;font-weight:700;border:none;background:none">'+(window.FIN_ALLCLI?'▲ Réduire':('▼ Voir les '+(rows.length-8)+' autre(s) client(s)'))+'</a></div>'):'')
+        +'</div>'):'';
     }catch(e){}
     const chartCard='<div class="bgd-card" style="min-width:0"><div class="bgd-h" style="display:flex;align-items:center">Évolution du CA encaissé<span class="bgd-badge" style="margin-left:auto;background:#F4F2FB;color:#4C3BB8">12 derniers mois · survole un point</span></div><div style="margin-top:8px">'+chartH+'</div></div>';
     // ---------- alertes & statuts ----------
@@ -955,6 +965,15 @@ async function renderFinanceView(){
     };
     tipOn(bx);
     const fr=$('finrefresh'); if(fr)fr.onclick=()=>{fr.disabled=true;fr.textContent='🔄 Actualisation…';window.FIN_FRESH=true;renderFinanceView();};
+    bx.querySelectorAll('.finedit').forEach(el=>el.onclick=()=>{window.FIN_EDIT=(window.FIN_EDIT===el.dataset.k?null:el.dataset.k);renderFinanceView();});
+    const fa=bx.querySelector('.finall'); if(fa)fa.onclick=()=>{window.FIN_ALLCLI=!window.FIN_ALLCLI;renderFinanceView();};
+    bx.querySelectorAll('.finsave').forEach(el=>el.onclick=async()=>{
+      const wrap=el.parentElement; const svc=wrap.querySelector('.finsvc')?wrap.querySelector('.finsvc').value:''; const pk=wrap.querySelector('.finpk')?Number(wrap.querySelector('.finpk').value):0;
+      el.disabled=true;el.textContent='…';
+      const r2=await api('/api/finance/attr',{method:'POST',body:JSON.stringify({client:el.dataset.nom,service:svc,pocket:pk})});
+      if(!r2.ok){const dd=await r2.json().catch(()=>({}));alert(dd.error||'Erreur');el.disabled=false;el.textContent='💾';return;}
+      window.FIN_EDIT=null; renderFinanceView();
+    });
     const bg2=$('plkeygo'); if(bg2)bg2.onclick=async()=>{
       const inp=$('plkeyin'); const k=inp?inp.value.trim():''; if(!k){if(inp)inp.focus();return;}
       bg2.disabled=true; bg2.textContent='Connexion…';

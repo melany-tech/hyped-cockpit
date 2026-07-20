@@ -815,10 +815,23 @@ app.get("/api/ceo", auth, async (req, res) => {
       else if (last.v !== cur) { last.v = cur; saveCeo(o); }
     }
   } catch (e) {}
-  res.json({ ok: true, treso: o.treso || null, ca: o.ca || null, tresoHist: o.tresoHist || [],
+  res.json({ ok: true, treso: o.treso || null, ca: o.ca || null, tresoHist: o.tresoHist || [], financeAttr: o.encAttr || {},
     pennylane: pl2 ? { connected: true, at: pl2.at, treso: pl2.treso, ca: pl2.ca, caMois: pl2.caMois, caPrevMois: pl2.caPrevMois, mensuel: pl2.mensuel || {}, lastPaid: pl2.lastPaid || [], factureMois: pl2.factureMois || 0, facturePrevMois: pl2.facturePrevMois || 0, factMensuel: pl2.factMensuel || {}, lateN: pl2.lateN || 0, lateSum: pl2.lateSum || 0, upcomN: pl2.upcomN || 0, upcomSum: pl2.upcomSum || 0, clients: pl2.clients || {}, error: pl2.error, annee: new Date().getFullYear() } : { connected: false },
     roadmap: o.roadmap || [], axes: RM_AXES, rmStatuts: RM_STATUTS, arbTypes: ARB_TYPES,
     arbitrages: (o.arbitrages || []).filter((a) => a.statut === "en attente").sort((a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999")) });
+});
+// Répartition manuelle des encaissements par service + part reversée aux influenceuses (pocket).
+// Mélany ajuste ce que Pennylane ne peut pas deviner (ses fees influence vs la pocket).
+app.post("/api/finance/attr", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  const key = normName(req.body?.client || ""); if (!key) return res.status(400).json({ error: "client manquant" });
+  const o = loadCeo(); o.encAttr = o.encAttr || {};
+  const OFF = ["Influence", "Storytelling", "Social Media", "360°", "Autre"];
+  const service = OFF.includes(req.body?.service) ? req.body.service : "";
+  const pocket = Math.max(0, Math.min(10000000, Number(req.body?.pocket) || 0));
+  if (!service && !pocket) { delete o.encAttr[key]; }
+  else { o.encAttr[key] = { nom: String(req.body?.client || "").slice(0, 80), service, pocket, at: Date.now(), by: req.user.name }; }
+  saveCeo(o); res.json({ ok: true, financeAttr: o.encAttr });
 });
 app.post("/api/ceo/config", auth, (req, res) => {
   if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
