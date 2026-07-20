@@ -171,6 +171,8 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 #mailbox .reopenbtn{opacity:.45;font-size:11px;padding:4px 9px}
 #mailbox .reopenbtn:hover{opacity:1}
 .filechips-wrap summary::-webkit-details-marker{display:none}
+.mbgrid{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:14px;align-items:start}
+@media(max-width:1100px){.mbgrid{grid-template-columns:1fr}}
 .draftbanner{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .bannerclose{border:none;background:none;color:#9A6B12;font-size:15px;font-weight:700;cursor:pointer;padding:2px 6px;border-radius:6px;line-height:1}
 .bannerclose:hover{background:#F0E0C0}
@@ -3314,16 +3316,29 @@ function renderMail(d, who){
       ${[['tous','Tous'],['atraiter','En attente'],['reps','Réponses créateurs'],['brouillons','Brouillons'],['relancer','À relancer']].map(([k2,l2])=>`<button class="lk mbtab" data-t="${k2}" style="border-radius:999px;padding:8px 14px;${window.MB_TAB===k2?'background:#6D5AE0;color:#fff;border-color:#6D5AE0;font-weight:700':''}">${l2}</button>`).join('')}
       <input id="mbsearch" class="rhin" placeholder="Rechercher un mail, un créateur… puis Entrée" style="flex:1;min-width:180px;border-radius:999px;padding:9px 14px">
     </div>`;
+  const sideActs=[];
+  if(window.DRAFTS_COUNT)sideActs.push(['brouillons','📤',window.DRAFTS_COUNT+' brouillon(s) à valider','à relire et envoyer']);
+  if(attente.length)sideActs.push(['relancer','⏰',attente.length+' relance(s) à faire','sans réponse créateur']);
+  const nUntreated=reps.filter(m=>!m.treated).length;
+  if(nUntreated)sideActs.push(['atraiter','↩️',nUntreated+' réponse(s) à traiter','en attente d\'action']);
+  const sideHtml=`<div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+    <div class="bgd-card" style="padding:14px"><div class="bgd-h" style="font-size:14px">À traiter aujourd'hui</div>
+    ${sideActs.length?sideActs.map(([t2,ic,l1,l2])=>`<div class="mbtab" data-t="${t2}" style="display:flex;gap:9px;align-items:center;padding:8px 0;border-bottom:1px solid #F0F1F6;cursor:pointer"><span style="font-size:15px">${ic}</span><div style="min-width:0"><b style="font-size:12.5px">${l1}</b><div class="fs" style="font-size:11px">${l2}</div></div></div>`).join(''):'<div class="fs" style="padding:8px 0">Rien d\'urgent 🎉</div>'}
+    </div>
+    <div class="bgd-card" style="padding:14px"><div class="bgd-h" style="font-size:14px">Répartition par marque</div>
+    ${bc.length?bc.map(([b2,n2])=>`<div class="mbchip" data-b="${esc(b2)}" style="display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid #F0F1F6;cursor:pointer"><b style="font-size:12px;flex:0 0 88px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(b2)}</b><span class="ceobar" style="flex:1"><span style="display:block;height:100%;border-radius:99px;width:${Math.round(100*n2/bTot)}%;background:#6D5AE0"></span></span><span class="fs" style="flex:0 0 58px;text-align:right">${n2} (${Math.round(100*n2/bTot)}%)</span></div>`).join(''):'<div class="fs">aucun mail par marque</div>'}
+    </div></div>`;
+  const mbWrap=(inner)=>`<div class="mbgrid"><div style="min-width:0">${inner}</div>${sideHtml}</div>`;
   const mbWire=()=>{
     document.querySelectorAll('#mailbox .mbtab').forEach(b2=>b2.onclick=()=>{window.MB_TAB=b2.dataset.t;renderMail(window.MB_LAST.d,window.MB_LAST.who);});
     document.querySelectorAll('#mailbox .mbchip').forEach(b2=>b2.onclick=()=>{window.MB_BRAND=(window.MB_BRAND===b2.dataset.b?null:b2.dataset.b);renderMail(window.MB_LAST.d,window.MB_LAST.who);});
     const s2=document.getElementById('mbsearch'); if(s2){s2.value=window.MB_Q||'';s2.onkeydown=(e2)=>{if(e2.key==='Enter'){window.MB_Q=s2.value.trim();renderMail(window.MB_LAST.d,window.MB_LAST.who);}};}
   };
-  if(window.MB_TAB==='brouillons'){$('mailbox').innerHTML=sum+'<div class="state">Tes brouillons t\'attendent dans Gmail : <a class="lk" href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noopener">ouvrir les brouillons ↗</a></div>';mbWire();return;}
-  if(window.MB_TAB==='relancer'){$('mailbox').innerHTML=sum+(attenteF.length?attenteHtml.replace('<details','<details open'):'<div class="state">Rien à relancer ✨</div>');mbWire();return;}
-  if(!repsF.length){$('mailbox').innerHTML=sum+'<div class="state">Aucun mail ici avec ces filtres. 👌</div>'+(window.MB_TAB==='tous'?autresHtml:'');mbWire();return;}
+  if(window.MB_TAB==='brouillons'){$('mailbox').innerHTML=mbWrap(sum+'<div class="state">Tes brouillons t\'attendent dans Gmail : <a class="lk" href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noopener">ouvrir les brouillons ↗</a></div>');mbWire();return;}
+  if(window.MB_TAB==='relancer'){$('mailbox').innerHTML=mbWrap(sum+(attenteF.length?attenteHtml.replace('<details','<details open'):'<div class="state">Rien à relancer ✨</div>'));mbWire();return;}
+  if(!repsF.length){$('mailbox').innerHTML=mbWrap(sum+'<div class="state">Aucun mail ici avec ces filtres. 👌</div>'+(window.MB_TAB==='tous'?autresHtml:''));mbWire();return;}
   const CC={facturation:'#C77F2A',preview:'#7A5AA8',logistique:'#2C9087','réponse':'#1C3A44'};
-  $('mailbox').innerHTML=sum+repsF.map(m=>{
+  $('mailbox').innerHTML=mbWrap(sum+repsF.map(m=>{
     const ownerTag=m.créateur?`<span class="owner">${esc(m.créateur)}</span>`:'';
     const c=CC[m.category]||'#56666D';
     const link=m.url?`<a href="${m.url}" target="_blank" rel="noopener">Ouvrir</a>`:'';
@@ -3335,11 +3350,12 @@ function renderMail(d, who){
     const treatBtns=tr?`<button class="lk reopenbtn" data-thread="${esc(m.threadId||'')}" title="Rouvrir : remet ce mail à traiter">Rouvrir</button>`:`<button class="lk treatbtn" data-thread="${esc(m.threadId||'')}" title="Marquer comme traité (déjà répondu)">✓ Traité</button>`;
     return `<div class="row${tr?' treated':''}" data-email="${esc(email)}" data-subject="${esc(m.subject||'')}" data-cat="${esc(m.category||'')}" data-creator="${esc(m.créateur||'')}" data-brand="${esc(m.brand||'')}" data-thread="${esc(m.threadId||'')}" data-snippet="${esc(snip.slice(0,400))}" data-url="${esc(m.url||'')}" data-files="${filesJson}"><span class="rdot" style="background:${c}"></span>
       <div class="info"><div class="t">${esc(m.subject)||'(sans objet)'}${spamBadge}${trBadge}</div><div class="s">${esc(m.from)} · ${esc(m.category)}${dt?` · <span class="maildate">${esc(dt)}</span>`:''}</div>${snip?`<div class="msgsnip">${esc(snip.slice(0,130))}${snip.length>130?'…':''}</div>`:''}${fileChips(m.attachments,m.transferLinks)}</div>
-      <span class="brand">${esc(m.brand)}</span>${ownerTag}<button class="lk primary replybtn">✍️ Répondre</button>${treatBtns}${link}</div>`;
-  }).join('')+(window.MB_TAB==='tous'?autresHtml:'');
+      <span class="brand">${esc(m.brand)}</span>${ownerTag}<button class="lk primary replybtn">✍️ Répondre</button>${link}<span class="mbmore" style="position:relative"><button class="lk mbmorebtn" title="Plus d'actions">⋯</button><span class="mbmenu" style="display:none;position:absolute;right:0;top:110%;background:#fff;border:1px solid #E4E0D5;border-radius:10px;padding:8px;z-index:30;box-shadow:0 6px 18px rgba(0,0,0,.12);white-space:nowrap">${treatBtns}</span></span></div>`;
+  }).join('')+(window.MB_TAB==='tous'?autresHtml:''));
   document.querySelectorAll('#mailbox .replybtn').forEach(b=>b.onclick=()=>openReply(b));
   document.querySelectorAll('#mailbox .treatbtn').forEach(b=>b.onclick=()=>setTreated(b.dataset.thread,true));
   document.querySelectorAll('#mailbox .reopenbtn').forEach(b=>b.onclick=()=>setTreated(b.dataset.thread,false));
+  document.querySelectorAll('#mailbox .mbmorebtn').forEach(b2=>b2.onclick=(e2)=>{e2.stopPropagation();const mn=b2.parentElement.querySelector('.mbmenu');document.querySelectorAll('#mailbox .mbmenu').forEach(x=>{if(x!==mn)x.style.display='none';});mn.style.display=(mn.style.display==='none'?'inline-block':'none');});
   mbWire();
 }
 async function setTreated(threadId, treated){
