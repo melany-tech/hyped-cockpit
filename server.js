@@ -789,31 +789,41 @@ async function pennylaneSnapshot(force) {
       pages++;
     } while (cursor && pages < 80);
     // 3) TRANSACTIONS BANCAIRES (rapprochement auto Phase 2) — nécessite le scope transactions:readonly sur la clé.
-    let bankTx = [], txError = null, txSampleKeys = null;
+    let bankTx = [], txError = null, txSampleKeys = null, txProbe = null;
+    async function plTry(pathUrl) {
+      const r = await fetch("https://app.pennylane.com/api/external/v2" + pathUrl, { headers: { "Authorization": "Bearer " + PL_KEY(), "Accept": "application/json" } });
+      const body = await r.text();
+      let json = null; try { json = JSON.parse(body); } catch (e) {}
+      return { ok: r.ok, status: r.status, body: body.slice(0, 300), json };
+    }
     try {
-      let tcur = "", tpages = 0, tstop = false;
-      do {
-        const td = await plGet("/transactions?limit=100&sort=-date" + (tcur ? "&cursor=" + encodeURIComponent(tcur) : ""));
-        const items = td.items || td.transactions || [];
-        if (!txSampleKeys && items[0]) txSampleKeys = Object.keys(items[0]);
+      const variants = ["/transactions?limit=100", "/transactions", "/transactions?per_page=100", "/transactions?limit=100&filter[]=date>=" + y0];
+      let good = null;
+      txProbe = [];
+      for (const v of variants) {
+        const res = await plTry(v);
+        txProbe.push({ v, status: res.status, body: res.ok ? "OK" : res.body });
+        if (res.ok) { good = res; break; }
+      }
+      if (good) {
+        const items = (good.json && (good.json.items || good.json.transactions)) || [];
+        if (items[0]) txSampleKeys = Object.keys(items[0]);
         for (const t of items) {
           const td2 = String(t.date || t.execution_date || t.settled_at || t.value_date || "").slice(0, 10);
-          if (td2 && td2 < y0) { tstop = true; break; }
           let amt = (t.amount != null) ? parseFloat(t.amount) : (t.amount_eur != null ? parseFloat(t.amount_eur) : ((String(t.currency || "EUR").toUpperCase() === "EUR" && t.currency_amount != null) ? parseFloat(t.currency_amount) : 0));
-          if (!(amt > 0)) continue; // seulement les entrées d'argent (crédits)
+          if (!(amt > 0)) continue;
           bankTx.push({ id: t.id, montant: Math.round(amt), date: td2, label: String(t.label || t.reference || "").slice(0, 120), tiers: String((t.thirdparty && t.thirdparty.name) || t.thirdparty_name || "").slice(0, 90), reste: (t.outstanding_balance != null ? Math.round(parseFloat(t.outstanding_balance)) : null) });
-          if (bankTx.length >= 300) { tstop = true; break; }
         }
-        tcur = (!tstop && td.has_more) ? (td.next_cursor || "") : "";
-        tpages++;
-      } while (tcur && tpages < 40);
+      } else {
+        txError = "aucune variante OK";
+      }
     } catch (e) { txError = String((e && e.message) || e).slice(0, 120); }
     Object.keys(mensuel).forEach((k) => { mensuel[k] = Math.round(mensuel[k] * 100) / 100; });
     Object.keys(factMensuel).forEach((k) => { factMensuel[k] = Math.round(factMensuel[k] * 100) / 100; });
     const moisK = new Date().toISOString().slice(0, 7);
     const prevD = new Date(); prevD.setMonth(prevD.getMonth() - 1); const prevK = prevD.toISOString().slice(0, 7);
     PL_CACHE = { at: Date.now(), treso: Math.round(treso * 100) / 100, ca: Math.round(enc * 100) / 100,
-      caMois: mensuel[moisK] || 0, caPrevMois: mensuel[prevK] || 0, mensuel, lastPaid, paidRecent, bankTx, txError, txSampleKeys,
+      caMois: mensuel[moisK] || 0, caPrevMois: mensuel[prevK] || 0, mensuel, lastPaid, paidRecent, bankTx, txError, txSampleKeys, txProbe,
       factureMois: factMensuel[moisK] || 0, facturePrevMois: factMensuel[prevK] || 0, factMensuel,
       lateN, lateSum: Math.round(lateSum), upcomN, upcomSum: Math.round(upcomSum), clients, error: null };
     Object.values(clients).forEach((c) => { if (c.caPaye) c.caPaye = Math.round(c.caPaye); });
@@ -839,7 +849,7 @@ app.get("/api/ceo", auth, async (req, res) => {
     }
   } catch (e) {}
   res.json({ ok: true, treso: o.treso || null, ca: o.ca || null, tresoHist: o.tresoHist || [], financeAttr: o.encAttr || {}, finPrev: o.finPrev || null, attendus: o.attendus || [],
-    pennylane: pl2 ? { connected: true, at: pl2.at, treso: pl2.treso, ca: pl2.ca, caMois: pl2.caMois, caPrevMois: pl2.caPrevMois, mensuel: pl2.mensuel || {}, lastPaid: pl2.lastPaid || [], factureMois: pl2.factureMois || 0, facturePrevMois: pl2.facturePrevMois || 0, factMensuel: pl2.factMensuel || {}, lateN: pl2.lateN || 0, lateSum: pl2.lateSum || 0, upcomN: pl2.upcomN || 0, upcomSum: pl2.upcomSum || 0, clients: pl2.clients || {}, paidRecent: pl2.paidRecent || [], bankTx: pl2.bankTx || [], txError: pl2.txError || null, txSampleKeys: pl2.txSampleKeys || null, error: pl2.error, annee: new Date().getFullYear() } : { connected: false },
+    pennylane: pl2 ? { connected: true, at: pl2.at, treso: pl2.treso, ca: pl2.ca, caMois: pl2.caMois, caPrevMois: pl2.caPrevMois, mensuel: pl2.mensuel || {}, lastPaid: pl2.lastPaid || [], factureMois: pl2.factureMois || 0, facturePrevMois: pl2.facturePrevMois || 0, factMensuel: pl2.factMensuel || {}, lateN: pl2.lateN || 0, lateSum: pl2.lateSum || 0, upcomN: pl2.upcomN || 0, upcomSum: pl2.upcomSum || 0, clients: pl2.clients || {}, paidRecent: pl2.paidRecent || [], bankTx: pl2.bankTx || [], txError: pl2.txError || null, txSampleKeys: pl2.txSampleKeys || null, txProbe: pl2.txProbe || null, error: pl2.error, annee: new Date().getFullYear() } : { connected: false },
     roadmap: o.roadmap || [], axes: RM_AXES, rmStatuts: RM_STATUTS, arbTypes: ARB_TYPES,
     arbitrages: (o.arbitrages || []).filter((a) => a.statut === "en attente").sort((a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999")) });
 });
