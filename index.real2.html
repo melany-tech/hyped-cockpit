@@ -3291,9 +3291,10 @@ function renderMail(d, who){
     const filesJson=esc(JSON.stringify({a:m.attachments||[],l:m.transferLinks||[]}));
     const tr=m.treated; const trLbl=tr?({'répondu':'Répondu','brouillon':'Brouillon en cours','programmé':'Envoi programmé','manuel':'Traité'}[tr.action]||'Traité'):'';
     const trBadge=tr?`<span class="treatedbadge" title="${esc(trLbl)} par ${esc(tr.by||'-')}">✓ ${esc(trLbl)}${tr.by?(' · '+esc(tr.by)):''}</span>`:'';
+    const spamBadge=m.spam?`<span class="treatedbadge" style="background:#FBE5E0;color:#D4483B" title="Ce mail était dans le dossier spam de Gmail : vérifie et sors-le des spams si c'est un vrai message">⚠️ trouvé dans les spams</span>`:'';
     const treatBtns=tr?`<button class="lk reopenbtn" data-thread="${esc(m.threadId||'')}" title="Rouvrir : remet ce mail à traiter">Rouvrir</button>`:`<button class="lk treatbtn" data-thread="${esc(m.threadId||'')}" title="Marquer comme traité (déjà répondu)">✓ Traité</button>`;
     return `<div class="row${tr?' treated':''}" data-email="${esc(email)}" data-subject="${esc(m.subject||'')}" data-cat="${esc(m.category||'')}" data-creator="${esc(m.créateur||'')}" data-brand="${esc(m.brand||'')}" data-thread="${esc(m.threadId||'')}" data-snippet="${esc(snip.slice(0,400))}" data-url="${esc(m.url||'')}" data-files="${filesJson}"><span class="rdot" style="background:${c}"></span>
-      <div class="info"><div class="t">${esc(m.subject)||'(sans objet)'}${trBadge}</div><div class="s">${esc(m.from)} · ${esc(m.category)}${dt?` · <span class="maildate">${esc(dt)}</span>`:''}</div>${snip?`<div class="msgsnip">${esc(snip.slice(0,130))}${snip.length>130?'…':''}</div>`:''}${fileChips(m.attachments,m.transferLinks)}</div>
+      <div class="info"><div class="t">${esc(m.subject)||'(sans objet)'}${spamBadge}${trBadge}</div><div class="s">${esc(m.from)} · ${esc(m.category)}${dt?` · <span class="maildate">${esc(dt)}</span>`:''}</div>${snip?`<div class="msgsnip">${esc(snip.slice(0,130))}${snip.length>130?'…':''}</div>`:''}${fileChips(m.attachments,m.transferLinks)}</div>
       <span class="brand">${esc(m.brand)}</span>${ownerTag}<button class="lk primary replybtn">✍️ Répondre</button>${treatBtns}${link}</div>`;
   }).join('')+autresHtml;
   document.querySelectorAll('#mailbox .replybtn').forEach(b=>b.onclick=()=>openReply(b));

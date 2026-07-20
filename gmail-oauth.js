@@ -288,7 +288,11 @@ async function analyzeFor(email, collabs, brandProducts = {}) {
   const gmail = gmailFor(email);
   if (!gmail) return { connected: false };
   const emails = await fetchEmails(gmail, undefined, 80); // 80 fils : couvre aussi les boîtes chargées
-  const res = analyzeMailbox(emails, collabs, brandProducts);
+  // SPAMS : Gmail exclut le dossier spam des recherches normales. On y repêche les 14 derniers jours :
+  // l'analyse IA (analyzeMailbox) fait ensuite le tri entre vrai spam et vrai message de créatrice mal classé.
+  let spams = [];
+  try { spams = (await fetchEmails(gmail, "in:spam newer_than:14d", 25)).map((m) => ({ ...m, spam: true })); } catch (e) {}
+  const res = analyzeMailbox(emails.concat(spams), collabs, brandProducts);
   // EN PARALLÈLE : on enrichit (PJ + liens) toutes les réponses créateurs en même temps
   await Promise.all((res.creatorReplies || []).map(async (r) => {
     const x = await attachmentsAndLinks(gmail, r.id);
