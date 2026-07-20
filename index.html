@@ -1715,12 +1715,15 @@ async function renderBudgetView(fromCache){
     }).join('');
     // ---- Barre du haut : pastilles marques + mois ----
     const chips='<div class="cpchips" style="flex:1">'+ds.map(d=>'<span class="chip bgchip'+(d===F?' on':'')+'" data-b="'+esc(d.brand)+'">'+esc(d.brand)+'</span>').join('')+'</div>';
-    box.innerHTML=`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">${chips}<span style="white-space:nowrap;background:#fff;border:1px solid #E5EAEC;border-radius:10px;padding:5px 10px"><label style="font-size:12px;font-weight:600;margin-right:6px">🗓️</label><input type="month" id="bgallmonth" value="${esc(month)}" style="width:auto;display:inline-block;font-size:12.5px;font-weight:600;padding:0;border:none;background:transparent"></span></div>`
+    box.innerHTML=`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">${chips}<span id="bgmonthwrap" style="white-space:nowrap;background:#fff;border:1px solid #E5EAEC;border-radius:10px;padding:5px 8px;display:inline-flex;align-items:center;gap:4px"><button class="lk" id="bgmprev" title="Mois précédent" style="border:none;background:none;padding:4px 6px;font-weight:800">‹</button><label style="font-size:12px;font-weight:600;cursor:pointer" for="bgallmonth">🗓️</label><input type="month" id="bgallmonth" value="${esc(month)}" style="width:auto;display:inline-block;font-size:12.5px;font-weight:600;padding:0;border:none;background:transparent;cursor:pointer"><button class="lk" id="bgmnext" title="Mois suivant" style="border:none;background:none;padding:4px 6px;font-weight:800">›</button></span></div>`
       +kpis
       +'<div class="bgd-grid">'+(featured||'')+'<div style="display:flex;flex-direction:column;gap:14px">'+evo+alertsBox+'</div></div>'
       +(minis?('<div class="bgd-minis">'+minis+'</div>'):'')
       +((!ds.length)?'<div class="state">Aucune marque pour l\'instant : crée les fiches dans l\'onglet Marques.</div>':'');
-    const mi=$('bgallmonth'); if(mi)mi.onchange=()=>{BG_MONTH=mi.value;renderBudgetView();};
+    const mi=$('bgallmonth'); if(mi){mi.onchange=()=>{BG_MONTH=mi.value;renderBudgetView();};mi.onclick=()=>{try{mi.showPicker();}catch(e){}};}
+    const shiftM=(k)=>{const [y2,m2]=(BG_MONTH||month).split('-').map(Number);const d2=new Date(y2,m2-1+k,1);BG_MONTH=d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0');renderBudgetView();};
+    const mp=$('bgmprev'); if(mp)mp.onclick=()=>shiftM(-1);
+    const mn=$('bgmnext'); if(mn)mn.onclick=()=>shiftM(1);
     const selectBrand=(b)=>{BG_BRAND=b;try{localStorage.setItem('hc_bgbrand',b);}catch(e){}renderBudgetView();};
     box.querySelectorAll('.bgchip').forEach(c=>c.onclick=()=>selectBrand(c.dataset.b));
     const sa=box.querySelector('.bgshowall'); if(sa)sa.onclick=()=>{BG_ALL=!BG_ALL;renderBudgetView(true);};
