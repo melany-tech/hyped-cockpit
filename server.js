@@ -1823,6 +1823,14 @@ async function budgetForBrand(brand, month) {
   }
   return { budgetMensuel, total };
 }
+// Modifier le budget d'une collab depuis le cockpit (écrit directement dans la colonne Budget du calendrier Notion)
+app.post("/api/budget/entry", auth, async (req, res) => {
+  if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
+  const id = String(req.body?.id || ""); const v = Number(req.body?.montant);
+  if (!id || !(v >= 0 && v < 10000000)) return res.status(400).json({ error: "montant invalide" });
+  try { await notion.pages.update({ page_id: id, properties: { "Budget": { number: v } } }); res.json({ ok: true }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
 app.get("/api/budget/:brand", auth, async (req, res) => {
   try {
     const brand = String(req.params.brand || "").trim();
@@ -1843,6 +1851,7 @@ app.get("/api/budget/:brand", auth, async (req, res) => {
       r.results.forEach((pg) => {
         const p = pg.properties || {};
         entries.push({
+          id: pg.id,
           nom: (p["Nom"]?.title || []).map((t) => t.plain_text).join("") || "(sans nom)",
           date: p[cfg.dateProp]?.date?.start?.slice(0, 10) || null,
           statut: p["Statut"]?.select?.name || "",
@@ -1862,7 +1871,7 @@ app.get("/api/budget/:brand", auth, async (req, res) => {
           const p = pg.properties || {};
           const b = Number(p["Budget"]?.number || 0);
           if (!(b > 0)) return;
-          entries.push({ nom: (p["Nom"]?.title || []).map((t) => t.plain_text).join("") || "(sans nom)", date: null, tbc: true, statut: p["Statut"]?.select?.name || "", budget: b, cp: firstPerson(p["Interlocuteur"]) || "" });
+          entries.push({ id: pg.id, nom: (p["Nom"]?.title || []).map((t) => t.plain_text).join("") || "(sans nom)", date: null, tbc: true, statut: p["Statut"]?.select?.name || "", budget: b, cp: firstPerson(p["Interlocuteur"]) || "" });
         });
         cursor2 = r2.has_more ? r2.next_cursor : null;
       } while (cursor2);

@@ -1592,13 +1592,17 @@ async function renderBudgetView(){
       if(!resp){const cnt={};(F.entries||[]).forEach(e=>{if(e.cp)cnt[e.cp]=(cnt[e.cp]||0)+1;});resp=Object.entries(cnt).sort((a,b)=>b[1]-a[1]).map(x=>x[0])[0]||'';}
       // Répartition par CRÉATRICE (maquette) : chaque influenceuse et son spend du mois.
       // Le montant vient de la colonne « Budget » du calendrier Notion (à la main ou via copilote).
-      const byInf={};(F.entries||[]).forEach(e=>{if(!(Number(e.budget)>0))return;const k=e.nom||'(sans nom)';byInf[k]=(byInf[k]||0)+Number(e.budget);});
-      const infs=Object.entries(byInf).sort((a,b)=>b[1]-a[1]);
+      const byInf={};(F.entries||[]).forEach(e=>{if(!(Number(e.budget)>0))return;const k=e.nom||'(sans nom)';(byInf[k]=byInf[k]||{sum:0,list:[]});byInf[k].sum+=Number(e.budget);byInf[k].list.push(e);});
+      const infs=Object.entries(byInf).map(([k,o2])=>[k,o2.sum,o2.list]).sort((a,b)=>b[1]-a[1]);
       const mx=Math.max(1,...infs.map(x=>x[1]),0);
       const clean=(s)=>String(s).replace(/^Démo\s*·\s*/i,'');
-      const prows=(BG_ALL?infs:infs.slice(0,7)).map(([k,v])=>{
+      const dmy2=(x)=>String(x||'').split('-').reverse().join('/');
+      const prows=(BG_ALL?infs:infs.slice(0,7)).map(([k,v,list])=>{
         const share=tot>0?Math.round(100*v/tot):0;
-        return `<div class="bgd-prow"><span class="bgd-pav" style="background:${bgdCol(k)}">${esc(bgdIni(clean(k)))}</span><span style="flex:1;min-width:80px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(clean(k))}</span><b style="flex:0 0 82px;text-align:right;white-space:nowrap">${esc(eur(v))}</b><span style="flex:0 0 44px;text-align:right;color:#5D6D74">${share} %</span><div class="bgd-bar" style="flex:0 0 30%"><div style="width:${Math.round(100*v/mx)}%"></div></div></div>`;
+        const open2=window.BG_EDIT===k;
+        let row=`<div class="bgd-prow"><span class="bgd-pav" style="background:${bgdCol(k)}">${esc(bgdIni(clean(k)))}</span><span style="flex:1;min-width:80px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(clean(k))}</span><b style="flex:0 0 82px;text-align:right;white-space:nowrap">${esc(eur(v))}</b><span style="flex:0 0 44px;text-align:right;color:#5D6D74">${share} %</span><div class="bgd-bar" style="flex:0 0 30%"><div style="width:${Math.round(100*v/mx)}%"></div></div><a class="lk bgpedit" data-n="${esc(k)}" title="Modifier les montants" style="border:none;background:${open2?'#EEEBFB':'none'};padding:3px 8px;border-radius:8px">✎</a></div>`;
+        if(open2)row+=(list||[]).map(en=>`<div class="bgd-prow" style="background:#FAFAFE;border-radius:10px;padding-left:36px"><span class="fs" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${en.date?dmy2(en.date):'date à confirmer'}${en.statut?(' · '+esc(en.statut)):''}</span><input type="number" class="rhin bgpin" data-id="${esc(en.id||'')}" value="${Number(en.budget)||0}" style="width:110px;padding:7px 9px;border-radius:9px"><button class="lk bgpsave" data-id="${esc(en.id||'')}" style="background:#6D5AE0;color:#fff;border-color:#6D5AE0">💾</button></div>`).join('');
+        return row;
       }).join('')+(infs.length>7?('<div class="bgd-prow bgshowall" style="cursor:pointer;color:#6D5AE0;font-weight:700">'+(BG_ALL?'▲ Réduire la liste':('▼ Tout dérouler · + '+(infs.length-7)+' autre(s) créatrice(s)'))+'</div>'):'');
       featured=`<div class="bgd-card">
         <div style="display:flex;align-items:center;gap:13px">
@@ -1695,6 +1699,14 @@ async function renderBudgetView(){
     const selectBrand=(b)=>{BG_BRAND=b;try{localStorage.setItem('hc_bgbrand',b);}catch(e){}renderBudgetView();};
     box.querySelectorAll('.bgchip').forEach(c=>c.onclick=()=>selectBrand(c.dataset.b));
     const sa=box.querySelector('.bgshowall'); if(sa)sa.onclick=()=>{BG_ALL=!BG_ALL;renderBudgetView();};
+    box.querySelectorAll('.bgpedit').forEach(el=>el.onclick=()=>{window.BG_EDIT=(window.BG_EDIT===el.dataset.n?null:el.dataset.n);renderBudgetView();});
+    box.querySelectorAll('.bgpsave').forEach(el=>el.onclick=async()=>{
+      const inp=box.querySelector('.bgpin[data-id="'+el.dataset.id+'"]'); if(!inp||!el.dataset.id)return;
+      el.disabled=true;el.textContent='…';
+      const r3=await api('/api/budget/entry',{method:'POST',body:JSON.stringify({id:el.dataset.id,montant:Number(inp.value)})});
+      if(!r3.ok){const dd=await r3.json().catch(()=>({}));alert(dd.error||'Erreur');el.disabled=false;el.textContent='💾';return;}
+      renderBudgetView();
+    });
     box.querySelectorAll('.bgmini').forEach(el=>el.onclick=()=>selectBrand(el.dataset.b));
     box.querySelectorAll('.bgfiche2').forEach(a=>a.onclick=(ev)=>{ev.stopPropagation();MQ_SELECTED=a.dataset.b;navToView('marques');});
     // « + » : ajout rapide profil + budget dans le calendrier de la marque affichée
