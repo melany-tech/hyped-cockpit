@@ -2994,6 +2994,7 @@ async function loadMail(fresh){
       else { $('mailbox').innerHTML='<div class="mailconnect"><p>Connexion expirée.</p><button class="btn gmailbtn" id="gmailconnect">Reconnecter mon Gmail</button></div>'; $('gmailconnect').onclick=()=>loadMail(); }
       return;
     }
+    try{const rr2=await api('/api/relances');const dd2=await rr2.json();window.RELANCES=(dd2&&dd2.relances)||{};}catch(e){window.RELANCES=window.RELANCES||{};}
     renderMail(d, who);
     loadCopilotBox(who);
     if(!who){ checkSignature(); loadScheduled(); }
@@ -3342,11 +3343,42 @@ function renderMail(d, who){
     <div class="bgd-card" style="padding:14px"><div class="bgd-h" style="font-size:14px">Répartition par marque</div>
     ${bc.length?bc.map(([b2,n2])=>`<div class="mbchip" data-b="${esc(b2)}" style="display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid #F0F1F6;cursor:pointer"><b style="font-size:12px;flex:0 0 88px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(b2)}</b><span class="ceobar" style="flex:1"><span style="display:block;height:100%;border-radius:99px;width:${Math.round(100*n2/bTot)}%;background:#6D5AE0"></span></span><span class="fs" style="flex:0 0 58px;text-align:right">${n2} (${Math.round(100*n2/bTot)}%)</span></div>`).join(''):'<div class="fs">aucun mail par marque</div>'}
     </div></div>`;
-  const mbWrap=(inner)=>`<div class="mbgrid"><div style="min-width:0">${inner}</div>${sideHtml}</div>`;
+  const mbWrap=(inner)=>`<div class="mbgrid"><div style="min-width:0">${window.RELZONE||''}${inner}</div>${sideHtml}</div>`;
+  // ---- Relances Instagram : créatrices en attente depuis >= 5 jours (on a répondu, elles n'ont pas) ----
+  const REL=window.RELANCES||{};
+  const joursDe=(dstr)=>{const d2=new Date(dstr);if(isNaN(d2))return 0;return Math.floor((Date.now()-d2.getTime())/86400000);};
+  const prenomDe=(m)=>{const s2=deent(m.snippet||'');const mm=s2.match(/(?:hello|coucou|bonjour|hey|hi)\s+([A-Za-zÀ-ÿ'-]{2,})/i);return mm?mm[1]:'';};
+  const relCand=attente.map(m=>({m,j:joursDe(m.date),rel:REL[m.threadId||'']||null})).filter(x=>x.j>=5||x.rel);
+  let relZone='';window.RELZONE='';
+  if(relCand.length){
+    const parBrand={};relCand.forEach(x=>{const b2=x.m.brand||'Autres';(parBrand[b2]=parBrand[b2]||[]).push(x);});
+    const nARelancer=relCand.filter(x=>!x.rel).length;
+    const relRow=(x)=>{const m=x.m;const pn=prenomDe(m);const rel=x.rel;
+      const relAge=rel?Math.floor((Date.now()-rel.at)/86400000):0;
+      const alerte=rel&&relAge>=7;
+      const stat=rel?(alerte?`<span class="bgd-badge" style="background:#FBE5E0;color:#D4483B;font-size:10.5px">⚠️ relancé IG il y a ${relAge}j · repush / mail</span>`:`<span class="bgd-badge" style="background:#E7F5EC;color:#1F8A5D;font-size:10.5px">📸 relancé IG le ${new Date(rel.at).toLocaleDateString('fr-FR')}${rel.by?(' · '+esc(rel.by)):''}</span>`):`<span class="bgd-badge" style="background:#FDF0E0;color:#C77F2A;font-size:10.5px">⏳ ${x.j}j sans réponse</span>`;
+      return `<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #F0F1F6;flex-wrap:wrap">
+        <span style="width:8px;height:8px;flex:0 0 8px;border-radius:50%;background:${alerte?'#D4483B':(rel?'#2E9E6B':'#E8933A')}"></span>
+        <div style="min-width:0;flex:1"><b style="font-size:13px">${pn?esc(pn):esc((m.subject||'créatrice').replace(/^re\s*:\s*/i,''))}</b> <span class="fs">${esc(m.subject||'')}</span></div>
+        ${stat}
+        ${m.url?`<a class="lk" href="${esc(m.url)}" target="_blank" rel="noopener" style="font-size:12px">Ouvrir le fil</a>`:''}
+        <button class="lk relig" data-tid="${esc(m.threadId||'')}" data-done="${rel?'1':'0'}" style="font-size:12px;${rel?'':'background:#E1306C;color:#fff;border-color:#E1306C'}">${rel?'↩︎ annuler':'📸 Relancé sur IG'}</button>
+      </div>`;};
+    window.RELZONE=relZone=`<div class="bgd-card" style="margin-bottom:14px;border-color:#F1D9C0"><div class="bgd-h">📸 Relances Instagram à faire <span class="cpsub">créatrices sans réponse au mail depuis 5 j+ · relance-les sur Insta, coche quand c'est fait</span></div>
+      <div class="fs" style="margin:2px 0 8px">${nARelancer} à relancer · ${relCand.length-nARelancer} déjà relancée(s) sur IG</div>
+      ${Object.entries(parBrand).map(([b2,arr])=>`<div style="margin-top:6px"><div class="fs" style="font-weight:700;color:#4C3BB8">🏷️ ${esc(b2)} · ${arr.length}</div>${arr.slice(0,12).map(relRow).join('')}</div>`).join('')}</div>`;
+  }
   const mbWire=()=>{
     document.querySelectorAll('#mailbox .mbtab').forEach(b2=>b2.onclick=()=>{window.MB_TAB=b2.dataset.t;renderMail(window.MB_LAST.d,window.MB_LAST.who);});
     document.querySelectorAll('#mailbox .mbchip').forEach(b2=>b2.onclick=()=>{window.MB_BRAND=(window.MB_BRAND===b2.dataset.b?null:b2.dataset.b);renderMail(window.MB_LAST.d,window.MB_LAST.who);});
     const s2=document.getElementById('mbsearch'); if(s2){s2.value=window.MB_Q||'';s2.onkeydown=(e2)=>{if(e2.key==='Enter'){window.MB_Q=s2.value.trim();renderMail(window.MB_LAST.d,window.MB_LAST.who);}};}
+    document.querySelectorAll('#mailbox .relig').forEach(b2=>b2.onclick=async()=>{
+      const tid=b2.dataset.tid; if(!tid)return; const done=b2.dataset.done==='1';
+      b2.disabled=true;
+      const rr=await api('/api/relance',{method:'POST',body:JSON.stringify({threadId:tid,done:done?false:true})});
+      const dd=await rr.json().catch(()=>({})); if(dd&&dd.relances)window.RELANCES=dd.relances;
+      renderMail(window.MB_LAST.d,window.MB_LAST.who);
+    });
   };
   if(window.MB_TAB==='brouillons'){$('mailbox').innerHTML=mbWrap(sum+'<div class="state">Tes brouillons t\'attendent dans Gmail : <a class="lk" href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noopener">ouvrir les brouillons ↗</a></div>');mbWire();return;}
   if(window.MB_TAB==='relancer'){$('mailbox').innerHTML=mbWrap(sum+(attenteF.length?attenteHtml.replace('<details','<details open'):'<div class="state">Rien à relancer ✨</div>'));mbWire();return;}

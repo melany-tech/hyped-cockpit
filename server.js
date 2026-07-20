@@ -1185,6 +1185,19 @@ app.get("/api/gmail/inbox", auth, async (req, res) => {
 });
 // --- Mails « traités » (évite les réponses en double) --------------------
 const TREATED_STORE = path.join(DATA_DIR, "treated.json");
+// Relances Instagram : quand une créatrice ne répond pas au mail, on la relance sur Insta.
+// Clé = threadId. { at, by, canal }. Partagé par toute l'équipe.
+const RELANCE_STORE = path.join(DATA_DIR, "relances_ig.json");
+function loadRelances() { try { return JSON.parse(fs.readFileSync(RELANCE_STORE, "utf8")); } catch (e) { return {}; } }
+function saveRelances(o) { try { fs.writeFileSync(RELANCE_STORE, JSON.stringify(o)); } catch (e) {} }
+app.get("/api/relances", auth, (req, res) => { res.json({ ok: true, relances: loadRelances() }); });
+app.post("/api/relance", auth, (req, res) => {
+  const tid = String(req.body?.threadId || ""); if (!tid) return res.status(400).json({ error: "threadId manquant" });
+  const o = loadRelances();
+  if (req.body?.done === false) { delete o[tid]; }
+  else { o[tid] = { at: Date.now(), by: req.user.name, canal: String(req.body?.canal || "instagram").slice(0, 20) }; }
+  saveRelances(o); res.json({ ok: true, relances: o });
+});
 function loadTreated() { try { return JSON.parse(fs.readFileSync(TREATED_STORE, "utf8")); } catch (e) { return {}; } }
 function saveTreated(o) { try { fs.writeFileSync(TREATED_STORE, JSON.stringify(o)); } catch (e) {} }
 function markTreated(email, threadId, meta) { if (!email || !threadId) return; const o = loadTreated(); o[email + "|" + threadId] = { by: (meta && meta.by) || "", action: (meta && meta.action) || "répondu", at: Date.now() }; saveTreated(o); }
