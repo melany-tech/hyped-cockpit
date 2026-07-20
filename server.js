@@ -764,10 +764,12 @@ async function pennylaneSnapshot(force) {
         const mk2 = String(iv.date || "").slice(0, 7);
         // FACTURÉ : toutes les factures émises, avoirs en négatif (une facture annulée par avoir se neutralise)
         if (mk2) factMensuel[mk2] = (factMensuel[mk2] || 0) + ht;
-        const cn = ((iv.customer && iv.customer.name) || "").trim() || String(iv.label || "").replace(/^\s*(facture|avoir)\s+/i, "").split(/\s+[-\u2013]\s+F-?\d|\s+[-\u2013]\s+/)[0].replace(/\(label g[^)]*\)/i, "").trim();
-        if (cn) {
-          const ck2 = cn.toLowerCase();
-          const c3 = (clients[ck2] = clients[ck2] || { nom: cn, lateN: 0, lateSum: 0, moisN: 0, lastPaid: null });
+        let cn = ((iv.customer && iv.customer.name) || "").trim() || String(iv.label || "").replace(/^\s*(facture|avoir)\s+/i, "").split(/\s+[-\u2013]\s+F-?\d|\s+[-\u2013]\s+/)[0].replace(/\(label g[^)]*\)/i, "").trim();
+        // Aucun nom exploitable : on regroupe pour que le versement reste visible (sinon il compte dans le total mais dispara\u00eet de la liste).
+        const ckOrphan = !cn; if (ckOrphan) cn = "Autres versements";
+        {
+          const ck2 = ckOrphan ? "__autres__" : cn.toLowerCase();
+          const c3 = (clients[ck2] = clients[ck2] || { nom: cn, orphan: ckOrphan, lateN: 0, lateSum: 0, moisN: 0, lastPaid: null });
           if (mk2 === curM) c3.moisN++;
           if (iv.status === "late") { c3.lateN++; c3.lateSum += ht; }
           if (iv.status === "paid" && !c3.lastPaid && ht > 0) c3.lastPaid = { date: iv.date || "", montant: Math.round(ht) };

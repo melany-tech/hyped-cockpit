@@ -906,26 +906,41 @@ async function renderFinanceView(){
       const clients=(pl&&pl.clients)||{};
       const norm=(x)=>String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
       const offreMission=(clientNom)=>{const cn=norm(clientNom);let best=null;missions.forEach(m=>{const mc=norm(m.client);if(mc&&(cn.includes(mc)||mc.includes(cn)))best=m.offre;});return best;};
-      const OFC={'Influence':'#7C5CFA','Storytelling':'#2E9E6B','Social Media':'#E8933A','360°':'#4A7FB5','Autre':'#B98A12','Pocket reversée aux influenceuses':'#C9CED4','Non attribué':'#C9CED4'};
+      const OFC={'Influence':'#7C5CFA','Storytelling de marque':'#2E9E6B','Storytelling':'#2E9E6B','Social Media':'#E8933A','360°':'#4A7FB5','Autre':'#B98A12','Pocket reversée aux influenceuses':'#C9CED4','Non attribué':'#C9CED4'};
+      const canon=(s)=>String(s||'')==='Storytelling'?'Storytelling de marque':String(s||'');
       const rows=Object.values(clients).map(c=>({nom:c.nom,ca:Math.round(c.caPaye||0)})).filter(x=>x.ca>0).sort((a2,b2)=>b2.ca-a2.ca);
       const parSvc={};let totNet=0;
-      rows.forEach(x=>{const a2=attr[norm(x.nom)]||{};const pocket=Math.min(x.ca,Math.round(a2.pocket||0));const net=x.ca-pocket;const svc=a2.service||offreMission(x.nom)||'Non attribué';
+      rows.forEach(x=>{const a2=attr[norm(x.nom)]||{};const pocket=Math.min(x.ca,Math.round(a2.pocket||0));const net=x.ca-pocket;const svc=canon(a2.service||offreMission(x.nom)||'Non attribué');
         if(net>0){parSvc[svc]=(parSvc[svc]||0)+net;totNet+=net;}
         if(pocket>0)parSvc['Pocket reversée aux influenceuses']=(parSvc['Pocket reversée aux influenceuses']||0)+pocket;});
       const arr=Object.entries(parSvc).sort((a2,b2)=>b2[1]-a2[1]);
       const mx=Math.max(1,...arr.map(x=>x[1]));
-      const bars=arr.map(([k,v])=>{const col=OFC[k]||'#7C5CFA';const pc=totNet?Math.round(100*v/totNet):0;const pocketRow=(k==='Pocket reversée aux influenceuses');
-        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0"><span style="flex:0 0 150px;font-weight:600;font-size:12.5px;'+(pocketRow?'color:#8A9AA0':'')+'">'+esc(k)+'</span><div class="ceobar" style="flex:1;height:16px"><div style="width:'+Math.round(100*v/mx)+'%;background:'+col+'"></div></div><b style="flex:0 0 92px;text-align:right;white-space:nowrap;'+(pocketRow?'color:#8A9AA0':'')+'">'+eur(v)+'</b><span class="fs" style="flex:0 0 42px;text-align:right">'+(pocketRow?'reversé':pc+' %')+'</span></div>';}).join('');
+      const cols=arr.map(([k,v])=>{const col=OFC[k]||'#7C5CFA';const pc=totNet?Math.round(100*v/totNet):0;const pocketRow=(k==='Pocket reversée aux influenceuses');const h=Math.max(6,Math.round(150*v/mx));
+        return '<div style="flex:1;min-width:70px;display:flex;flex-direction:column;align-items:center;gap:6px">'
+          +'<b style="font-size:12.5px;white-space:nowrap;'+(pocketRow?'color:#8A9AA0':'')+'">'+eur(v)+'</b>'
+          +'<div style="height:160px;display:flex;align-items:flex-end"><div title="'+esc(k)+' · '+eur(v)+'" style="width:44px;height:'+h+'px;background:'+col+';border-radius:9px 9px 0 0"></div></div>'
+          +'<span style="font-size:11.5px;font-weight:700;text-align:center;line-height:1.25;max-width:96px;'+(pocketRow?'color:#8A9AA0':'')+'">'+esc(k)+'</span>'
+          +'<span class="fs" style="font-size:10.5px;'+(pocketRow?'color:#8A9AA0':'')+'">'+(pocketRow?'reversé':pc+' %')+'</span>'
+          +'</div>';}).join('');
+      const bars='<div style="display:flex;align-items:flex-end;gap:16px;padding:10px 4px 4px;overflow-x:auto">'+cols+'</div>';
+      // Donut : répartition de tes fees par service (pocket reversée exclu = c'est du pass-through)
+      const donArr=arr.filter(([k])=>k!=='Pocket reversée aux influenceuses');
+      const donTot=donArr.reduce((s2,x)=>s2+x[1],0)||1;
+      const R=54,CIR=2*Math.PI*R;let dOff=0;
+      const segs=donArr.map(([k,v])=>{const col=OFC[k]||'#7C5CFA';const len=CIR*v/donTot;const s2='<circle cx="72" cy="72" r="'+R+'" fill="none" stroke="'+col+'" stroke-width="20" stroke-dasharray="'+len.toFixed(2)+' '+(CIR-len).toFixed(2)+'" stroke-dashoffset="'+(-dOff).toFixed(2)+'" transform="rotate(-90 72 72)"><title>'+esc(k)+' · '+eur(v)+'</title></circle>';dOff+=len;return s2;}).join('');
+      const donut='<svg width="144" height="144" viewBox="0 0 144 144" style="flex:0 0 auto">'+segs+'<text x="72" y="69" text-anchor="middle" font-size="15" font-weight="800" fill="#1F2430" font-family="inherit">'+eur(donTot)+'</text><text x="72" y="86" text-anchor="middle" font-size="9.5" fill="#8A9AA0" font-family="inherit">tes fees</text></svg>';
+      const legend='<div style="display:flex;flex-direction:column;gap:7px;min-width:150px">'+donArr.map(([k,v])=>{const col=OFC[k]||'#7C5CFA';const pc=totNet?Math.round(100*v/totNet):0;return '<div style="display:flex;align-items:center;gap:8px;font-size:12px"><span style="width:11px;height:11px;flex:0 0 11px;border-radius:3px;background:'+col+'"></span><span style="flex:1;font-weight:600">'+esc(k)+'</span><b>'+pc+'%</b></div>';}).join('')+'</div>';
+      const donutH='<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;padding:6px 4px 14px;border-bottom:1px solid #F0F1F6;margin-bottom:6px">'+donut+legend+'</div>';
       // liste éditable par client
-      const SEL=['(auto)','Influence','Storytelling','Social Media','360°','Autre'];
+      const SEL=['(auto)','Influence','Storytelling de marque','Social Media','360°','Autre'];
       const editRows=rows.slice(0,window.FIN_ALLCLI?999:8).map(x=>{const a2=attr[norm(x.nom)]||{};const key=esc(norm(x.nom));const open2=window.FIN_EDIT===norm(x.nom);
-        const badge=a2.service?('<span class="bgd-badge" style="background:#EEEBFB;color:#4C3BB8;font-size:10.5px">'+esc(a2.service)+'</span>'):(offreMission(x.nom)?('<span class="bgd-badge" style="background:#F4F2FB;color:#4C3BB8;font-size:10.5px">'+esc(offreMission(x.nom))+' (auto)</span>'):'<span class="bgd-badge" style="background:#FDF0E0;color:#C77F2A;font-size:10.5px">à attribuer</span>');
+        const badge=a2.service?('<span class="bgd-badge" style="background:#EEEBFB;color:#4C3BB8;font-size:10.5px">'+esc(canon(a2.service))+'</span>'):(offreMission(x.nom)?('<span class="bgd-badge" style="background:#F4F2FB;color:#4C3BB8;font-size:10.5px">'+esc(canon(offreMission(x.nom)))+' (auto)</span>'):'<span class="bgd-badge" style="background:#FDF0E0;color:#C77F2A;font-size:10.5px">à attribuer</span>');
         const pk=Math.round(a2.pocket||0);
         let row='<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #F0F1F6;flex-wrap:wrap"><b style="flex:1;min-width:120px;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(x.nom)+'</b>'+badge+(pk>0?('<span class="fs">pocket '+eur(pk)+'</span>'):'')+'<b style="white-space:nowrap">'+eur(x.ca)+'</b><a class="lk finedit" data-k="'+key+'" data-nom="'+esc(x.nom)+'" style="border:none;background:'+(open2?'#EEEBFB':'none')+';padding:3px 8px;border-radius:8px">✎</a></div>';
-        if(open2)row+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px 0 12px 0;border-bottom:1px solid #F0F1F6"><span class="fs">Service :</span><select class="rhin finsvc" style="font-size:12.5px">'+SEL.map(o2=>'<option'+((o2==='(auto)'?'':o2)===(a2.service||'')?' selected':'')+' value="'+(o2==='(auto)'?'':o2)+'">'+o2+'</option>').join('')+'</select><span class="fs">Pocket reversée (€) :</span><input type="number" class="rhin finpk" value="'+pk+'" style="width:110px;padding:7px 9px;border-radius:9px"><button class="lk finsave" data-nom="'+esc(x.nom)+'" style="background:#6D5AE0;color:#fff;border-color:#6D5AE0">💾</button><span class="fs">le reste ('+eur(x.ca-pk)+') compte comme tes fees</span></div>';
+        if(open2)row+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px 0 12px 0;border-bottom:1px solid #F0F1F6"><span class="fs">Service :</span><select class="rhin finsvc" style="font-size:12.5px">'+SEL.map(o2=>'<option'+((o2==='(auto)'?'':o2)===canon(a2.service||'')?' selected':'')+' value="'+(o2==='(auto)'?'':o2)+'">'+o2+'</option>').join('')+'</select><span class="fs">Pocket reversée (€) :</span><input type="number" class="rhin finpk" value="'+pk+'" style="width:110px;padding:7px 9px;border-radius:9px"><button class="lk finsave" data-nom="'+esc(x.nom)+'" style="background:#6D5AE0;color:#fff;border-color:#6D5AE0">💾</button><span class="fs">le reste ('+eur(x.ca-pk)+') compte comme tes fees</span></div>';
         return row;}).join('');
       svcCard=arr.length||rows.length?('<div class="bgd-card" style="margin-bottom:14px"><div class="bgd-h" style="display:flex;align-items:center">💼 Encaissé par service <span class="bgd-badge" style="margin-left:auto;background:#F4F2FB;color:#4C3BB8">'+yr+' · tes fees, hors pocket reversée</span></div>'
-        +'<div style="margin-top:8px">'+(bars||'<div class="fs">Renseigne les services ci-dessous.</div>')+'</div>'
+        +'<div style="margin-top:8px">'+(donArr.length?donutH:'')+(bars||'<div class="fs">Renseigne les services ci-dessous.</div>')+'</div>'
         +'<div class="bgd-h" style="margin-top:14px;font-size:14px">Ajuster par client</div><div class="fs" style="margin:2px 0 4px">Pennylane ne connaît pas le détail : dis le service, et la part reversée aux influenceuses (pocket). Le reste = tes fees.</div>'
         +editRows
         +(rows.length>8?('<div style="text-align:center;padding:8px"><a class="lk finall" style="color:#6D5AE0;font-weight:700;border:none;background:none">'+(window.FIN_ALLCLI?'▲ Réduire':('▼ Voir les '+(rows.length-8)+' autre(s) client(s)'))+'</a></div>'):'')
