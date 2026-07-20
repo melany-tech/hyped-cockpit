@@ -2018,6 +2018,8 @@ async function load(){
   // Rôle « team » (ex. social media manager) : espace allégé, centré sur la to-do.
   // On masque les outils créateurs (profils, mails, campagnes, marques, contacts, rapports).
   if(VIEWER.role!=='supervisor'){['roadmap','finance','commercial','projets'].forEach(g=>{const n2=document.querySelector('.sb-nav .nav[data-go="'+g+'"]');if(n2)n2.style.display='none';});}
+  // Profils / sourcing = opérationnel des CP : masqué pour la direction (elle ne fait pas de veille).
+  if(VIEWER.role==='supervisor'){const np=document.querySelector('.sb-nav .nav[data-go="profils"]');if(np)np.style.display='none';}
   if(VIEWER.role==='team'){
     ['profils','campagnes','contenus','marques','contacts','messages','rapports','budget'].forEach(g=>{const a=document.querySelector('.sb-nav .nav[data-go="'+g+'"]');if(a)a.style.display='none';});
     ['srcpanel','mailpanel','pipelinepanel','brandpanel','fillpanel','listpanel','statcards'].forEach(id=>{const e=$(id);if(e){e.classList.add('hidden');e.style.display='none';}});
