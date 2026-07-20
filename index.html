@@ -1040,7 +1040,7 @@ async function renderFinanceView(){
         +'</div>';}).join('');
     const editA=window.ATT_EDIT?attendus.find(a=>a.id===window.ATT_EDIT):null;
     const fOpen=window.ATT_ADD||!!editA;
-    const inpF=(id,ph,val,ty)=>'<input id="'+id+'" class="rhin" type="'+(ty||'text')+'" placeholder="'+ph+'" value="'+esc(val==null?'':String(val))+'" style="padding:9px 11px;border-radius:9px">';
+    const inpF=(id,ph,val,ty)=>'<input id="'+id+'" class="rhin" type="'+(ty||'text')+'" autocomplete="off" data-lpignore="true" name="'+id+'_'+Math.random().toString(36).slice(2,7)+'" placeholder="'+ph+'" value="'+esc(val==null?'':String(val))+'" style="padding:9px 11px;border-radius:9px">';
     const selFa=(id,opts,val)=>'<select id="'+id+'" class="rhin" style="padding:9px 11px;border-radius:9px">'+opts.map(o=>'<option value="'+o[0]+'"'+(o[0]===val?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>';
     const formH=fOpen?('<div style="margin-top:10px;padding:12px;border:1px solid #E7E3F7;border-radius:12px;background:#FBFAFF">'
       +'<b style="font-size:13.5px">'+(editA?'Modifier l\'encaissement prévu':'Nouvel encaissement prévu')+'</b>'
