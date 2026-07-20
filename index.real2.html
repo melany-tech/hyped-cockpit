@@ -897,6 +897,30 @@ async function renderFinanceView(){
     } else {
       chartH='<div style="text-align:center;padding:26px 10px"><div style="font-size:34px">📈</div><div class="fs" style="margin-top:6px">La courbe se remplit dès la connexion Pennylane.</div></div>';
     }
+    // ---- Encaissé par SERVICE (croisement missions[offre] × encaissé Pennylane par client) ----
+    let svcCard='';
+    try{
+      const rm=await api('/api/missions'); const dm=rm.ok?await rm.json():{missions:[]};
+      const missions=(dm&&dm.missions)||[];
+      const clients=(pl&&pl.clients)||{};
+      const norm=(x)=>String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
+      const offreDe=(clientNom)=>{const cn=norm(clientNom);let best=null;missions.forEach(m=>{const mc=norm(m.client);if(mc&&(cn.includes(mc)||mc.includes(cn)))best=m.offre;});return best;};
+      const OFC={'Storytelling':'#2E9E6B','Influence':'#7C5CFA','Social Media':'#E8933A','360°':'#D4483B','Non attribué':'#C9CED4'};
+      const parSvc={};let totS=0;
+      Object.values(clients).forEach(c=>{const v=Math.round(c.caPaye||0);if(!(v>0))return;const off=offreDe(c.nom)||'Non attribué';parSvc[off]=(parSvc[off]||0)+v;totS+=v;});
+      const arr=Object.entries(parSvc).sort((a2,b2)=>b2[1]-a2[1]);
+      const mx=Math.max(1,...arr.map(x=>x[1]));
+      if(arr.length){
+        const bars=arr.map(([k,v])=>{const col=OFC[k]||'#7C5CFA';const pc=totS?Math.round(100*v/totS):0;
+          return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0"><span style="flex:0 0 120px;font-weight:600;font-size:12.5px">'+esc(k)+'</span><div class="ceobar" style="flex:1;height:16px"><div style="width:'+Math.round(100*v/mx)+'%;background:'+col+'"></div></div><b style="flex:0 0 92px;text-align:right;white-space:nowrap">'+eur(v)+'</b><span class="fs" style="flex:0 0 40px;text-align:right">'+pc+' %</span></div>';}).join('');
+        const naN=parSvc['Non attribué']||0;
+        svcCard='<div class="bgd-card" style="margin-bottom:14px"><div class="bgd-h" style="display:flex;align-items:center">💼 Encaissé par service <span class="bgd-badge" style="margin-left:auto;background:#F4F2FB;color:#4C3BB8">'+yr+' · d\'après tes missions</span></div><div style="margin-top:8px">'+bars+'</div>'
+          +(naN>0?'<div class="fs" style="margin-top:8px;padding:8px 11px;border-radius:10px;background:#FDF0E0;color:#C77F2A">ℹ️ '+eur(naN)+' non attribués : crée une mission (onglet Projets) avec le nom du client tel qu\'il apparaît dans Pennylane et son offre, pour qu\'ils soient rangés dans le bon service.</div>':'')
+          +'</div>';
+      } else if(missions.length===0){
+        svcCard='<div class="bgd-card" style="margin-bottom:14px"><div class="bgd-h">💼 Encaissé par service</div><div class="fs" style="margin-top:8px">Crée tes missions dans l\'onglet Projets (chacune a une offre : Influence, Storytelling, Social Media, 360°) en mettant le nom du client tel qu\'il apparaît dans Pennylane. Cet histogramme montrera alors d\'où viennent tes encaissements par service.</div></div>';
+      }
+    }catch(e){}
     const chartCard='<div class="bgd-card" style="min-width:0"><div class="bgd-h" style="display:flex;align-items:center">Évolution du CA encaissé<span class="bgd-badge" style="margin-left:auto;background:#F4F2FB;color:#4C3BB8">12 derniers mois · survole un point</span></div><div style="margin-top:8px">'+chartH+'</div></div>';
     // ---------- alertes & statuts ----------
     const stIc=(bg,ic)=>'<span style="width:30px;height:30px;flex:0 0 30px;border-radius:50%;background:'+bg+';display:inline-flex;align-items:center;justify-content:center;font-size:14px">'+ic+'</span>';
@@ -920,7 +944,7 @@ async function renderFinanceView(){
       +'<div class="fs" style="margin-top:8px">🛡️ Clé stockée uniquement sur le disque sécurisé du serveur : jamais dans le code, jamais réaffichée. À générer dans Pennylane → Paramètres → Connectivité → Développeurs.</div></div>';
     bx.innerHTML=kpis
       +'<div class="bgd-grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);margin-bottom:14px"><div style="min-width:0;display:flex;flex-direction:column;gap:14px">'+mainH+'</div><div style="min-width:0;display:flex;flex-direction:column;gap:14px">'+chartCard+alertH+'</div></div>'
-      +'<div class="bgd-grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">'+encH+connH+'</div>';
+      +svcCard+'<div class="bgd-grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">'+encH+connH+'</div>';
     const tipOn=(root)=>{
       let tb=document.getElementById('pltipbox');
       if(!tb){tb=document.createElement('div');tb.id='pltipbox';tb.style.cssText='position:fixed;z-index:120;pointer-events:none;background:#1F2430;color:#fff;font-size:12.5px;font-weight:700;font-family:inherit;padding:7px 11px;border-radius:9px;box-shadow:0 4px 14px rgba(0,0,0,.28);display:none;white-space:nowrap';document.body.appendChild(tb);}

@@ -771,6 +771,7 @@ async function pennylaneSnapshot(force) {
           if (mk2 === curM) c3.moisN++;
           if (iv.status === "late") { c3.lateN++; c3.lateSum += ht; }
           if (iv.status === "paid" && !c3.lastPaid && ht > 0) c3.lastPaid = { date: iv.date || "", montant: Math.round(ht) };
+          if (iv.status === "paid" && iv.date && iv.date >= y0) c3.caPaye = (c3.caPaye || 0) + ht;
         }
         if (iv.status === "late") { lateN++; lateSum += ht; }
         else if (iv.status === "upcoming") { upcomN++; upcomSum += ht; }
@@ -792,6 +793,7 @@ async function pennylaneSnapshot(force) {
       caMois: mensuel[moisK] || 0, caPrevMois: mensuel[prevK] || 0, mensuel, lastPaid,
       factureMois: factMensuel[moisK] || 0, facturePrevMois: factMensuel[prevK] || 0, factMensuel,
       lateN, lateSum: Math.round(lateSum), upcomN, upcomSum: Math.round(upcomSum), clients, error: null };
+    Object.values(clients).forEach((c) => { if (c.caPaye) c.caPaye = Math.round(c.caPaye); });
   } catch (e) {
     PL_CACHE = { ...PL_CACHE, at: Date.now(), error: String((e && e.message) || e).slice(0, 100) };
     try { console.error("[pennylane]", PL_CACHE.error); } catch (e2) {}
