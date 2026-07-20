@@ -2797,7 +2797,7 @@ async function loadBudgetBox(brand,det,month){
     const C=2*Math.PI*44;
     const col=(bm>0&&tot>bm)?'#C2553B':'#2C9087';
     const donut=bm>0?`<svg viewBox="0 0 110 110" style="width:118px;height:118px;flex:0 0 118px"><circle cx="55" cy="55" r="44" fill="none" stroke="#E8EEEE" stroke-width="14"/><circle cx="55" cy="55" r="44" fill="none" stroke="${col}" stroke-width="14" stroke-dasharray="${(C*pct).toFixed(1)} ${C.toFixed(1)}" stroke-linecap="round" transform="rotate(-90 55 55)"/><text x="55" y="52" text-anchor="middle" style="font-size:15px;font-weight:800;fill:#1C3A44">${Math.round(100*tot/bm)}%</text><text x="55" y="68" text-anchor="middle" style="font-size:9px;fill:#6A7A7A">engagé</text></svg>`:'';
-    box.innerHTML=`<div class="bcsub">📊 Suivi budget · <input type="month" id="bgmonth" value="${esc(d.month)}" style="width:auto;display:inline-block;font-size:12px;padding:2px 6px"> <button class="lk" id="bgexport" style="float:right">⬇️ Exporter en Excel (reporting client)</button></div>
+    box.innerHTML=`<div class="bcsub">📊 Suivi budget · <span style="white-space:nowrap;background:#fff;border:1px solid #E5EAEC;border-radius:10px;padding:4px 6px;display:inline-flex;align-items:center;gap:2px;vertical-align:middle"><button class="lk" id="bgmprev2" title="Mois précédent" style="border:none;background:none;padding:2px 7px;font-weight:800;font-size:15px">‹</button><label for="bgmonth" style="cursor:pointer">🗓️</label><input type="month" id="bgmonth" value="${esc(d.month)}" style="width:auto;display:inline-block;font-size:12.5px;font-weight:600;padding:0 2px;border:none;background:transparent;cursor:pointer"><button class="lk" id="bgmnext2" title="Mois suivant" style="border:none;background:none;padding:2px 7px;font-weight:800;font-size:15px">›</button></span> <button class="lk" id="bgexport" style="float:right">⬇️ Exporter en Excel (reporting client)</button></div>
       <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;padding:6px 0 12px">${donut}
       <div style="flex:1;min-width:220px">
         ${bm>0?`<div><b>${eur(tot)}</b> engagés sur <b>${eur(bm)}</b> de budget mensuel</div>
@@ -2805,7 +2805,10 @@ async function loadBudgetBox(brand,det,month){
         :`<div><b>${eur(tot)}</b> engagés ce mois-ci.</div><div class="fs">Renseigne « 📊 Budget mensuel » dans la fiche (✏️ Modifier la fiche) pour voir le camembert et le restant.</div>`}
         <div class="fs" style="margin-top:5px">${(d.entries||[]).length} collab(s) au calendrier ce mois-ci${d.noCal?' · <b>calendrier non branché pour cette marque</b>':''}. Les montants validés par mail sont inscrits automatiquement au calendrier par le copilote ; les ajouts à la main comptent pareil.</div>
       </div></div>`;
-    const mi=box.querySelector('#bgmonth'); if(mi)mi.onchange=()=>loadBudgetBox(brand,det,mi.value);
+    const mi=box.querySelector('#bgmonth'); if(mi){mi.onchange=()=>loadBudgetBox(brand,det,mi.value);mi.onclick=()=>{try{mi.showPicker();}catch(e){}};}
+    const shM=(k)=>{const [y2,m2]=String(d.month).split('-').map(Number);const dd2=new Date(y2,m2-1+k,1);loadBudgetBox(brand,det,dd2.getFullYear()+'-'+String(dd2.getMonth()+1).padStart(2,'0'));};
+    const bp2=box.querySelector('#bgmprev2'); if(bp2)bp2.onclick=()=>shM(-1);
+    const bn2=box.querySelector('#bgmnext2'); if(bn2)bn2.onclick=()=>shM(1);
     const ex=box.querySelector('#bgexport'); if(ex)ex.onclick=async()=>{
       ex.textContent='⏳ Préparation…';
       try{
