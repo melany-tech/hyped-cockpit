@@ -3624,20 +3624,26 @@ function renderAgenda(events){
   CAL_EVENTS=events||[]; if(CURRENT_VIEW==='calendrier')renderCalendrier();
   const now=new Date();
   const dnum=now.getDate(), mon=now.toLocaleDateString('fr-FR',{month:'short'});
-  const evHtml=(events&&events.length)?events.map(e=>{
+  const absArr=window.AGENDA_ABS||[];
+  const absHtml=absArr.map(a=>`<div class="row"><span class="rdot" style="background:#E8933A"></span><div class="info"><div class="t">🌴 ${a.moi?'Tu es en congé':(esc(a.who)+' est en congé')}</div><div class="s">${esc(a.type)}${a.au&&a.au!==a.du?(' · jusqu\'au '+String(a.au).split('-').reverse().join('/')):''}</div></div><span class="brand" style="color:#B98A12;background:#F5EFE2">Off</span></div>`).join('');
+  const evHtml=absHtml+((events&&events.length)?events.map(e=>{
     const when=e.allDay?'journée':fmtTime(e.start)+(e.end?(' – '+fmtTime(e.end)):'');
     const link=e.meet?`<a href="${esc(e.meet)}" target="_blank" rel="noopener">Rejoindre</a>`:(e.htmlLink?`<a href="${esc(e.htmlLink)}" target="_blank" rel="noopener">Ouvrir</a>`:'');
     const dot=e.meet?'#2C9087':'#7A5AA8';
     const sub=[when]; if(e.location)sub.push(esc(e.location));
     return `<div class="row"><span class="rdot" style="background:${dot}"></span><div class="info"><div class="t">${esc(e.title)}</div><div class="s">${sub.join(' · ')}</div></div>${e.meet?'<span class="brand" style="color:#0F6E56;background:#E4F1ED">Meet</span>':''}${link}</div>`;
-  }).join(''):'<div class="state" style="padding:14px">Aucune visio aujourd\'hui ☀️</div>';
+  }).join(''):(absHtml?'':'<div class="state" style="padding:14px">Aucune visio aujourd\'hui ☀️</div>'));
   $('visiobox').innerHTML=`<div class="agenda"><div class="agtop"><div class="agbig"><div class="d">${dnum}</div><div class="m">${mon}</div></div>${miniCal()}</div><div class="agevs">${evHtml}</div></div>`;
 }
 async function loadVisios(){
   try{
     const who=mailAs(); const q=who?('?as='+encodeURIComponent(who)):'';
+    try{const ra=await api('/api/absences/jour'+q);const da=await ra.json();window.AGENDA_ABS=(da&&da.absences)||[];}catch(e){window.AGENDA_ABS=[];}
     const r=await api('/api/calendar'+q);const d=await r.json();
-    if(!d.enabled||!d.connected){ show($('agendapanel'),false); CAL_EVENTS=[]; CAL_VIEWING=who; if(CURRENT_VIEW==='calendrier')renderCalendrier(); return; }
+    if(!d.enabled||!d.connected){
+      if((window.AGENDA_ABS||[]).length){ show($('agendapanel'),true); const hdr0=$('agendapanel')&&$('agendapanel').querySelector('.pt'); if(hdr0)hdr0.innerHTML='<span class="pi">📅</span> '+(who?('Agenda · '+esc(who)):'Agenda du jour'); CAL_VIEWING=who; renderAgenda([]); if(CURRENT_VIEW==='calendrier')renderCalendrier(); return; }
+      show($('agendapanel'),false); CAL_EVENTS=[]; CAL_VIEWING=who; if(CURRENT_VIEW==='calendrier')renderCalendrier(); return;
+    }
     show($('agendapanel'),true);
     const hdr=$('agendapanel')&&$('agendapanel').querySelector('.pt'); if(hdr) hdr.innerHTML='<span class="pi">📅</span> '+(who?('Agenda · '+esc(who)):'Agenda du jour');
     CAL_VIEWING=who;

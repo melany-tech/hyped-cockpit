@@ -586,6 +586,15 @@ app.get("/api/rh", auth, (req, res) => {
     members: USERS.filter((u) => !COPILOT.departed.includes(String(u.email).toLowerCase()) && normName(u.name) !== "kendia").map((u) => u.name),
     team: sup ? USERS.filter((u) => u.role !== "supervisor").map((u) => u.name) : [] });
 });
+// Absences validées d'une date donnée, pour l'agenda du cockpit
+app.get("/api/absences/jour", auth, (req, res) => {
+  const o = loadRh(); const sup = req.user.role === "supervisor";
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || "")) ? String(req.query.date) : new Date().toISOString().slice(0, 10);
+  const list = (o.absences || []).filter((a) => a.statut === "validée" && a.du <= d && d <= a.au)
+    .filter((a) => sup || normName(a.who) === normName(req.user.name))
+    .map((a) => ({ who: a.who, type: a.type, du: a.du, au: a.au, moi: normName(a.who) === normName(req.user.name) }));
+  res.json({ ok: true, date: d, sup, absences: list });
+});
 app.post("/api/rh/absence", auth, async (req, res) => {
   const du = String(req.body?.du || ""), au = String(req.body?.au || du);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(du) || !/^\d{4}-\d{2}-\d{2}$/.test(au)) return res.status(400).json({ error: "dates invalides" });
@@ -3680,6 +3689,24 @@ async function remindTick() {
         try { await copilotNotify({ slackUser: sid2, text: q }); } catch (e) {}
       }
       st["last_ck_" + ck] = today; saveRemind(st);
+    }
+    // Rappel la veille des absences validées (une fois par jour, le matin) : Slack + mail à la direction
+    if (slot === "am" && st.last_absrem !== today) {
+      try {
+        const tmr = new Date(now.getTime() + 86400000).toISOString().slice(0, 10);
+        const rhO2 = loadRh();
+        const demain = (rhO2.absences || []).filter((a) => a.statut === "validée" && a.du === tmr);
+        if (demain.length) {
+          const dmy2 = (x) => String(x).split("-").reverse().join("/");
+          const lignes = demain.map((a) => "• *" + a.who + "* · " + a.type + " (jusqu'au " + dmy2(a.au) + ")").join("\n");
+          const txtR = "🌴 *Rappel absences de demain* (" + dmy2(tmr) + ") :\n" + lignes + "\nPense à anticiper la couverture 🙂";
+          for (const u3 of USERS.filter((x) => x.role === "supervisor")) {
+            const su3 = rhSlackTo(u3.email); if (su3) { try { await copilotNotify({ slackUser: su3, text: txtR }); } catch (e) {} }
+            try { if (gm.ENABLED && gm.isConnected(u3.email)) await gm.sendEmail(u3.email, { to: u3.email, subject: "Rappel : absence(s) demain " + dmy2(tmr), body: txtR.replace(/\*/g, "") }); } catch (e) {}
+          }
+        }
+        st.last_absrem = today; saveRemind(st);
+      } catch (e) {}
     }
     if (!slot) return;
     if (st["last_" + slot] === today) return;
