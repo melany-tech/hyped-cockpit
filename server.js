@@ -764,7 +764,7 @@ async function pennylaneSnapshot(force) {
         const mk2 = String(iv.date || "").slice(0, 7);
         // FACTURÉ : toutes les factures émises, avoirs en négatif (une facture annulée par avoir se neutralise)
         if (mk2) factMensuel[mk2] = (factMensuel[mk2] || 0) + ht;
-        const cn = ((iv.customer && iv.customer.name) || "").trim();
+        const cn = ((iv.customer && iv.customer.name) || "").trim() || String(iv.label || "").replace(/^\s*(facture|avoir)\s+/i, "").split(/\s+[-\u2013]\s+F-?\d|\s+[-\u2013]\s+/)[0].replace(/\(label g[^)]*\)/i, "").trim();
         if (cn) {
           const ck2 = cn.toLowerCase();
           const c3 = (clients[ck2] = clients[ck2] || { nom: cn, lateN: 0, lateSum: 0, moisN: 0, lastPaid: null });
