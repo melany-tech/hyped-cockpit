@@ -168,6 +168,9 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 .todolink:hover{border-bottom-color:var(--teal)}
 .draftbanner{display:block;background:#FBEFD9;color:#9A6B12;border:1px solid #F0E0C0;border-radius:11px;padding:12px 16px;margin-bottom:18px;font-weight:600;font-size:13.5px;text-decoration:none}
 .draftbanner:hover{background:#F6E6C8}
+#mailbox .reopenbtn{opacity:.45;font-size:11px;padding:4px 9px}
+#mailbox .reopenbtn:hover{opacity:1}
+.filechips-wrap summary::-webkit-details-marker{display:none}
 .draftbanner{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .bannerclose{border:none;background:none;color:#9A6B12;font-size:15px;font-weight:700;cursor:pointer;padding:2px 6px;border-radius:6px;line-height:1}
 .bannerclose:hover{background:#F0E0C0}
@@ -2907,6 +2910,7 @@ async function loadDrafts(){
     updateBell();
     // bandeau fermable : la croix le masque, il revient si le nombre de brouillons change
     let dismissed=false; try{ dismissed=localStorage.getItem('hc_draftdismiss')===String(d&&d.count); }catch(e){}
+    window.DRAFTS_COUNT=(d&&d.count)||0;
     if(d&&d.count>0&&!dismissed){
       const b=$('draftbanner');
       b.innerHTML='<span>📧 '+d.count+' brouillon'+(d.count>1?'s':'')+' à valider, clique pour les relire et les envoyer depuis Gmail</span><button class="bannerclose" title="Masquer ce bandeau">✕</button>';
@@ -3246,15 +3250,16 @@ function fileChips(atts, lnks){
   if(!atts.length && !lnks.length) return '';
   const who=(typeof mailAs==='function')?mailAs():'';
   const al=lnks.map(u=>`<a class="filechip linkchip" href="${esc(u)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 ${esc(transferName(u))} ↗</a>`).join('');
-  const af=atts.map(a=>{
-    const lbl='📎 '+esc(a.filename)+(a.sizeLabel?(' · '+esc(a.sizeLabel)):'');
+  const af=atts.map((a,ai)=>{
+    const niceN=(/^(img|image)[-_][0-9a-f-]{8,}/i.test(String(a.filename||''))?('Image '+(ai+1)+String((String(a.filename).match(/\.[a-z0-9]{2,4}$/i)||[''])[0])):a.filename);
+    const lbl='📎 '+esc(niceN)+(a.sizeLabel?(' · '+esc(a.sizeLabel)):'');
     if(a.attId&&a.msgId){
       const q='msgId='+encodeURIComponent(a.msgId)+'&attId='+encodeURIComponent(a.attId)+'&name='+encodeURIComponent(a.filename)+(who?('&as='+encodeURIComponent(who)):'');
       return `<a class="filechip attchip" href="/api/gmail/attachment?${q}" target="_blank" rel="noopener" download="${esc(a.filename)}" title="Télécharger ${esc(a.filename)}" onclick="event.stopPropagation()">${lbl} ⬇</a>`;
     }
     return `<span class="filechip" title="${esc(a.filename)}">${lbl}</span>`;
   }).join('');
-  return `<div class="filechips">${al}${af}</div>`;
+  const nAll=atts.length+lnks.length; return `<details class="filechips-wrap" onclick="event.stopPropagation()" style="margin-top:5px"><summary class="filechip" style="cursor:pointer;display:inline-block">📎 ${nAll} pièce${nAll>1?'s':''} jointe${nAll>1?'s':''}</summary><div class="filechips">${af}${al}</div></details>`;
 }
 // Date lisible d'un mail : « 14:32 » si aujourd'hui, sinon « mer. 2 juil. 09:15 »
 function mailDate(d){
@@ -3266,6 +3271,7 @@ function mailDate(d){
 // Les extraits Gmail arrivent avec des entités HTML (&#39; etc.) : on les décode avant affichage
 function deent(s){const t=document.createElement('textarea');t.innerHTML=String(s||'');return t.value;}
 function renderMail(d, who){
+  window.MB_LAST={d,who}; window.MB_TAB=window.MB_TAB||'tous';
   const reps=d.creatorReplies||[];
   if(!who){ try{setPipeReponse(reps.length);}catch(e){} }
   // « Autres mails reçus » : tout ce qui n'est pas une réponse créateur mais qui existe quand même
@@ -3282,15 +3288,42 @@ function renderMail(d, who){
   const isHA=m=>/@hyped-agency\.fr/i.test(String(m.from||''));
   const attente=autresTous.filter(m=>m.brand&&isHA(m));
   const autres=autresTous.filter(m=>!(m.brand&&isHA(m)));
+  const q=(window.MB_Q||'').toLowerCase(); const bsel=window.MB_BRAND||null;
+  const match=(m)=>(!bsel||String(m.brand||'')===bsel)&&(!q||((m.subject||'')+' '+(m.from||'')+' '+(m.snippet||'')).toLowerCase().includes(q));
+  const repsF=reps.filter(m=>match(m)&&(window.MB_TAB!=='atraiter'||!m.treated));
+  const attenteF=attente.filter(match); const autresF=autres.filter(match);
   const aRow=m=>{const link=m.url?`<a class="lk" href="${esc(m.url)}" target="_blank" rel="noopener">Ouvrir</a>`:'';
     const snip=deent(m.snippet||''); const dt=mailDate(m.date);
     return `<div class="row"><span class="rdot" style="background:#9AA7AA"></span><div class="info"><div class="t">${esc(m.subject)||'(sans objet)'}</div><div class="s">${esc(m.from||'')}${m.interne?' · <span class="cptag">interne</span>':''}${dt?` · <span class="maildate">${esc(dt)}</span>`:''}</div>${snip?`<div class="msgsnip">${esc(snip.slice(0,130))}${snip.length>130?'…':''}</div>`:''}</div>${m.brand?`<span class="brand">${esc(m.brand)}</span>`:''}${link}</div>`;};
-  const attenteHtml=attente.length?`<details class="othermails"><summary>⏳ En attente de réponse créateur (${attente.length}) · tu as répondu, la balle est chez eux</summary>${attente.slice(0,50).map(aRow).join('')}</details>`:'';
-  const autresHtml=(autres.length?`<details class="othermails"><summary>📥 Autres mails reçus (${autres.length}) · internes, en copie, hors collabs</summary>${autres.slice(0,50).map(aRow).join('')}</details>`:'')+attenteHtml;
-  const sum=`<div class="mailhead">📥 Toute la boîte <span class="cpsub">un fil par ligne · la phrase grise est l'aperçu de la première ligne du mail · les lignes marquées 🤖 ont leur carte détaillée dans la zone copilote au-dessus</span></div><div class="mailsum">${d.relevant||0} mail(s) liés aux collabs · <b>${reps.length} réponse(s) créateur</b> · ${attente.length} en attente créateur · ${autres.length} autre(s) · ${d.noise||0} ignoré(s) (pubs, newsletters)</div>`;
-  if(!reps.length){$('mailbox').innerHTML=sum+'<div class="state">Aucune réponse créateur récente. 👌</div>'+autresHtml;return;}
+  const attenteHtml=attenteF.length?`<details class="othermails"><summary>⏳ En attente de réponse créateur (${attenteF.length}) · tu as répondu, la balle est chez eux</summary>${attenteF.slice(0,50).map(aRow).join('')}</details>`:'';
+  const autresHtml=(autresF.length?`<details class="othermails"><summary>📥 Autres mails reçus (${autresF.length}) · internes, en copie, hors collabs</summary>${autresF.slice(0,50).map(aRow).join('')}</details>`:'')+attenteHtml;
+  const bc=Object.entries(d.byBrand||{}).map(([b,a2])=>[b,(a2||[]).length]).filter(x=>x[1]>0).sort((a2,b2)=>b2[1]-a2[1]);
+  const bTot=bc.reduce((s2,x)=>s2+x[1],0)||1;
+  const kpiM=(ic,lbl,val,sub,t2)=>`<div class="bgd-card mbtab" data-t="${t2}" style="min-width:0;cursor:pointer;padding:13px"><div style="display:flex;gap:10px;align-items:center"><span style="width:40px;height:40px;flex:0 0 40px;border-radius:12px;background:#F4F2FB;display:inline-flex;align-items:center;justify-content:center;font-size:18px">${ic}</span><div style="min-width:0"><div class="bgd-klbl" style="font-size:11.5px">${lbl}</div><div class="bgd-kval" style="font-size:21px">${val}</div><div class="bgd-ksub" style="font-size:11px">${sub}</div></div></div></div>`;
+  const nDrafts=(window.DRAFTS_COUNT!=null)?window.DRAFTS_COUNT:'·';
+  const sum=`<div class="bgd-h" style="font-size:19px">Messages créateurs</div><div class="fs" style="margin:2px 0 12px">Suivi des échanges, réponses et brouillons par marque.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:10px;margin-bottom:12px">
+    ${kpiM('📥','Mails liés aux collabs',String(d.relevant||0),'hors newsletters et pubs','tous')}
+    ${kpiM('↩️','Réponses créateurs',String(reps.length),'à traiter en priorité','reps')}
+    ${kpiM('📤','Brouillons à valider',String(nDrafts),'à relire et envoyer','brouillons')}
+    ${kpiM('⏰','À relancer',String(attente.length),'sans réponse créateur','relancer')}
+    ${kpiM('🏷️','Marques actives',String(bc.length),'avec des échanges','tous')}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">${bc.slice(0,4).map(([b,n2])=>`<button class="lk mbchip" data-b="${esc(b)}" style="display:flex;align-items:center;gap:8px;border-radius:12px;padding:8px 12px;${window.MB_BRAND===b?'background:#EEEBFB;border-color:#D9D2F6;color:#4C3BB8;font-weight:700':''}"><span class="bgd-pav" style="background:${(typeof bgdCol==='function')?bgdCol(b):'#6D5AE0'}">${esc(String(b||'?').slice(0,2).toUpperCase())}</span>${esc(b)} · ${n2} mail${n2>1?'s':''}<span class="ceobar" style="width:52px"><span style="display:block;height:100%;border-radius:99px;width:${Math.round(100*n2/bTot)}%;background:#6D5AE0"></span></span></button>`).join('')}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      ${[['tous','Tous'],['atraiter','En attente'],['reps','Réponses créateurs'],['brouillons','Brouillons'],['relancer','À relancer']].map(([k2,l2])=>`<button class="lk mbtab" data-t="${k2}" style="border-radius:999px;padding:8px 14px;${window.MB_TAB===k2?'background:#6D5AE0;color:#fff;border-color:#6D5AE0;font-weight:700':''}">${l2}</button>`).join('')}
+      <input id="mbsearch" class="rhin" placeholder="Rechercher un mail, un créateur… puis Entrée" style="flex:1;min-width:180px;border-radius:999px;padding:9px 14px">
+    </div>`;
+  const mbWire=()=>{
+    document.querySelectorAll('#mailbox .mbtab').forEach(b2=>b2.onclick=()=>{window.MB_TAB=b2.dataset.t;renderMail(window.MB_LAST.d,window.MB_LAST.who);});
+    document.querySelectorAll('#mailbox .mbchip').forEach(b2=>b2.onclick=()=>{window.MB_BRAND=(window.MB_BRAND===b2.dataset.b?null:b2.dataset.b);renderMail(window.MB_LAST.d,window.MB_LAST.who);});
+    const s2=document.getElementById('mbsearch'); if(s2){s2.value=window.MB_Q||'';s2.onkeydown=(e2)=>{if(e2.key==='Enter'){window.MB_Q=s2.value.trim();renderMail(window.MB_LAST.d,window.MB_LAST.who);}};}
+  };
+  if(window.MB_TAB==='brouillons'){$('mailbox').innerHTML=sum+'<div class="state">Tes brouillons t\'attendent dans Gmail : <a class="lk" href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noopener">ouvrir les brouillons ↗</a></div>';mbWire();return;}
+  if(window.MB_TAB==='relancer'){$('mailbox').innerHTML=sum+(attenteF.length?attenteHtml.replace('<details','<details open'):'<div class="state">Rien à relancer ✨</div>');mbWire();return;}
+  if(!repsF.length){$('mailbox').innerHTML=sum+'<div class="state">Aucun mail ici avec ces filtres. 👌</div>'+(window.MB_TAB==='tous'?autresHtml:'');mbWire();return;}
   const CC={facturation:'#C77F2A',preview:'#7A5AA8',logistique:'#2C9087','réponse':'#1C3A44'};
-  $('mailbox').innerHTML=sum+reps.map(m=>{
+  $('mailbox').innerHTML=sum+repsF.map(m=>{
     const ownerTag=m.créateur?`<span class="owner">${esc(m.créateur)}</span>`:'';
     const c=CC[m.category]||'#56666D';
     const link=m.url?`<a href="${m.url}" target="_blank" rel="noopener">Ouvrir</a>`:'';
@@ -3303,10 +3336,11 @@ function renderMail(d, who){
     return `<div class="row${tr?' treated':''}" data-email="${esc(email)}" data-subject="${esc(m.subject||'')}" data-cat="${esc(m.category||'')}" data-creator="${esc(m.créateur||'')}" data-brand="${esc(m.brand||'')}" data-thread="${esc(m.threadId||'')}" data-snippet="${esc(snip.slice(0,400))}" data-url="${esc(m.url||'')}" data-files="${filesJson}"><span class="rdot" style="background:${c}"></span>
       <div class="info"><div class="t">${esc(m.subject)||'(sans objet)'}${spamBadge}${trBadge}</div><div class="s">${esc(m.from)} · ${esc(m.category)}${dt?` · <span class="maildate">${esc(dt)}</span>`:''}</div>${snip?`<div class="msgsnip">${esc(snip.slice(0,130))}${snip.length>130?'…':''}</div>`:''}${fileChips(m.attachments,m.transferLinks)}</div>
       <span class="brand">${esc(m.brand)}</span>${ownerTag}<button class="lk primary replybtn">✍️ Répondre</button>${treatBtns}${link}</div>`;
-  }).join('')+autresHtml;
+  }).join('')+(window.MB_TAB==='tous'?autresHtml:'');
   document.querySelectorAll('#mailbox .replybtn').forEach(b=>b.onclick=()=>openReply(b));
   document.querySelectorAll('#mailbox .treatbtn').forEach(b=>b.onclick=()=>setTreated(b.dataset.thread,true));
   document.querySelectorAll('#mailbox .reopenbtn').forEach(b=>b.onclick=()=>setTreated(b.dataset.thread,false));
+  mbWire();
 }
 async function setTreated(threadId, treated){
   if(!threadId)return;
