@@ -922,10 +922,17 @@ async function renderFinanceView(){
         +'<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;font-size:13px;margin-bottom:7px"><b style="color:#0E9AA3">Tes fees '+eur(feesTot)+' · '+fPc+'%</b><b style="color:#8A9AA0">Reversé aux influenceuses '+eur(pocketTot)+' · '+pPc+'%</b></div>'
         +'<div style="display:flex;height:24px;border-radius:9px;overflow:hidden;background:#EEF0F2">'+(fPc>0?'<div style="width:'+fPc+'%;background:#16BAC5"></div>':'')+(pPc>0?'<div style="width:'+pPc+'%;background:#C9CED4"></div>':'')+'</div>'
         +'<div class="fs" style="margin-top:7px">Sur '+eur(encTot)+' encaissés : ce qui te revient (tes fees, Influence + Storytelling + etc.) vs ce que tu reverses aux influenceuses.</div></div>'):'';
-      // détail de tes fees par service (pocket exclu, c'est du pass-through)
-      const donArr=arr.filter(([k])=>k!=='Pocket reversée aux influenceuses');
+      // détail par service : encaissé seul, ou encaissé + prévisionnel selon le toggle
+      const attP=(ceo.attendus||[]).filter(a=>a.statut!=='encaisse'&&(a.certitude==='confirme'||a.certitude==='probable'));
+      const prevSvc={};attP.forEach(a=>{const k=a.service?canon(a.service):(offreMission(a.client)?canon(offreMission(a.client)):'Non attribué');prevSvc[k]=(prevSvc[k]||0)+(a.montant||0);});
+      const hasPrev=Object.keys(prevSvc).length>0;
+      window.SVC_MODE=window.SVC_MODE||'reel';const withPrev=hasPrev&&window.SVC_MODE==='prev';
+      const dispSvc={};arr.forEach(([k,v])=>{if(k!=='Pocket reversée aux influenceuses')dispSvc[k]=(dispSvc[k]||0)+v;});
+      if(withPrev){Object.keys(prevSvc).forEach(k=>{dispSvc[k]=(dispSvc[k]||0)+prevSvc[k];});}
+      const donArr=Object.entries(dispSvc).sort((a2,b2)=>b2[1]-a2[1]);
+      const svcTot=donArr.reduce((s2,x)=>s2+x[1],0)||1;
       const mx=Math.max(1,...donArr.map(x=>x[1]));
-      const cols=donArr.map(([k,v])=>{const col=OFC[k]||'#16BAC5';const pc=totNet?Math.round(100*v/totNet):0;const h=Math.max(6,Math.round(150*v/mx));
+      const cols=donArr.map(([k,v])=>{const col=OFC[k]||'#16BAC5';const pc=Math.round(100*v/svcTot);const h=Math.max(6,Math.round(150*v/mx));
         return '<div style="flex:1;min-width:70px;display:flex;flex-direction:column;align-items:center;gap:6px">'
           +'<b style="font-size:12.5px;white-space:nowrap">'+eur(v)+'</b>'
           +'<div style="height:160px;display:flex;align-items:flex-end"><div title="'+esc(k)+' · '+eur(v)+'" style="width:44px;height:'+h+'px;background:'+col+';border-radius:9px 9px 0 0"></div></div>'
@@ -933,11 +940,12 @@ async function renderFinanceView(){
           +'<span class="fs" style="font-size:10.5px">'+pc+' %</span>'
           +'</div>';}).join('');
       const bars='<div style="display:flex;align-items:flex-end;gap:16px;padding:10px 4px 4px;overflow-x:auto">'+cols+'</div>';
-      const donTot=donArr.reduce((s2,x)=>s2+x[1],0)||1;
+      const donTot=svcTot;
       const R=54,CIR=2*Math.PI*R;let dOff=0;
       const segs=donArr.map(([k,v])=>{const col=OFC[k]||'#16BAC5';const len=CIR*v/donTot;const s2='<circle cx="72" cy="72" r="'+R+'" fill="none" stroke="'+col+'" stroke-width="20" stroke-dasharray="'+len.toFixed(2)+' '+(CIR-len).toFixed(2)+'" stroke-dashoffset="'+(-dOff).toFixed(2)+'" transform="rotate(-90 72 72)"><title>'+esc(k)+' · '+eur(v)+'</title></circle>';dOff+=len;return s2;}).join('');
-      const donut='<svg width="144" height="144" viewBox="0 0 144 144" style="flex:0 0 auto">'+segs+'<text x="72" y="69" text-anchor="middle" font-size="15" font-weight="800" fill="#1F2430" font-family="inherit">'+eur(donTot)+'</text><text x="72" y="86" text-anchor="middle" font-size="9.5" fill="#8A9AA0" font-family="inherit">tes fees</text></svg>';
-      const legend='<div style="display:flex;flex-direction:column;gap:7px;min-width:150px">'+donArr.map(([k,v])=>{const col=OFC[k]||'#16BAC5';const pc=totNet?Math.round(100*v/totNet):0;return '<div style="display:flex;align-items:center;gap:8px;font-size:12px"><span style="width:11px;height:11px;flex:0 0 11px;border-radius:3px;background:'+col+'"></span><span style="flex:1;font-weight:600">'+esc(k)+'</span><b>'+pc+'%</b></div>';}).join('')+'</div>';
+      const donut='<svg width="144" height="144" viewBox="0 0 144 144" style="flex:0 0 auto">'+segs+'<text x="72" y="69" text-anchor="middle" font-size="15" font-weight="800" fill="#1F2430" font-family="inherit">'+eur(donTot)+'</text><text x="72" y="86" text-anchor="middle" font-size="9.5" fill="#8A9AA0" font-family="inherit">'+(withPrev?'fees + attendu':'tes fees')+'</text></svg>';
+      const svcToggle=hasPrev?('<span style="margin-left:auto;display:inline-flex;gap:3px;background:#EEF0F2;border-radius:9px;padding:3px"><a class="lk svcmode" data-m="reel" style="border:none;font-size:11.5px;padding:3px 9px;border-radius:7px;background:'+(withPrev?'transparent':'#fff')+';font-weight:'+(withPrev?'400':'700')+'">Encaissé</a><a class="lk svcmode" data-m="prev" style="border:none;font-size:11.5px;padding:3px 9px;border-radius:7px;background:'+(withPrev?'#fff':'transparent')+';font-weight:'+(withPrev?'700':'400')+'">+ Prévisionnel</a></span>'):'';
+      const legend='<div style="display:flex;flex-direction:column;gap:7px;min-width:150px">'+donArr.map(([k,v])=>{const col=OFC[k]||'#16BAC5';const pc=Math.round(100*v/svcTot);return '<div style="display:flex;align-items:center;gap:8px;font-size:12px"><span style="width:11px;height:11px;flex:0 0 11px;border-radius:3px;background:'+col+'"></span><span style="flex:1;font-weight:600">'+esc(k)+'</span><b>'+pc+'%</b></div>';}).join('')+'</div>';
       const donutH='<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;padding:2px 4px 6px">'+donut+legend+'</div>';
       // liste éditable par client
       const SEL=['(auto)','Influence','Storytelling de marque','Social Media','360°','Autre'];
@@ -947,15 +955,13 @@ async function renderFinanceView(){
         let row='<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #F0F1F6;flex-wrap:wrap"><b style="flex:1;min-width:120px;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(x.nom)+'</b>'+badge+(a2.service?(pk>0?('<span class="fs" style="white-space:nowrap"><b style="color:#2E9E6B">'+eur(x.ca-pk)+'</b> fees · '+eur(pk)+' reversé</span>'):('<span class="fs" style="color:#2E9E6B;white-space:nowrap">100% tes fees</span>')):'')+'<b style="white-space:nowrap">'+eur(x.ca)+'</b><a class="lk finedit" data-k="'+key+'" data-nom="'+esc(x.nom)+'" style="border:none;background:'+(open2?'#EEEBFB':'none')+';padding:3px 8px;border-radius:8px">✎</a></div>';
         if(open2)row+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px 0 12px 0;border-bottom:1px solid #F0F1F6"><span class="fs">Service :</span><select class="rhin finsvc" style="font-size:12.5px">'+SEL.map(o2=>'<option'+((o2==='(auto)'?'':o2)===canon(a2.service||'')?' selected':'')+' value="'+(o2==='(auto)'?'':o2)+'">'+o2+'</option>').join('')+'</select><span class="fs">Part reversée aux influenceuses (€) :</span><input type="number" class="rhin finpk" value="'+pk+'" placeholder="0" style="width:110px;padding:7px 9px;border-radius:9px"><button class="lk finsave" data-nom="'+esc(x.nom)+'" style="background:#6D5AE0;color:#fff;border-color:#6D5AE0">💾</button><span class="fs">laisse 0 si 100% tes fees · ici tes fees = <b style="color:#2E9E6B">'+eur(x.ca-pk)+'</b></span></div>';
         return row;}).join('');
-      // Prévisionnel par service (encaissements attendus confirmés + probables)
-      const attP=(ceo.attendus||[]).filter(a=>a.statut!=='encaisse'&&(a.certitude==='confirme'||a.certitude==='probable'));
-      const prevSvc={};attP.forEach(a=>{const k=a.service?canon(a.service):(offreMission(a.client)?canon(offreMission(a.client)):'Non attribué');prevSvc[k]=(prevSvc[k]||0)+(a.montant||0);});
+      // Prévisionnel par service (réutilise prevSvc calculé plus haut)
       const prevArrS=Object.entries(prevSvc).sort((a2,b2)=>b2[1]-a2[1]);const prevTotS=prevArrS.reduce((s2,x)=>s2+x[1],0)||1;
       const prevBlock=prevArrS.length?('<div style="margin-top:14px;padding-top:12px;border-top:1px solid #F0F1F6"><div class="bgd-h" style="font-size:13.5px;display:flex;align-items:center">🔮 Prévisionnel par service <span class="bgd-badge" style="margin-left:auto;background:#EEEBFB;color:#4C3BB8">'+eur(prevArrS.reduce((s2,x)=>s2+x[1],0))+' attendu</span></div><div class="fs" style="margin:2px 0 6px">Tes encaissements attendus (confirmé + probable), répartis par service. Change le service sur chaque ligne dans « Encaissements attendus ».</div>'
         +prevArrS.map(([k,v])=>{const col=OFC[k]||'#16BAC5';const pc=Math.round(100*v/prevTotS);return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0"><span style="flex:0 0 160px;font-weight:600;font-size:12.5px">'+esc(k)+'</span><div style="flex:1;height:14px;background:#EEF0F2;border-radius:7px;overflow:hidden"><div style="width:'+pc+'%;height:100%;background:'+col+'"></div></div><b style="flex:0 0 92px;text-align:right">'+eur(v)+'</b><span class="fs" style="flex:0 0 42px;text-align:right">'+pc+' %</span></div>';}).join('')
         +'</div>'):'';
       svcCard=arr.length||rows.length?('<div class="bgd-card" style="margin-bottom:14px"><div class="bgd-h" style="display:flex;align-items:center">💼 Encaissé par service <span class="bgd-badge" style="margin-left:auto;background:#F4F2FB;color:#4C3BB8">'+yr+' · tes fees, hors part reversée</span></div>'
-        +'<div style="margin-top:8px">'+fpBar+(donArr.length?('<div class="bgd-h" style="font-size:13.5px;margin:2px 0 0">Détail de tes fees par service</div>'+donutH+bars):'<div class="fs">Renseigne les services ci-dessous.</div>')+'</div>'
+        +'<div style="margin-top:8px">'+fpBar+(donArr.length?('<div class="bgd-h" style="font-size:13.5px;margin:2px 0 0;display:flex;align-items:center;flex-wrap:wrap;gap:8px">'+(withPrev?'Fees encaissés + prévisionnel par service':'Détail de tes fees par service')+svcToggle+'</div>'+donutH+bars):'<div class="fs">Renseigne les services ci-dessous.</div>')+'</div>'
         +prevBlock
         +'<div class="bgd-h" style="margin-top:14px;font-size:14px">Ajuster par client</div><div class="fs" style="margin:2px 0 4px">Par défaut, une facture = <b style="color:#2E9E6B">100% tes fees</b> (ex : storytelling de marque). Sur l\'influence, indique juste la <b>part reversée aux influenceuses</b> : le reste reste tes fees.</div>'
         +editRows
@@ -1096,6 +1102,7 @@ async function renderFinanceView(){
     const fr=$('finrefresh'); if(fr)fr.onclick=()=>{fr.disabled=true;fr.textContent='🔄 Actualisation…';window.FIN_FRESH=true;renderFinanceView();};
     bx.querySelectorAll('.finedit').forEach(el=>el.onclick=()=>{window.FIN_EDIT=(window.FIN_EDIT===el.dataset.k?null:el.dataset.k);renderFinanceView();});
     const fa=bx.querySelector('.finall'); if(fa)fa.onclick=()=>{window.FIN_ALLCLI=!window.FIN_ALLCLI;renderFinanceView();};
+    bx.querySelectorAll('.svcmode').forEach(el=>el.onclick=()=>{window.SVC_MODE=el.dataset.m;renderFinanceView();});
     const at_tog=$('attf_toggle'); if(at_tog)at_tog.onclick=()=>{window.ATT_ADD=!window.ATT_ADD;window.ATT_EDIT=null;renderFinanceView();};
     const at_can=$('attf_cancel'); if(at_can)at_can.onclick=()=>{window.ATT_ADD=false;window.ATT_EDIT=null;renderFinanceView();};
     const at_sav=$('attf_save'); if(at_sav)at_sav.onclick=async()=>{
