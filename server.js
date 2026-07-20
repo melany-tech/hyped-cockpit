@@ -3021,7 +3021,7 @@ app.post("/api/sourcing", auth, async (req, res) => {
   const normHandle = (x) => {
     const m1 = String(x || "").match(/instagram\.com\/([A-Za-z0-9._]+)/i); if (m1) return m1[1].toLowerCase();
     const m2 = String(x || "").match(/@([A-Za-z0-9._]+)/); if (m2) return m2[1].toLowerCase();
-    return nlow(String(x || "").replace(/^contacter\s+/i, "")).trim();
+    return String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/^contacter\s+/i, "").trim();
   };
   const marqueIn = String(req.body?.marque || "");
   const lienIn0 = req.body?.lien || (/^https?:\/\//i.test(profil) ? profil : null);
@@ -3048,6 +3048,7 @@ app.post("/api/sourcing", auth, async (req, res) => {
   if (req.body?.commentaire) props["Commentaire veille"] = { rich_text: [{ text: { content: String(req.body.commentaire) } }] };
   try {
     const pg = await notion.pages.create({ parent: { database_id: TASKS_DB }, properties: props });
+    invalidateTasksCache(); // le profil doit apparaître immédiatement dans la liste
     // Message auto-prêt : brouillon d'approche dans le Gmail de la CP assignée (si connectée)
     let draft = false;
     try {
