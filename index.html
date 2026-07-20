@@ -906,7 +906,7 @@ async function renderFinanceView(){
       const clients=(pl&&pl.clients)||{};
       const norm=(x)=>String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
       const offreMission=(clientNom)=>{const cn=norm(clientNom);let best=null;missions.forEach(m=>{const mc=norm(m.client);if(mc&&(cn.includes(mc)||mc.includes(cn)))best=m.offre;});return best;};
-      const OFC={'Influence':'#7C5CFA','Storytelling de marque':'#2E9E6B','Storytelling':'#2E9E6B','Social Media':'#E8933A','360°':'#4A7FB5','Autre':'#8A929C','Pocket reversée aux influenceuses':'#C9CED4','Non attribué':'#C9CED4'};
+      const OFC={'Influence':'#16BAC5','Storytelling de marque':'#2E9E6B','Storytelling':'#2E9E6B','Social Media':'#E8933A','360°':'#3F5E8C','Autre':'#8A929C','Pocket reversée aux influenceuses':'#C9CED4','Non attribué':'#C9CED4'};
       const canon=(s)=>String(s||'')==='Storytelling'?'Storytelling de marque':String(s||'');
       const rows=Object.values(clients).map(c=>({nom:c.nom,ca:Math.round(c.caPaye||0)})).filter(x=>x.ca>0).sort((a2,b2)=>b2.ca-a2.ca);
       const parSvc={};let totNet=0;
@@ -915,7 +915,7 @@ async function renderFinanceView(){
         if(pocket>0)parSvc['Pocket reversée aux influenceuses']=(parSvc['Pocket reversée aux influenceuses']||0)+pocket;});
       const arr=Object.entries(parSvc).sort((a2,b2)=>b2[1]-a2[1]);
       const mx=Math.max(1,...arr.map(x=>x[1]));
-      const cols=arr.map(([k,v])=>{const col=OFC[k]||'#7C5CFA';const pc=totNet?Math.round(100*v/totNet):0;const pocketRow=(k==='Pocket reversée aux influenceuses');const h=Math.max(6,Math.round(150*v/mx));
+      const cols=arr.map(([k,v])=>{const col=OFC[k]||'#16BAC5';const pc=totNet?Math.round(100*v/totNet):0;const pocketRow=(k==='Pocket reversée aux influenceuses');const h=Math.max(6,Math.round(150*v/mx));
         return '<div style="flex:1;min-width:70px;display:flex;flex-direction:column;align-items:center;gap:6px">'
           +'<b style="font-size:12.5px;white-space:nowrap;'+(pocketRow?'color:#8A9AA0':'')+'">'+eur(v)+'</b>'
           +'<div style="height:160px;display:flex;align-items:flex-end"><div title="'+esc(k)+' · '+eur(v)+'" style="width:44px;height:'+h+'px;background:'+col+';border-radius:9px 9px 0 0"></div></div>'
@@ -927,9 +927,9 @@ async function renderFinanceView(){
       const donArr=arr.filter(([k])=>k!=='Pocket reversée aux influenceuses');
       const donTot=donArr.reduce((s2,x)=>s2+x[1],0)||1;
       const R=54,CIR=2*Math.PI*R;let dOff=0;
-      const segs=donArr.map(([k,v])=>{const col=OFC[k]||'#7C5CFA';const len=CIR*v/donTot;const s2='<circle cx="72" cy="72" r="'+R+'" fill="none" stroke="'+col+'" stroke-width="20" stroke-dasharray="'+len.toFixed(2)+' '+(CIR-len).toFixed(2)+'" stroke-dashoffset="'+(-dOff).toFixed(2)+'" transform="rotate(-90 72 72)"><title>'+esc(k)+' · '+eur(v)+'</title></circle>';dOff+=len;return s2;}).join('');
+      const segs=donArr.map(([k,v])=>{const col=OFC[k]||'#16BAC5';const len=CIR*v/donTot;const s2='<circle cx="72" cy="72" r="'+R+'" fill="none" stroke="'+col+'" stroke-width="20" stroke-dasharray="'+len.toFixed(2)+' '+(CIR-len).toFixed(2)+'" stroke-dashoffset="'+(-dOff).toFixed(2)+'" transform="rotate(-90 72 72)"><title>'+esc(k)+' · '+eur(v)+'</title></circle>';dOff+=len;return s2;}).join('');
       const donut='<svg width="144" height="144" viewBox="0 0 144 144" style="flex:0 0 auto">'+segs+'<text x="72" y="69" text-anchor="middle" font-size="15" font-weight="800" fill="#1F2430" font-family="inherit">'+eur(donTot)+'</text><text x="72" y="86" text-anchor="middle" font-size="9.5" fill="#8A9AA0" font-family="inherit">tes fees</text></svg>';
-      const legend='<div style="display:flex;flex-direction:column;gap:7px;min-width:150px">'+donArr.map(([k,v])=>{const col=OFC[k]||'#7C5CFA';const pc=totNet?Math.round(100*v/totNet):0;return '<div style="display:flex;align-items:center;gap:8px;font-size:12px"><span style="width:11px;height:11px;flex:0 0 11px;border-radius:3px;background:'+col+'"></span><span style="flex:1;font-weight:600">'+esc(k)+'</span><b>'+pc+'%</b></div>';}).join('')+'</div>';
+      const legend='<div style="display:flex;flex-direction:column;gap:7px;min-width:150px">'+donArr.map(([k,v])=>{const col=OFC[k]||'#16BAC5';const pc=totNet?Math.round(100*v/totNet):0;return '<div style="display:flex;align-items:center;gap:8px;font-size:12px"><span style="width:11px;height:11px;flex:0 0 11px;border-radius:3px;background:'+col+'"></span><span style="flex:1;font-weight:600">'+esc(k)+'</span><b>'+pc+'%</b></div>';}).join('')+'</div>';
       const donutH='<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;padding:6px 4px 14px;border-bottom:1px solid #F0F1F6;margin-bottom:6px">'+donut+legend+'</div>';
       // liste éditable par client
       const SEL=['(auto)','Influence','Storytelling de marque','Social Media','360°','Autre'];
