@@ -638,7 +638,7 @@ app.post("/api/rh/doc", auth, async (req, res) => {
   const fid = crypto.randomBytes(8).toString("hex");
   try { fs.writeFileSync(path.join(RH_DIR, fid), buf); } catch (e) { return res.status(500).json({ error: "impossible d'enregistrer sur le disque" }); }
   const o = loadRh(); o.docs = o.docs || [];
-  const cat = ["Fiche de paie", "Facture", "Contrat", "Autre"].includes(req.body?.cat) ? req.body.cat : "Autre";
+  const cat = ["Fiche de paie", "Facture", "Contrat", "RIB", "Autre"].includes(req.body?.cat) ? req.body.cat : "Autre";
   o.docs.push({ id: fid, who, cat, filename: String(req.body?.filename || "document").slice(0, 100), mime: m[1], size: buf.length, by: req.user.name, at: Date.now() });
   saveRh(o);
   try {

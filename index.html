@@ -1402,6 +1402,10 @@ async function renderRhView(){
       +infoCard('📄','DOCUMENTS',String(fsel.docs)+' déposé(s)','paie / factures · carte Documents ci-dessus')
       +'</div>'
       +'<div style="border:1px solid #EDF0F2;border-radius:14px;padding:12px;margin-top:10px"><div class="fs" style="font-size:11px">📝 NOTES RH</div><div style="margin-top:4px;'+(fsel.notes?'':'opacity:.55')+'">'+(fsel.notes?esc(fsel.notes):'contrat, particularités, points d&#39;attention… (✎ Modifier la fiche pour compléter)')+'</div></div>'
+      +(function(){const mydocs=(d.docs||[]).filter(x=>nlow(x.who)===nlow(fsel.name)).sort((a,b2)=>(b2.at||0)-(a.at||0));const kb2=(n)=>n>1048576?((n/1048576).toFixed(1)+' Mo'):(Math.round((n||0)/1024)+' Ko');const catB=(c)=>'<span class="bgd-badge" style="background:#EDE9FC;color:#4C3BB8;font-size:10.5px">'+esc(c||'Document')+'</span>';
+        return '<div style="border:1px solid #EDF0F2;border-radius:14px;padding:12px;margin-top:10px"><div class="fs" style="font-size:11px;margin-bottom:6px">📎 DOCUMENTS · contrat, fiche de paie, facture, RIB…</div>'
+          +(mydocs.length?mydocs.map(f=>'<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #F0F1F6;flex-wrap:wrap">'+catB(f.cat)+'<a class="lk" href="/api/rh/doc/'+esc(f.id)+'" target="_blank" rel="noopener" style="flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(f.filename)+'</a><span class="fs">'+kb2(f.size)+' · '+new Date(f.at||0).toLocaleDateString('fr-FR')+'</span><a class="lk" href="/api/rh/doc/'+esc(f.id)+'?dl=1">⬇️</a>'+(sup||nlow(fsel.name)===nlow(VIEWER.name)?('<button class="lk rhfdocdel" data-id="'+esc(f.id)+'" style="color:#C2553B">✕</button>'):'')+'</div>').join(''):'<div class="fs" style="padding:4px 0">Aucun document pour l\'instant.</div>')
+          +'<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-top:9px"><select id="rhfdoccat" class="rhin" style="font-size:12.5px"><option>Contrat</option><option>Fiche de paie</option><option>Facture</option><option>RIB</option><option>Autre</option></select><input type="file" id="rhfdocfile" class="rhin" style="max-width:210px;font-size:12px"><button class="lk" id="rhfdocup" style="background:#6D5AE0;color:#fff;border-color:#6D5AE0">📎 Déposer pour '+esc(fsel.name)+'</button></div><div id="rhfdocmsg" class="fs" style="margin-top:5px"></div></div>';})()
       +'</div>';
   }
   const fichesH=fiches.length?('<div class="bgd-card" style="margin-top:14px"><div class="bgd-h">🗂️ '+(sup?'Fiches équipe':'Ma fiche')+' <span class="cpsub">clique un nom pour ouvrir sa fiche · stockées sur le disque sécurisé du cockpit</span></div>'
@@ -1536,6 +1540,20 @@ async function renderRhView(){
   };
   box.querySelectorAll('.rhtdone').forEach(c=>c.onchange=async()=>{ await api('/api/todos/'+encodeURIComponent(c.dataset.id)+'/done',{method:'POST'}); renderRhView(); });
   box.querySelectorAll('.rhfsel').forEach(b2=>b2.onclick=()=>{window.RH_FICHE_SEL=b2.dataset.n;renderRhView();});
+  box.querySelectorAll('.rhfdocdel').forEach(b2=>b2.onclick=async()=>{ if(!confirm('Supprimer ce document ?'))return; b2.disabled=true; await api('/api/rh/doc/'+encodeURIComponent(b2.dataset.id)+'/del',{method:'POST'}); renderRhView(); });
+  const fdu=$('rhfdocup'); if(fdu)fdu.onclick=()=>{
+    const fi2=$('rhfdocfile'); const f=fi2&&fi2.files&&fi2.files[0]; const msg=$('rhfdocmsg');
+    if(!f){if(msg)msg.textContent='Choisis un fichier 🙂';return;}
+    if(f.size>15*1024*1024){if(msg)msg.textContent='15 Mo max';return;}
+    fdu.disabled=true;fdu.textContent='Envoi…';
+    const fr=new FileReader();
+    fr.onload=async()=>{
+      const r2=await api('/api/rh/doc',{method:'POST',body:JSON.stringify({who:window.RH_FICHE_SEL,cat:($('rhfdoccat')?$('rhfdoccat').value:'Autre'),filename:f.name,data:fr.result})});
+      if(!r2.ok){const dd=await r2.json().catch(()=>({}));if(msg)msg.textContent=dd.error||'Erreur';fdu.disabled=false;fdu.textContent='📎 Déposer';return;}
+      renderRhView();
+    };
+    fr.readAsDataURL(f);
+  };
   box.querySelectorAll('[data-rhfedit]').forEach(a2=>a2.onclick=()=>{window.RH_FICHE_SEL=a2.dataset.rhfedit;window.RH_FICHE_EDIT=true;renderRhView();});
   const rfs=$('rhfsave'); if(rfs)rfs.onclick=async()=>{
     rfs.disabled=true;
@@ -3369,9 +3387,10 @@ function renderMail(d, who){
       ${Object.entries(parBrand).map(([b2,arr])=>`<div style="margin-top:6px"><div class="fs" style="font-weight:700;color:#4C3BB8">🏷️ ${esc(b2)} · ${arr.length}</div>${arr.slice(0,12).map(relRow).join('')}</div>`).join('')}</div>`;
   }
   const mbWire=()=>{
-    document.querySelectorAll('#mailbox .mbtab').forEach(b2=>b2.onclick=()=>{window.MB_TAB=b2.dataset.t;renderMail(window.MB_LAST.d,window.MB_LAST.who);});
+    document.querySelectorAll('#mailbox .mbtab').forEach(b2=>b2.onclick=()=>{window.MB_TAB=b2.dataset.t;window.MB_ALL_DONE=false;renderMail(window.MB_LAST.d,window.MB_LAST.who);});
     document.querySelectorAll('#mailbox .mbchip').forEach(b2=>b2.onclick=()=>{window.MB_BRAND=(window.MB_BRAND===b2.dataset.b?null:b2.dataset.b);renderMail(window.MB_LAST.d,window.MB_LAST.who);});
     const s2=document.getElementById('mbsearch'); if(s2){s2.value=window.MB_Q||'';s2.onkeydown=(e2)=>{if(e2.key==='Enter'){window.MB_Q=s2.value.trim();renderMail(window.MB_LAST.d,window.MB_LAST.who);}};}
+    document.querySelectorAll('#mailbox .mbmoredone').forEach(b2=>b2.onclick=()=>{window.MB_ALL_DONE=!b2.dataset.less;renderMail(window.MB_LAST.d,window.MB_LAST.who);});
     document.querySelectorAll('#mailbox .relig').forEach(b2=>b2.onclick=async()=>{
       const tid=b2.dataset.tid; if(!tid)return; const done=b2.dataset.done==='1';
       b2.disabled=true;
@@ -3384,7 +3403,18 @@ function renderMail(d, who){
   if(window.MB_TAB==='relancer'){$('mailbox').innerHTML=mbWrap(sum+(attenteF.length?attenteHtml.replace('<details','<details open'):'<div class="state">Rien à relancer ✨</div>'));mbWire();return;}
   if(!repsF.length){$('mailbox').innerHTML=mbWrap(sum+'<div class="state">Aucun mail ici avec ces filtres. 👌</div>'+(window.MB_TAB==='tous'?autresHtml:''));mbWire();return;}
   const CC={facturation:'#C77F2A',preview:'#7A5AA8',logistique:'#2C9087','réponse':'#1C3A44'};
-  $('mailbox').innerHTML=mbWrap(sum+repsF.map(m=>{
+  // Onglet « Tous » : on met en avant ce qui demande une action ; les fils déjà répondus/traités
+  // sont limités aux 5 plus récents (bouton pour voir les autres), pour ne pas noyer la vue.
+  let repsRender=repsF;
+  const estTraite=(m)=>!!(m.treated||m.decision||(m.status&&m.status!=='pending'));
+  if(window.MB_TAB==='tous'&&!window.MB_ALL_DONE){
+    const actifs=repsF.filter(m=>!estTraite(m));
+    const faits=repsF.filter(m=>estTraite(m)).sort((a,b2)=>String(b2.date||'').localeCompare(String(a.date||'')));
+    window.MB_HIDDEN_DONE=Math.max(0,faits.length-5);
+    repsRender=actifs.concat(faits.slice(0,5));
+  } else { window.MB_HIDDEN_DONE=0; }
+  const doneBtn=window.MB_HIDDEN_DONE>0?`<div class="state" style="padding:10px;text-align:center"><button class="lk mbmoredone" style="color:#6D5AE0;font-weight:700;border:none;background:none">▼ Voir les ${window.MB_HIDDEN_DONE} autre(s) fil(s) déjà répondu(s)</button></div>`:(window.MB_ALL_DONE&&window.MB_TAB==='tous'?`<div class="state" style="padding:10px;text-align:center"><button class="lk mbmoredone" data-less="1" style="color:#6D5AE0;font-weight:700;border:none;background:none">▲ Réduire les fils déjà répondus</button></div>`:'');
+  $('mailbox').innerHTML=mbWrap(sum+repsRender.map(m=>{
     const ownerTag=m.créateur?`<span class="owner">${esc(m.créateur)}</span>`:'';
     const c=CC[m.category]||'#56666D';
     const link=m.url?`<a href="${m.url}" target="_blank" rel="noopener">Ouvrir</a>`:'';
@@ -3397,7 +3427,7 @@ function renderMail(d, who){
     return `<div class="row${tr?' treated':''}" data-email="${esc(email)}" data-subject="${esc(m.subject||'')}" data-cat="${esc(m.category||'')}" data-creator="${esc(m.créateur||'')}" data-brand="${esc(m.brand||'')}" data-thread="${esc(m.threadId||'')}" data-snippet="${esc(snip.slice(0,400))}" data-url="${esc(m.url||'')}" data-files="${filesJson}"><span class="rdot" style="background:${c}"></span>
       <div class="info"><div class="t">${esc(m.subject)||'(sans objet)'}${spamBadge}${trBadge}</div><div class="s">${esc(m.from)} · ${esc(m.category)}${dt?` · <span class="maildate">${esc(dt)}</span>`:''}</div>${snip?`<div class="msgsnip">${esc(snip.slice(0,130))}${snip.length>130?'…':''}</div>`:''}${fileChips(m.attachments,m.transferLinks)}</div>
       <span class="brand">${esc(m.brand)}</span>${ownerTag}<button class="lk primary replybtn">✍️ Répondre</button>${link}<span class="mbmore" style="position:relative"><button class="lk mbmorebtn" title="Plus d'actions">⋯</button><span class="mbmenu" style="display:none;position:absolute;right:0;top:110%;background:#fff;border:1px solid #E4E0D5;border-radius:10px;padding:8px;z-index:30;box-shadow:0 6px 18px rgba(0,0,0,.12);white-space:nowrap">${treatBtns}</span></span></div>`;
-  }).join('')+(window.MB_TAB==='tous'?autresHtml:''));
+  }).join('')+doneBtn+(window.MB_TAB==='tous'?autresHtml:''));
   document.querySelectorAll('#mailbox .replybtn').forEach(b=>b.onclick=()=>openReply(b));
   document.querySelectorAll('#mailbox .treatbtn').forEach(b=>b.onclick=()=>setTreated(b.dataset.thread,true));
   document.querySelectorAll('#mailbox .reopenbtn').forEach(b=>b.onclick=()=>setTreated(b.dataset.thread,false));
