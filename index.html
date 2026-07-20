@@ -1705,6 +1705,7 @@ async function renderBudgetView(){
       el.disabled=true;el.textContent='…';
       const r3=await api('/api/budget/entry',{method:'POST',body:JSON.stringify({id:el.dataset.id,montant:Number(inp.value)})});
       if(!r3.ok){const dd=await r3.json().catch(()=>({}));alert(dd.error||'Erreur');el.disabled=false;el.textContent='💾';return;}
+      window.BG_EDIT=null; // enregistré : on replie la ligne
       renderBudgetView();
     });
     box.querySelectorAll('.bgmini').forEach(el=>el.onclick=()=>selectBrand(el.dataset.b));
