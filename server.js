@@ -824,7 +824,7 @@ app.get("/api/ceo", auth, async (req, res) => {
 // Mélany ajuste ce que Pennylane ne peut pas deviner (ses fees influence vs la pocket).
 app.post("/api/finance/attr", auth, (req, res) => {
   if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
-  const key = normName(req.body?.client || ""); if (!key) return res.status(400).json({ error: "client manquant" });
+  const key = String(req.body?.client || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, ""); if (!key) return res.status(400).json({ error: "client manquant" });
   const o = loadCeo(); o.encAttr = o.encAttr || {};
   const OFF = ["Influence", "Storytelling", "Social Media", "360°", "Autre"];
   const service = OFF.includes(req.body?.service) ? req.body.service : "";
