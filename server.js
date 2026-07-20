@@ -788,7 +788,7 @@ async function pennylaneSnapshot(force) {
       cursor = (!stop && d.has_more) ? (d.next_cursor || "") : "";
       pages++;
     } while (cursor && pages < 80);
-    // 3) TRANSACTIONS BANCAIRES (rapprochement auto Phase 2) — scope transactions:readonly requis.
+    // 3) TRANSACTIONS BANCAIRES (rapprochement auto Phase 2) : scope transactions:readonly requis.
     let bankTx = [], txError = null, txRaw3 = null;
     try {
       let tcur = "", tpages = 0, tstop = false;
@@ -806,8 +806,12 @@ async function pennylaneSnapshot(force) {
           let amt = (t.amount != null) ? parseFloat(t.amount) : ((String(t.currency || "EUR").toUpperCase() === "EUR" && t.currency_amount != null) ? parseFloat(t.currency_amount) : 0);
           if (!(amt > 0)) continue; // entrées d'argent seulement
           const cust = t.customer || {};
-          const facts = Array.isArray(t.matched_invoices) ? t.matched_invoices.map(invNum).filter(Boolean) : [];
-          bankTx.push({ id: t.id, montant: Math.round(amt), date: td2, label: String(t.label || "").slice(0, 120), tiers: String(cust.name || cust.label || "").slice(0, 90), facts, reste: (t.outstanding_balance != null ? Math.round(parseFloat(t.outstanding_balance)) : null) });
+          const lbl = String(t.label || "");
+          let facts = Array.isArray(t.matched_invoices) ? t.matched_invoices.map(invNum).filter(Boolean) : [];
+          const mfx = lbl.match(/F[-\s]?(\d{4})[-\s]?(\d{2})[-\s]?(\d{1,5})/i); // n° de facture dans le libellé bancaire
+          if (mfx) facts.push("F-" + mfx[1] + "-" + mfx[2] + "-" + mfx[3]);
+          facts = Array.from(new Set(facts.map((x) => String(x).toUpperCase().replace(/\s+/g, "-"))));
+          bankTx.push({ id: t.id, montant: Math.round(amt), date: td2, label: lbl.slice(0, 120), tiers: String(cust.name || cust.label || "").slice(0, 90), facts, reste: (t.outstanding_balance != null ? Math.round(parseFloat(t.outstanding_balance)) : null) });
           if (bankTx.length >= 400) { tstop = true; break; }
         }
         tcur = (!tstop && d3.has_more) ? (d3.next_cursor || "") : "";
@@ -845,7 +849,7 @@ app.get("/api/ceo", auth, async (req, res) => {
     }
   } catch (e) {}
   res.json({ ok: true, treso: o.treso || null, ca: o.ca || null, tresoHist: o.tresoHist || [], financeAttr: o.encAttr || {}, finPrev: o.finPrev || null, attendus: o.attendus || [],
-    pennylane: pl2 ? { connected: true, at: pl2.at, treso: pl2.treso, ca: pl2.ca, caMois: pl2.caMois, caPrevMois: pl2.caPrevMois, mensuel: pl2.mensuel || {}, lastPaid: pl2.lastPaid || [], factureMois: pl2.factureMois || 0, facturePrevMois: pl2.facturePrevMois || 0, factMensuel: pl2.factMensuel || {}, lateN: pl2.lateN || 0, lateSum: pl2.lateSum || 0, upcomN: pl2.upcomN || 0, upcomSum: pl2.upcomSum || 0, clients: pl2.clients || {}, paidRecent: pl2.paidRecent || [], bankTx: pl2.bankTx || [], txError: pl2.txError || null, txRaw3: pl2.txRaw3 || null, error: pl2.error, annee: new Date().getFullYear() } : { connected: false },
+    pennylane: pl2 ? { connected: true, at: pl2.at, treso: pl2.treso, ca: pl2.ca, caMois: pl2.caMois, caPrevMois: pl2.caPrevMois, mensuel: pl2.mensuel || {}, lastPaid: pl2.lastPaid || [], factureMois: pl2.factureMois || 0, facturePrevMois: pl2.facturePrevMois || 0, factMensuel: pl2.factMensuel || {}, lateN: pl2.lateN || 0, lateSum: pl2.lateSum || 0, upcomN: pl2.upcomN || 0, upcomSum: pl2.upcomSum || 0, clients: pl2.clients || {}, paidRecent: pl2.paidRecent || [], bankTx: pl2.bankTx || [], txError: pl2.txError || null, error: pl2.error, annee: new Date().getFullYear() } : { connected: false },
     roadmap: o.roadmap || [], axes: RM_AXES, rmStatuts: RM_STATUTS, arbTypes: ARB_TYPES,
     arbitrages: (o.arbitrages || []).filter((a) => a.statut === "en attente").sort((a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999")) });
 });
@@ -912,6 +916,24 @@ app.post("/api/finance/attendu/encaisse", auth, (req, res) => {
 app.post("/api/finance/attendu/del", auth, (req, res) => {
   if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
   const o = loadCeo(); o.attendus = (o.attendus || []).filter((x) => x.id !== req.body?.id);
+  saveCeo(o); res.json({ ok: true, attendus: o.attendus });
+});
+// Rapprochement d'un encaissement attendu avec un virement Pennylane (plein ou partiel).
+app.post("/api/finance/attendu/reconcile", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  const o = loadCeo(); o.attendus = o.attendus || [];
+  const it = o.attendus.find((x) => x.id === req.body?.id); if (!it) return res.status(404).json({ error: "introuvable" });
+  const txId = req.body?.txId != null ? String(req.body.txId) : "";
+  const txMontant = Math.max(0, Math.round(Number(req.body?.txMontant) || 0));
+  const txDate = String(req.body?.txDate || "").slice(0, 10);
+  const target = Number(it.montant) || 0;
+  if (!txMontant || txMontant >= target * 0.98) {
+    it.statut = "encaisse"; it.encaisseAt = Date.now(); it.encaisseTx = txId || null; it.encaisseMontant = txMontant || target; it.encaisseDate = txDate || null;
+  } else {
+    it.partiels = (it.partiels || []).concat([{ montant: txMontant, date: txDate || null, tx: txId || null, at: Date.now() }]);
+    it.montant = Math.max(0, target - txMontant);
+    if (it.montant <= 0) { it.statut = "encaisse"; it.encaisseAt = Date.now(); }
+  }
   saveCeo(o); res.json({ ok: true, attendus: o.attendus });
 });
 app.post("/api/ceo/config", auth, (req, res) => {
