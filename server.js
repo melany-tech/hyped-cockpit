@@ -1212,7 +1212,10 @@ app.post("/api/gmail/send", auth, async (req, res) => {
   if (!gm.ENABLED) return res.status(400).json({ error: "Gmail non configuré" });
   const { to, cc, bcc, subject, body } = req.body || {};
   if (!to) return res.status(400).json({ error: "destinataire manquant" });
-  try { const r = await gm.sendEmail(req.user.email, { to, cc, bcc, subject, body }); if (r && r.ok) { logActivity({ type: "email", creator: to, cp: req.user.name }); if (req.body?.threadId) markTreated(inboxTarget(req).email, String(req.body.threadId), { by: req.user.name, action: "répondu" }); } res.json(r); }
+  const atts = (Array.isArray(req.body?.attachments) ? req.body.attachments : []).slice(0, 3)
+    .filter((a2) => a2 && a2.dataB64 && String(a2.dataB64).length < 14000000)
+    .map((a2) => ({ filename: String(a2.filename || "piece-jointe").slice(0, 100), mimeType: String(a2.mime || a2.mimeType || "application/octet-stream").slice(0, 80), dataB64: String(a2.dataB64) }));
+  try { const r = await gm.sendEmail(req.user.email, { to, cc, bcc, subject, body, attachments: atts }); if (r && r.ok) { logActivity({ type: "email", creator: to, cp: req.user.name }); if (req.body?.threadId) markTreated(inboxTarget(req).email, String(req.body.threadId), { by: req.user.name, action: "répondu" }); } res.json(r); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 // --- Envois programmés (le cockpit envoie à l'heure dite, même hors ligne) ---
@@ -1229,7 +1232,10 @@ app.post("/api/gmail/schedule", auth, (req, res) => {
   const at = Number(req.body?.at || 0);
   if (!to) return res.status(400).json({ error: "destinataire manquant" });
   if (!at || at < Date.now() + 30000) return res.status(400).json({ error: "choisis une date/heure future" });
-  const item = { id: "s_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), email: req.user.email, by: req.user.name, to, cc, bcc, subject, body, at, createdAt: Date.now(), attempts: 0 };
+  const attsS = (Array.isArray(req.body?.attachments) ? req.body.attachments : []).slice(0, 3)
+    .filter((a2) => a2 && a2.dataB64 && String(a2.dataB64).length < 7000000)
+    .map((a2) => ({ filename: String(a2.filename || "piece-jointe").slice(0, 100), mime: String(a2.mime || "application/octet-stream").slice(0, 80), dataB64: String(a2.dataB64) }));
+  const item = { id: "s_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), email: req.user.email, by: req.user.name, to, cc, bcc, subject, body, at, attachments: attsS, createdAt: Date.now(), attempts: 0 };
   const a = loadScheduled(); a.push(item); saveScheduled(a);
   logActivity({ type: "programme", creator: to, cp: req.user.name, extra: new Date(at).toISOString() });
   if (req.body?.threadId) markTreated(inboxTarget(req).email, String(req.body.threadId), { by: req.user.name, action: "programmé" });
@@ -1257,7 +1263,7 @@ async function runScheduledSends() {
   if (!due.length) return;
   for (const item of due) {
     try {
-      const r = await gm.sendEmail(item.email, { to: item.to, cc: item.cc, bcc: item.bcc, subject: item.subject, body: item.body });
+      const r = await gm.sendEmail(item.email, { to: item.to, cc: item.cc, bcc: item.bcc, subject: item.subject, body: item.body, attachments: (item.attachments || []).map((a2) => ({ filename: a2.filename, mimeType: a2.mime || a2.mimeType, dataB64: a2.dataB64 })) });
       if (r && r.ok) { logActivity({ type: "email", creator: item.to, cp: item.by, extra: "envoi programmé" }); item._done = true; }
       else { item.attempts = (item.attempts || 0) + 1; item.lastError = r && r.error; }
     } catch (e) { item.attempts = (item.attempts || 0) + 1; item.lastError = String(e && e.message || e); }
