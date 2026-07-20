@@ -2822,14 +2822,18 @@ async function renderTodoTab(){
     if(!ts.length){ w.innerHTML=h+'<div class="state">Rien à faire, tout est à jour 🎉</div>'; wireTodo(w); return; }
     const by={};
     ts.forEach(t=>{const k=t.projet||'Sans marque';(by[k]=by[k]||[]).push(t);});
+    let tdHidden=0;
     h+=Object.keys(by).sort().map(b=>'<div class="todobrand"><div class="todobt">🏷️ '+esc(b)+' <span class="todocount">'+by[b].length+'</span></div>'
-      +by[b].map(t=>'<label class="todoitem"><input type="checkbox" data-tid="'+esc(t.id)+'"><span class="todotxt">'+esc(t.task)+'</span>'
+      +(window.TODO_ALL?by[b]:(tdHidden+=Math.max(0,by[b].length-5),by[b].slice(0,5))).map(t=>'<label class="todoitem"><input type="checkbox" data-tid="'+esc(t.id)+'"><span class="todotxt">'+esc(t.task)+'</span>'
         +(/^contacter\s/i.test(t.task)?('<button class="lk todomsg" data-inf="'+esc(infOf(t.task))+'" data-brand="'+esc(t.projet||'')+'">✉️ Contacter</button>'):'')
         +(t.type?('<span class="todotag">'+esc(t.type)+'</span>'):'')
         +(t.echeance?('<span class="tododue">'+esc(t.echeance)+'</span>'):'')
         +(VIEWER&&VIEWER.role==='supervisor'&&t.responsable?('<span class="todowho">'+esc(t.responsable)+'</span>'):'')
         +'</label>').join('')+'</div>').join('');
+    if(!window.TODO_ALL&&tdHidden>0)h+='<div class="state todoshowall" style="padding:10px;cursor:pointer;color:#6D5AE0;font-weight:700;text-align:center">▼ Tout dérouler · + '+tdHidden+' tâche(s)</div>';
+    else if(window.TODO_ALL&&tdHidden===0)h+='<div class="state todoshowall" style="padding:10px;cursor:pointer;color:#6D5AE0;font-weight:700;text-align:center">▲ Réduire la liste</div>';
     w.innerHTML=h; wireTodo(w);
+    const tsa=w.querySelector('.todoshowall'); if(tsa)tsa.onclick=()=>{window.TODO_ALL=!window.TODO_ALL;renderTodoTab();};
   }catch(e){w.innerHTML='<div class="state">Erreur de chargement.</div>';}
 }
 function wireTodo(w){
@@ -3018,6 +3022,8 @@ async function loadCopilotBox(who){
       await api('/api/copilot/pj/'+encodeURIComponent(el.dataset.id)+'/del',{method:'POST',body:JSON.stringify({fid:el.dataset.fid})});
       loadCopilotBox();
     });
+    const lgS=box.querySelector('.lgsable'); if(lgS){lgS.style.cursor='pointer';lgS.title='Aller au premier message reçu';lgS.onclick=()=>{const e2=box.querySelector('.cplast');if(e2){e2.scrollIntoView({behavior:'smooth',block:'center'});e2.style.boxShadow='0 0 0 3px #E8B04B';setTimeout(()=>{e2.style.boxShadow='';},1400);}};}
+    const lgG=box.querySelector('.lggris'); if(lgG){lgG.style.cursor='pointer';lgG.title='Aller au premier brouillon';lgG.onclick=()=>{const e2=box.querySelector('.cprep');if(e2){e2.scrollIntoView({behavior:'smooth',block:'center'});e2.style.boxShadow='0 0 0 3px #9AA3AC';setTimeout(()=>{e2.style.boxShadow='';},1400);}};}
     // Anciennes cartes (créées avant l'ajout) : on va chercher le dernier message du créateur dans le fil
     box.querySelectorAll('.cplastload').forEach(async el=>{
       try{
@@ -3716,7 +3722,8 @@ function renderSourcing(profils){
   const add='<div class="srcadd"><input id="srcprofil" placeholder="@profil ou lien"><select id="srcmarque">'+opts+'</select>'+cpsel+'<button class="lk" id="srcbtn">+ Ajouter</button><button class="lk" id="srcimport" title="Importer une shortlist de la marque (Excel ou CSV)">📥 Importer</button><a class="lk" href="/modele-shortlist.xlsx" title="Le modèle Excel à envoyer aux marques : leurs shortlists rentreront parfaitement dans l\'import">📄 Modèle marque</a><input type="file" id="srcfile" accept=".xlsx,.xls,.csv" style="display:none"></div><div id="srcimppanel"></div>';
   let rows;
   if(!profils.length) rows='<div class="state" style="padding:14px">Aucun profil à contacter, ajoute-en un, ou ils arriveront via la veille. 🔎</div>';
-  else rows=profils.map(p=>{
+  else { const LIMIT=8; const shown=window.SRC_ALL?profils:profils.slice(0,LIMIT);
+  rows=shown.map(p=>{
     const link=p.lien?`<a href="${esc(p.lien)}" target="_blank" rel="noopener">Profil</a>`:'';
     const who=p.responsable?`<span class="owner">${esc(p.responsable)}</span>`:'<span class="owner none">à attribuer</span>';
     const sub=p.commentaire?esc(p.commentaire):'à contacter';
@@ -3724,8 +3731,9 @@ function renderSourcing(profils){
       <div class="info"><div class="t">${linkify(p.task)}</div><div class="s">${sub}</div></div>
       ${p.projet?`<span class="brand">${esc(p.projet)}</span>`:''}${who}${link}
       <button class="lk primary srcmsg">✍️ Message</button><button class="lk srcdone">Marquer comme contacté</button><button class="lk srcdel" title="Supprimer ce profil de la liste (corbeille Notion)" style="color:#C2553B">✕</button></div>`;
-  }).join('');
+  }).join('')+(profils.length>LIMIT?('<div class="state srcshowall" style="padding:10px;cursor:pointer;color:#6D5AE0;font-weight:700;text-align:center">'+(window.SRC_ALL?'▲ Réduire la liste':('▼ Tout dérouler · + '+(profils.length-LIMIT)+' autre(s) profil(s)'))+'</div>'):''); };
   $('srcbox').innerHTML=add+rows;
+  const sa2=document.querySelector('.srcshowall'); if(sa2)sa2.onclick=()=>{window.SRC_ALL=!window.SRC_ALL;renderSourcing(SRC_PROFILS);};
   $('srcbtn').onclick=addProfil;
   $('srcprofil').onkeydown=(e)=>{if(e.key==='Enter')addProfil();};
   document.querySelectorAll('#srcbox .srcdel').forEach(b=>b.onclick=async()=>{

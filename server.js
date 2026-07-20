@@ -227,6 +227,9 @@ async function fetchRows() {
 
 // === App ================================================================
 const app = express();
+// Health check pour les déploiements sans coupure : Render ne bascule le trafic
+// que quand la nouvelle instance répond 200 ici (fini les 502 pour l'équipe pendant les deploys).
+app.get("/healthz", (req, res) => res.status(200).json({ ok: true }));
 app.use(express.json({ limit: "25mb", verify: (req, res, buf) => { req.rawBody = buf.toString("utf8"); } })); // 25 Mo (docs) + rawBody pour la signature Slack
 app.use(express.urlencoded({ extended: false })); // formulaires simples (consigne copilote depuis Slack)
 app.use(cookieParser());
