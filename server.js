@@ -828,7 +828,7 @@ app.post("/api/finance/attr", auth, (req, res) => {
   if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
   const key = String(req.body?.client || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, ""); if (!key) return res.status(400).json({ error: "client manquant" });
   const o = loadCeo(); o.encAttr = o.encAttr || {};
-  const OFF = ["Influence", "Storytelling", "Social Media", "360°", "Autre"];
+  const OFF = ["Influence", "Storytelling de marque", "Storytelling", "Social Media", "360°", "Autre"];
   const service = OFF.includes(req.body?.service) ? req.body.service : "";
   const pocket = Math.max(0, Math.min(10000000, Number(req.body?.pocket) || 0));
   if (!service && !pocket) { delete o.encAttr[key]; }
