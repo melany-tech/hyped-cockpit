@@ -925,7 +925,7 @@ app.post("/api/ceo/arbitrage/:id/decide", auth, async (req, res) => {
 app.post("/api/ceo/assist", auth, async (req, res) => {
   if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
   const txt = String(req.body?.text || "").trim().slice(0, 500);
-  if (!txt) return res.status(400).json({ error: "dis-moi quoi faire 🙂" });
+  if (!txt) return res.status(400).json({ error: "dis-moi quoi faire 😊" });
   const low0 = normName(txt);
   try {
     // 1) décisions copilote en bloc : « refuse / accepte les décisions (de Rozenn) »
@@ -1813,7 +1813,7 @@ app.post("/api/budget/:brand/add", auth, async (req, res) => {
   const cfg = BUDGET_CALS[nrmName(brand)];
   if (!cfg) return res.status(400).json({ error: "pas de calendrier branché pour cette marque (ajoute la collab dans Notion)" });
   const nom = String(req.body?.nom || "").trim();
-  if (!nom) return res.status(400).json({ error: "il me faut le nom du profil 🙂" });
+  if (!nom) return res.status(400).json({ error: "il me faut le nom du profil 😊" });
   const budget = parseFloat(String(req.body?.budget ?? "").replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
   const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body?.date || "")) ? String(req.body.date) : new Date().toISOString().slice(0, 10);
   const props = {
@@ -3699,7 +3699,7 @@ async function remindTick() {
         if (demain.length) {
           const dmy2 = (x) => String(x).split("-").reverse().join("/");
           const lignes = demain.map((a) => "• *" + a.who + "* · " + a.type + " (jusqu'au " + dmy2(a.au) + ")").join("\n");
-          const txtR = "🌴 *Rappel absences de demain* (" + dmy2(tmr) + ") :\n" + lignes + "\nPense à anticiper la couverture 🙂";
+          const txtR = "🌴 *Rappel absences de demain* (" + dmy2(tmr) + ") :\n" + lignes + "\nPense à anticiper la couverture 😊";
           for (const u3 of USERS.filter((x) => x.role === "supervisor")) {
             const su3 = rhSlackTo(u3.email); if (su3) { try { await copilotNotify({ slackUser: su3, text: txtR }); } catch (e) {} }
             try { if (gm.ENABLED && gm.isConnected(u3.email)) await gm.sendEmail(u3.email, { to: u3.email, subject: "Rappel : absence(s) demain " + dmy2(tmr), body: txtR.replace(/\*/g, "") }); } catch (e) {}
@@ -3722,7 +3722,7 @@ async function remindTick() {
       let txt;
       if (slot === "am") {
         txt = late.length === 1
-          ? "Coucou ✨ petite relance : la tâche « " + late[0].task + " » est en retard (échéance le " + dmy(late[0].echeance) + ").\nRéponds « c'est fait » et je la passe en Fait dans Notion, ou dis-moi si tu bloques 🙂"
+          ? "Coucou ✨ petite relance : la tâche « " + late[0].task + " » est en retard (échéance le " + dmy(late[0].echeance) + ").\nRéponds « c'est fait » et je la passe en Fait dans Notion, ou dis-moi si tu bloques 😊"
           : "Coucou ✨ petit point du matin, " + late.length + " tâches en retard :\n" + lignes + "\nRéponds « c'est fait » (ou « le moodboard est fait ») et je mets Notion à jour, pour de vrai 😉";
       } else {
         txt = late.length === 1
@@ -3920,7 +3920,7 @@ async function boot(){
 function boot2(){const d=window.__meta;chips($('brands'),d.brands,marque,v=>{marque=v;localStorage.setItem('aj_marque',v);boot2();});chips($('cps'),d.cps,cp,v=>{cp=v;localStorage.setItem('aj_cp',v);boot2();});}
 $('go').onclick=async()=>{
   const lien=$('lien').value.trim();
-  if(!lien){$('msg').textContent='Colle d\\'abord le lien du profil 🙂';return;}
+  if(!lien){$('msg').textContent='Colle d\\'abord le lien du profil 😊';return;}
   $('go').disabled=true;$('go').textContent='Ajout…';
   try{
     const r=await fetch('/api/sourcing',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({profil:lien,marque,responsable:cp,notify:true})});

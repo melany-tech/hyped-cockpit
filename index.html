@@ -1120,7 +1120,7 @@ async function renderProjetsView(){
       const back=()=>{window.PJ_FORM=undefined;renderProjetsView();};
       $('pjfback').onclick=back; $('pjfcancel').onclick=back;
       $('pjfsave').onclick=async()=>{
-        const client=gv('pjf_client'); if(!client){alert('Le client est requis 🙂');return;}
+        const client=gv('pjf_client'); if(!client){alert('Le client est requis 😊');return;}
         const body={op:fm?'update':'create',id:fm?fm.id:undefined,client,nom:gv('pjf_nom'),offre:gv('pjf_offre'),recurrence:gv('pjf_rec'),marque:(gv('pjf_marque')==='aucune'?'':gv('pjf_marque')),montant:gv('pjf_montant'),debut:gv('pjf_debut'),fin:gv('pjf_fin'),phase:gv('pjf_phase'),roleCeo:gv('pjf_role'),next:gv('pjf_next'),echeance:gv('pjf_ech'),contexte:($('pjf_ctx')?$('pjf_ctx').value:''),equipe:{leadStrat:gv('pjf_ls'),leadOps:gv('pjf_lo'),contrib:gv('pjf_co'),valid:gv('pjf_va')}};
         const r2=await api('/api/missions',{method:'POST',body:JSON.stringify(body)});
         if(!r2.ok){const dd=await r2.json().catch(()=>({}));alert(dd.error||'Erreur');return;}
@@ -1501,7 +1501,7 @@ async function renderRhView(){
   // ---------- interactions ----------
   const g=$('rhgo'); if(g)g.onclick=async()=>{
     const du=$('rhdu').value,au=$('rhau').value||du;
-    if(!du){alert('Choisis au moins la date de début 🙂');return;}
+    if(!du){alert('Choisis au moins la date de début 😊');return;}
     g.disabled=true;g.textContent='Envoi…';
     const r=await api('/api/rh/absence',{method:'POST',body:JSON.stringify({type:$('rhtype').value,du,au,note:$('rhnote').value})});
     const dd=await r.json().catch(()=>({}));
@@ -1527,7 +1527,7 @@ async function renderRhView(){
   const tg=$('rhdocstoggle'); if(tg)tg.onclick=()=>{ RH_DOCS_OPEN=!RH_DOCS_OPEN; renderRhView(); };
   const up=$('rhup'); if(up)up.onclick=()=>{
     const f=$('rhfile').files[0];
-    if(!f){alert('Choisis d\'abord un fichier 🙂');return;}
+    if(!f){alert('Choisis d\'abord un fichier 😊');return;}
     if(f.size>15*1024*1024){alert('15 Mo max');return;}
     up.disabled=true;up.textContent='Envoi…';
     const rd=new FileReader();
@@ -1546,7 +1546,7 @@ async function renderRhView(){
   box.querySelectorAll('.rhfdocdel').forEach(b2=>b2.onclick=async()=>{ if(!confirm('Supprimer ce document ?'))return; b2.disabled=true; await api('/api/rh/doc/'+encodeURIComponent(b2.dataset.id)+'/del',{method:'POST'}); renderRhView(); });
   const fdu=$('rhfdocup'); if(fdu)fdu.onclick=()=>{
     const fi2=$('rhfdocfile'); const f=fi2&&fi2.files&&fi2.files[0]; const msg=$('rhfdocmsg');
-    if(!f){if(msg)msg.textContent='Choisis un fichier 🙂';return;}
+    if(!f){if(msg)msg.textContent='Choisis un fichier 😊';return;}
     if(f.size>15*1024*1024){if(msg)msg.textContent='15 Mo max';return;}
     fdu.disabled=true;fdu.textContent='Envoi…';
     const fr=new FileReader();
@@ -1773,7 +1773,7 @@ async function renderBudgetView(fromCache){
     if(ab&&af){
       ab.onclick=()=>{af.style.display=(af.style.display==='none')?'block':'none';const n=af.querySelector('.bga_nom');if(n&&af.style.display==='block')n.focus();};
       const save=async()=>{
-        const nom=af.querySelector('.bga_nom').value.trim(); if(!nom){af.querySelector('.bga_msg').textContent='Il me faut le nom du profil 🙂';return;}
+        const nom=af.querySelector('.bga_nom').value.trim(); if(!nom){af.querySelector('.bga_msg').textContent='Il me faut le nom du profil 😊';return;}
         const b2=af.querySelector('.bga_save'); b2.textContent='⏳ Ajout…';
         const r=await api('/api/budget/'+encodeURIComponent(F.brand)+'/add',{method:'POST',body:JSON.stringify({nom,budget:af.querySelector('.bga_budget').value,date:af.querySelector('.bga_date').value,tbc:af.querySelector('.bga_tbc').checked})});
         const dd=await r.json().catch(()=>({}));
@@ -1799,7 +1799,7 @@ async function renderProcess(){
       +'<div class="ficheform" style="margin-top:14px"><div class="fdlrow"><input id="pdlabel" placeholder="Nom du document (ex. Plaquette agence 2026)"><input id="pdfile" type="file"><button class="lk primary" id="pdadd">📄 Ajouter le document</button></div><span class="fichemsg" id="pdmsg"></span></div>';
     const pa=$('pdadd'); if(pa)pa.onclick=()=>{
       const fi=$('pdfile'); const f=fi&&fi.files&&fi.files[0];
-      if(!f){$('pdmsg').textContent='Choisis d\'abord un fichier 🙂';return;}
+      if(!f){$('pdmsg').textContent='Choisis d\'abord un fichier 😊';return;}
       if(f.size>15*1024*1024){$('pdmsg').textContent='Fichier trop lourd (15 Mo max)';return;}
       $('pdmsg').textContent='Envoi en cours…';
       const rd=new FileReader();
@@ -2771,10 +2771,10 @@ function wireFiche(det,brand,rerender){
   const be=q('fbaseedit'); if(be) be.onclick=()=>toggleBase(q('fbaseform').style.display==='none');
   const bs=q('fbasesave'); if(bs) bs.onclick=async()=>{ const base={}; FICHE_FIELDS.forEach(([k])=>{ base[k]=q('fb_'+k).value.trim(); }); if(await fichePost(brand,{base},q('fbasemsg'))) R(); };
   const bc=q('fbasecancel'); if(bc) bc.onclick=()=>toggleBase(false);
-  const la=q('flinkadd'); if(la) la.onclick=async()=>{ const url=q('flinkurl').value.trim(); if(!url){ q('fdlmsg').textContent='Il me faut au moins l\'URL 🙂'; return; } if(await fichePost(brand,{link:{label:q('flinklabel').value.trim(),url}},q('fdlmsg'))) R(); };
+  const la=q('flinkadd'); if(la) la.onclick=async()=>{ const url=q('flinkurl').value.trim(); if(!url){ q('fdlmsg').textContent='Il me faut au moins l\'URL 😊'; return; } if(await fichePost(brand,{link:{label:q('flinklabel').value.trim(),url}},q('fdlmsg'))) R(); };
   const da=q('fdocadd'); if(da) da.onclick=()=>{
     const fi=q('fdocfile'); const file=fi&&fi.files&&fi.files[0];
-    if(!file){ q('fdlmsg').textContent='Choisis d\'abord un fichier 🙂'; return; }
+    if(!file){ q('fdlmsg').textContent='Choisis d\'abord un fichier 😊'; return; }
     if(file.size>10*1024*1024){ q('fdlmsg').textContent='Fichier trop lourd (10 Mo max)'; return; }
     q('fdlmsg').textContent='Envoi en cours…';
     const rd=new FileReader();
@@ -2794,9 +2794,9 @@ function wireFiche(det,brand,rerender){
   };
   det.querySelectorAll('.feditit').forEach(b=>b.onclick=()=>{ editAt=Number(b.dataset.at); openItForm(b.dataset); });
   const ic2=q('fitcancel'); if(ic2) ic2.onclick=()=>{ q('fitform').style.display='none'; editAt=null; const e2=q('fitedit'); if(e2)e2.style.display=''; };
-  const is=q('fitsave'); if(is) is.onclick=async()=>{ const itv={nom:q('fitnom').value.trim(),role:q('fitrole').value.trim(),email:q('fitemail').value.trim(),tel:q('fittel').value.trim()}; if(!itv.nom&&!itv.email){alert('Il faut au moins un nom ou un email 🙂');return;} const payload=editAt?{editInterlocuteur:{...itv,at:editAt}}:{addInterlocuteur:itv}; if(await fichePost(brand,payload,null)) R(); };
+  const is=q('fitsave'); if(is) is.onclick=async()=>{ const itv={nom:q('fitnom').value.trim(),role:q('fitrole').value.trim(),email:q('fitemail').value.trim(),tel:q('fittel').value.trim()}; if(!itv.nom&&!itv.email){alert('Il faut au moins un nom ou un email 😊');return;} const payload=editAt?{editInterlocuteur:{...itv,at:editAt}}:{addInterlocuteur:itv}; if(await fichePost(brand,payload,null)) R(); };
   det.querySelectorAll('.fdelit').forEach(b=>b.onclick=async()=>{ if(confirm('Supprimer cet interlocuteur ?')&&await fichePost(brand,{deleteInterlocuteurAt:Number(b.dataset.at)},null)) R(); });
-  const na=q('fnoteadd'); if(na) na.onclick=async()=>{ const t=q('fnewnote').value.trim(); if(!t){ q('fnotemsg').textContent='Écris d\'abord ta note 🙂'; return; } if(await fichePost(brand,{note:t},q('fnotemsg'))) R(); };
+  const na=q('fnoteadd'); if(na) na.onclick=async()=>{ const t=q('fnewnote').value.trim(); if(!t){ q('fnotemsg').textContent='Écris d\'abord ta note 😊'; return; } if(await fichePost(brand,{note:t},q('fnotemsg'))) R(); };
   det.querySelectorAll('.fnote .fdel:not(.fdellink):not(.fdeldoc)').forEach(b=>b.onclick=async()=>{ if(confirm('Supprimer cette note ?')&&await fichePost(brand,{deleteNoteAt:Number(b.dataset.at)},null)) R(); });
 }
 async function renderBrandDetail(brand,target){
@@ -3072,7 +3072,7 @@ async function loadCopilotBox(who){
     box.querySelectorAll('.cprewin').forEach(i=>i.onkeydown=(e)=>{ if(e.key==='Enter'){ e.preventDefault(); const btn=i.closest('.cpcard').querySelector('button[data-cpact="rework"]'); if(btn)btn.click(); } });
     box.querySelectorAll('.cppjin').forEach(inp=>inp.onchange=()=>{
       const f=inp.files&&inp.files[0]; if(!f)return;
-      if(f.size>10*1024*1024){alert('10 Mo max 🙂');inp.value='';return;}
+      if(f.size>10*1024*1024){alert('10 Mo max 😊');inp.value='';return;}
       const fr=new FileReader();
       fr.onload=async()=>{
         const r2=await api('/api/copilot/pj/'+encodeURIComponent(inp.dataset.id),{method:'POST',body:JSON.stringify({filename:f.name,data:fr.result})});
@@ -3590,7 +3590,7 @@ function openMsgPanel(rowEl, opts){
   const pjIn=panel.querySelector('.msgpjin');
   const pjRender=()=>{ if(!pjRow)return; pjRow.querySelectorAll('.msgpjb').forEach(e2=>e2.remove());
     msgPjs.forEach((a2,i2)=>{ const sp=document.createElement('span'); sp.className='bgd-badge msgpjb'; sp.style.cssText='background:#EDE9FC;color:#4C3BB8;font-size:11px'; sp.innerHTML='📎 '+esc(a2.filename)+' <a class="lk" style="border:none;background:none;padding:0 2px;color:#C2553B;cursor:pointer">✕</a>'; sp.querySelector('a').onclick=()=>{msgPjs.splice(i2,1);pjRender();}; pjRow.appendChild(sp); }); };
-  if(pjIn)pjIn.onchange=()=>{ [...(pjIn.files||[])].forEach(f=>{ if(msgPjs.length>=3){alert('3 pièces jointes maximum 🙂');return;} if(f.size>7*1024*1024){alert(f.name+' : 7 Mo max par fichier');return;}
+  if(pjIn)pjIn.onchange=()=>{ [...(pjIn.files||[])].forEach(f=>{ if(msgPjs.length>=3){alert('3 pièces jointes maximum 😊');return;} if(f.size>7*1024*1024){alert(f.name+' : 7 Mo max par fichier');return;}
       const fr=new FileReader(); fr.onload=()=>{ const m2=/^data:([^;]+);base64,(.+)$/.exec(String(fr.result)||''); if(m2){msgPjs.push({filename:f.name,mime:m2[1],dataB64:m2[2]});pjRender();} }; fr.readAsDataURL(f); });
     pjIn.value=''; };
   const sbtn=panel.querySelector('.msgsend');
