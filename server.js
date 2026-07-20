@@ -238,7 +238,9 @@ function setAuthCookie(res, payload) {
   res.cookie("hc_token", token, { httpOnly: true, sameSite: PROD ? "none" : "lax", secure: PROD, maxAge: 30 * 864e5 * 1000 });
 }
 function auth(req, res, next) {
-  try { req.user = jwt.verify(req.cookies.hc_token, JWT_SECRET); next(); }
+  // eslint-disable-next-line no-inner-declarations
+  function _blockDeparted(req2) { try { const u2 = req2.user; if (u2 && (COPILOT.departed.includes(String(u2.email).toLowerCase()) || normName(u2.name) === "kendia")) return true; } catch (e) {} return false; }
+  try { req.user = jwt.verify(req.cookies.hc_token, JWT_SECRET); if (_blockDeparted(req)) return res.status(403).json({ error: "compte désactivé" }); next(); }
   catch (e) { res.status(401).json({ error: "non connecté" }); }
 }
 // Anti brute force : 8 échecs par IP+email -> pause de 10 minutes
@@ -255,6 +257,10 @@ app.post("/api/login", (req, res) => {
     e.n += 1;
     if (e.n >= 8) { e.until = Date.now() + 10 * 60 * 1000; e.n = 0; }
     return res.status(401).json({ error: "Email ou mot de passe incorrect." });
+  }
+  // Comptes de personnes parties (ex. Kendia) : accès au cockpit désactivé.
+  if (COPILOT.departed.includes(String(u.email).toLowerCase()) || normName(u.name) === "kendia") {
+    return res.status(403).json({ error: "Ce compte n'est plus actif. Contacte Mélany si besoin." });
   }
   delete LOGIN_FAILS[k];
   setAuthCookie(res, { email: u.email, name: u.name, role: u.role });
