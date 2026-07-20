@@ -3348,7 +3348,7 @@ function renderMail(d, who){
   const REL=window.RELANCES||{};
   const joursDe=(dstr)=>{const d2=new Date(dstr);if(isNaN(d2))return 0;return Math.floor((Date.now()-d2.getTime())/86400000);};
   const prenomDe=(m)=>{const s2=deent(m.snippet||'');const mm=s2.match(/(?:hello|coucou|bonjour|hey|hi)\s+([A-Za-zÀ-ÿ'-]{2,})/i);return mm?mm[1]:'';};
-  const relCand=attente.map(m=>({m,j:joursDe(m.date),rel:REL[m.threadId||'']||null})).filter(x=>x.j>=5||x.rel);
+  const relCand=attente.map(m=>({m,j:joursDe(m.date),rel:REL[m.threadId||'']||null})).filter(x=>x.j>=2||x.rel).sort((a,b2)=>b2.j-a.j);
   let relZone='';window.RELZONE='';
   if(relCand.length){
     const parBrand={};relCand.forEach(x=>{const b2=x.m.brand||'Autres';(parBrand[b2]=parBrand[b2]||[]).push(x);});
@@ -3364,7 +3364,7 @@ function renderMail(d, who){
         ${m.url?`<a class="lk" href="${esc(m.url)}" target="_blank" rel="noopener" style="font-size:12px">Ouvrir le fil</a>`:''}
         <button class="lk relig" data-tid="${esc(m.threadId||'')}" data-done="${rel?'1':'0'}" style="font-size:12px;${rel?'':'background:#E1306C;color:#fff;border-color:#E1306C'}">${rel?'↩︎ annuler':'📸 Relancé sur IG'}</button>
       </div>`;};
-    window.RELZONE=relZone=`<div class="bgd-card" style="margin-bottom:14px;border-color:#F1D9C0"><div class="bgd-h">📸 Relances Instagram à faire <span class="cpsub">créatrices sans réponse au mail depuis 5 j+ · relance-les sur Insta, coche quand c'est fait</span></div>
+    window.RELZONE=relZone=`<div class="bgd-card" style="margin-bottom:14px;border-color:#F1D9C0"><div class="bgd-h">📸 Relances Instagram à faire <span class="cpsub">créatrices sans réponse à ton mail depuis 2 j+ · relance-les sur Insta, coche quand c'est fait</span></div>
       <div class="fs" style="margin:2px 0 8px">${nARelancer} à relancer · ${relCand.length-nARelancer} déjà relancée(s) sur IG</div>
       ${Object.entries(parBrand).map(([b2,arr])=>`<div style="margin-top:6px"><div class="fs" style="font-weight:700;color:#4C3BB8">🏷️ ${esc(b2)} · ${arr.length}</div>${arr.slice(0,12).map(relRow).join('')}</div>`).join('')}</div>`;
   }
