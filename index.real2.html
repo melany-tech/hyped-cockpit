@@ -975,18 +975,82 @@ async function renderFinanceView(){
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px"><input type="password" id="plkeyin" class="rhin" style="flex:1;min-width:220px;border-radius:12px;padding:12px 14px" placeholder="Colle ici ta clé API Pennylane" autocomplete="off"><button id="plkeygo" style="font-family:inherit;font-size:13.5px;font-weight:700;padding:12px 22px;border-radius:12px;border:none;background:linear-gradient(135deg,#8A63F8,#6D4DE8);color:#fff;cursor:pointer;white-space:nowrap">'+(plOn?'Reconnecter l\'API':'Connecter l\'API')+'</button></div>'
       +'<div id="plkeymsg" style="margin-top:8px"></div>'
       +'<div class="fs" style="margin-top:8px">🛡️ Clé stockée uniquement sur le disque sécurisé du serveur : jamais dans le code, jamais réaffichée. À générer dans Pennylane → Paramètres → Connectivité → Développeurs.</div></div>';
-    // ---------- prévisionnel / objectif de CA (saisi à la main) ----------
-    const prev=(ceo.finPrev&&ceo.finPrev.montant)||0;
-    const prevPc=prev>0?Math.max(0,Math.min(100,Math.round(100*caAn/prev))):0;
-    const prevH='<div class="bgd-card" style="margin-bottom:14px">'
-      +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b style="font-size:15px">🎯 Prévisionnel '+yr+'</b>'
-      +(prev>0?('<b style="font-size:18px;color:'+V+'">'+eur(prev)+'</b>'):'<span class="fs">à définir</span>')
-      +'<a class="lk finprevedit" title="Modifier" style="border:none;background:'+(window.FIN_PREV_EDIT?'#EEEBFB':'none')+';padding:3px 9px;border-radius:8px">✎</a>'
-      +(prev>0?('<span style="margin-left:auto" class="fs">encaissé '+eur(caAn)+' · <b style="color:'+V+'">'+prevPc+'%</b> de l\'objectif · reste '+eur(Math.max(0,prev-caAn))+'</span>'):'')
-      +'</div>'
-      +(prev>0?('<div style="margin-top:9px;display:flex;height:16px;border-radius:8px;overflow:hidden;background:#EEF0F2"><div style="width:'+prevPc+'%;background:'+V+'"></div></div>'):'')
-      +(window.FIN_PREV_EDIT?('<div style="margin-top:11px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="fs">Objectif de CA '+yr+' (€) :</span><input type="number" id="finprevin" class="rhin" value="'+(prev||'')+'" placeholder="ex : 250000" style="width:160px;padding:8px 11px;border-radius:9px"><button id="finprevsave" class="lk" style="background:'+V+';color:#fff;border-color:'+V+'">💾 Enregistrer</button><span class="fs">laisse vide pour retirer</span></div>'):'')
+    // ========== PRÉVISIONNEL DE TRÉSORERIE (encaissements attendus) ==========
+    const _nz=(x)=>String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
+    const _fdate=(d)=>{const p=String(d||'').split('-');return p.length===3?(p[2]+'/'+p[1]):(d||'');};
+    const attendus=(ceo.attendus||[]);
+    const todayStr=new Date().toISOString().slice(0,10);
+    const _now=new Date();const _eom=new Date(_now.getFullYear(),_now.getMonth()+1,0);const eomStr=_eom.toISOString().slice(0,10);
+    const paidRecent=(plOn&&pl.paidRecent)||[];
+    const matchPaid=(a)=>{if(!paidRecent.length)return null;let m=a.facture?paidRecent.find(p=>p.num&&p.num.toLowerCase()===String(a.facture).toLowerCase()):null;if(!m){const cn=_nz(a.client);if(cn)m=paidRecent.find(p=>_nz(p.client)===cn&&Math.abs((p.montant||0)-(a.montant||0))<=Math.max(50,0.02*(a.montant||0)));}return m||null;};
+    const openA=attendus.filter(a=>a.statut!=='encaisse');
+    const sumA=(arr)=>arr.reduce((s,a)=>s+(a.montant||0),0);
+    const isFinMois=(a)=>a.date&&a.date>=todayStr&&a.date<=eomStr;
+    const encMois=plOn?Math.round(pl.caMois||0):0;
+    const attFin=openA.filter(a=>isFinMois(a)&&(a.certitude==='confirme'||a.certitude==='probable'));
+    const attFinSum=sumA(attFin);
+    const retardA=openA.filter(a=>a.date&&a.date<todayStr);
+    const retardSum=sumA(retardA);
+    const projection=encMois+attFinSum;
+    const tk=(ic,bg,lbl,val,sub)=>'<div class="bgd-card" style="min-width:0;padding:14px 16px"><div style="display:flex;align-items:center;gap:9px"><span style="width:34px;height:34px;flex:0 0 34px;border-radius:11px;background:'+bg+';display:inline-flex;align-items:center;justify-content:center;font-size:15px">'+ic+'</span><div style="min-width:0"><div class="fs" style="font-size:11.5px">'+lbl+'</div><b style="font-size:19px">'+val+'</b></div></div>'+(sub?('<div class="fs" style="margin-top:6px;font-size:10.5px">'+sub+'</div>'):'')+'</div>';
+    const tresoBanner='<div class="bgd-h" style="display:flex;align-items:center;margin-bottom:8px">💶 Pilotage trésorerie <span class="bgd-badge" style="margin-left:auto;background:#E7F5EC;color:#1F8A5D">'+_now.toLocaleDateString('fr-FR',{month:'long'})+'</span></div>'
+      +'<div class="bgd-kpis" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr));margin-bottom:14px">'
+      +tk('💰','#E7F5EC','Encaissé ce mois',plOn?eur(encMois):'·','réellement reçu (HT)')
+      +tk('⏳','#EEEBFB','Attendu d\'ici fin de mois',eur(attFinSum),attFin.length+' encaissement(s) prévu(s)')
+      +tk('⚠️','#FBE5E0','En retard d\'encaissement',eur(retardSum),retardA.length+' paiement(s) en retard')
+      +tk('📈','#E7F0FA','Projection fin de mois',plOn?eur(projection):'·','encaissé + attendu confirmé')
       +'</div>';
+    // --- courbe Réel vs Prévisionnel ---
+    let tresoChart='';
+    {
+      const win=openA.filter(a=>a.date&&a.date>=todayStr&&(a.certitude==='confirme'||a.certitude==='probable')).slice().sort((x,y)=>String(x.date).localeCompare(String(y.date)));
+      if(win.length){
+        const pts=[{d:todayStr,v:encMois,lbl:'Aujourd\'hui'}];let cc=encMois;
+        win.forEach(a=>{cc+=(a.montant||0);pts.push({d:a.date,v:cc,lbl:a.client});});
+        const forecastEnd=pts[pts.length-1].v;
+        const t0=new Date(todayStr).getTime();const tN=new Date(pts[pts.length-1].d).getTime();const span=Math.max(1,tN-t0);
+        const w=700,h=200,padL=52,padB=30,padT=16,iw=w-padL-16,ih=h-padT-padB;
+        const mxv=Math.max(1,forecastEnd);
+        const X=(d)=>padL+((new Date(d).getTime()-t0)/span)*iw;
+        const Y=(v)=>padT+ih-(v/mxv)*ih;
+        const poly=pts.map(p=>X(p.d).toFixed(1)+','+Y(p.v).toFixed(1)).join(' ');
+        const dots=pts.map((p,i)=>'<circle cx="'+X(p.d).toFixed(1)+'" cy="'+Y(p.v).toFixed(1)+'" r="'+(i===0?4.5:3.5)+'" fill="'+(i===0?'#2E9E6B':V)+'"/><circle class="pltip" data-tip="'+esc(p.lbl)+' · '+eur(p.v)+' le '+_fdate(p.d)+'" cx="'+X(p.d).toFixed(1)+'" cy="'+Y(p.v).toFixed(1)+'" r="14" fill="transparent" style="cursor:pointer"/>').join('');
+        const yl=[0,0.5,1].map(f=>'<text x="'+(padL-8)+'" y="'+(Y(mxv*f)+3).toFixed(1)+'" font-size="10" fill="#9AA3AC" text-anchor="end">'+Math.round(mxv*f/1000)+' k€</text><line x1="'+padL+'" y1="'+Y(mxv*f).toFixed(1)+'" x2="'+(padL+iw)+'" y2="'+Y(mxv*f).toFixed(1)+'" stroke="#F0F1F6"/>').join('');
+        const step=Math.ceil(pts.length/6)||1;
+        const xl=pts.map((p,i)=>(i%step===0||i===pts.length-1)?'<text x="'+X(p.d).toFixed(1)+'" y="'+(h-8)+'" font-size="9.5" fill="#9AA3AC" text-anchor="middle">'+_fdate(p.d)+'</text>':'').join('');
+        const svg='<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto;display:block">'+yl+'<polyline points="'+poly+'" fill="none" stroke="'+V+'" stroke-width="2.5" stroke-dasharray="6 5" stroke-linecap="round" stroke-linejoin="round"/>'+dots+xl+'</svg>';
+        tresoChart='<div class="bgd-card" style="margin-bottom:14px"><div class="bgd-h" style="display:flex;align-items:center">Réel vs Prévisionnel <span class="bgd-badge" style="margin-left:auto;background:#F4F2FB;color:#4C3BB8">cash · survole un point</span></div>'
+          +'<div class="fs" style="margin:2px 0 6px">Point vert = encaissé à ce jour ('+eur(encMois)+' ce mois). En pointillé : projection si tout arrive comme prévu, jusqu\'à <b style="color:'+V+'">'+eur(forecastEnd)+'</b>.</div>'
+          +svg+'</div>';
+      }
+    }
+    // --- carte Encaissements attendus + formulaire ---
+    const TYPES=[['acompte','Acompte'],['mensualite','Mensualité'],['solde','Solde'],['autre','Autre']];
+    const CERTS=[['confirme','Confirmé'],['probable','Probable'],['potentiel','Potentiel']];
+    const certBadge=(c)=>{const m=({confirme:['#E7F5EC','#1F8A5D','Confirmé'],probable:['#FDF7E0','#B7920E','Probable'],potentiel:['#EFF1F3','#7A828C','Potentiel']})[c]||['#EFF1F3','#7A828C',c];return '<span class="bgd-badge" style="background:'+m[0]+';color:'+m[1]+';font-size:10.5px">'+m[2]+'</span>';};
+    const statBadge=(a)=>{if(a.statut==='encaisse')return '<span class="bgd-badge" style="background:#E7F5EC;color:#1F8A5D;font-size:10.5px">✓ Encaissé</span>';if(matchPaid(a))return '<span class="bgd-badge" style="background:#EEEBFB;color:#4C3BB8;font-size:10.5px">🔎 Rapprochement suggéré</span>';if(a.date&&a.date<todayStr)return '<span class="bgd-badge" style="background:#FBE5E0;color:#D4483B;font-size:10.5px">En retard</span>';const dd=a.date?Math.round((new Date(a.date)-new Date(todayStr))/86400000):999;if(dd>=0&&dd<=7)return '<span class="bgd-badge" style="background:#FDF0E0;color:#C77F2A;font-size:10.5px">Échéance proche</span>';if(a.facture)return '<span class="bgd-badge" style="background:#E7F0FA;color:#2F6DB5;font-size:10.5px">Facture envoyée</span>';return '<span class="bgd-badge" style="background:#EFF1F3;color:#7A828C;font-size:10.5px">À facturer</span>';};
+    const typeLbl=(t)=>(({acompte:'Acompte',mensualite:'Mensualité',solde:'Solde',autre:'Autre'})[t]||'');
+    const attSorted=attendus.slice().sort((a,b)=>{if((a.statut==='encaisse')!==(b.statut==='encaisse'))return a.statut==='encaisse'?1:-1;return String(a.date||'9999').localeCompare(String(b.date||'9999'));});
+    const attRows=attSorted.map(a=>{const mp=matchPaid(a);const enc=a.statut==='encaisse';
+      return '<div style="padding:11px 0;border-bottom:1px solid #F0F1F6">'
+        +'<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap"><b style="font-size:13.5px;'+(enc?'text-decoration:line-through;color:#8A9AA0':'')+'">'+esc(a.client)+'</b>'+certBadge(a.certitude)+statBadge(a)+'<b style="margin-left:auto;white-space:nowrap;'+(enc?'color:#8A9AA0':'')+'">'+eur(a.montant)+'</b></div>'
+        +'<div class="fs" style="margin-top:3px">'+(a.projet?esc(a.projet)+' · ':'')+(typeLbl(a.type)?typeLbl(a.type)+' · ':'')+(a.date?('attendu le '+_fdate(a.date)):'date non définie')+(a.facture?(' · facture '+esc(a.facture)):'')+(a.comment?(' · '+esc(a.comment)):'')+'</div>'
+        +(mp&&!enc?('<div style="margin-top:6px;padding:7px 10px;border-radius:9px;background:#F4F2FB;font-size:12px;color:#4C3BB8">🔎 Virement Pennylane repéré : '+eur(mp.montant)+' le '+_fdate(mp.date)+(mp.num?(' (facture '+esc(mp.num)+')'):'')+' · <a class="lk attconf" data-id="'+esc(a.id)+'" style="border:none;background:#6D5AE0;color:#fff;padding:3px 10px;border-radius:8px;font-weight:700">Confirmer le rapprochement</a></div>'):'')
+        +'<div style="margin-top:6px;display:flex;gap:10px;flex-wrap:wrap"><a class="lk attenc" data-id="'+esc(a.id)+'" style="font-size:12px">'+(enc?'↩︎ Remettre en attendu':'✓ Marquer encaissé')+'</a><a class="lk attedit" data-id="'+esc(a.id)+'" style="font-size:12px">✎ Modifier</a><a class="lk attdel" data-id="'+esc(a.id)+'" style="font-size:12px;color:#D4483B">🗑 Supprimer</a></div>'
+        +'</div>';}).join('');
+    const editA=window.ATT_EDIT?attendus.find(a=>a.id===window.ATT_EDIT):null;
+    const fOpen=window.ATT_ADD||!!editA;
+    const inpF=(id,ph,val,ty)=>'<input id="'+id+'" class="rhin" type="'+(ty||'text')+'" placeholder="'+ph+'" value="'+esc(val==null?'':String(val))+'" style="padding:9px 11px;border-radius:9px">';
+    const selFa=(id,opts,val)=>'<select id="'+id+'" class="rhin" style="padding:9px 11px;border-radius:9px">'+opts.map(o=>'<option value="'+o[0]+'"'+(o[0]===val?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>';
+    const formH=fOpen?('<div style="margin-top:10px;padding:12px;border:1px solid #E7E3F7;border-radius:12px;background:#FBFAFF">'
+      +'<b style="font-size:13.5px">'+(editA?'Modifier l\'encaissement prévu':'Nouvel encaissement prévu')+'</b>'
+      +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:9px;margin-top:9px">'
+        +inpF('attf_client','Client *',editA?editA.client:'')+inpF('attf_projet','Projet / prestation',editA?editA.projet:'')+inpF('attf_montant','Montant € *',editA?editA.montant:'','number')+inpF('attf_date','Date attendue',editA?editA.date:'','date')+selFa('attf_type',TYPES,editA?editA.type:'solde')+selFa('attf_cert',CERTS,editA?editA.certitude:'confirme')+inpF('attf_facture','N° facture (si émise)',editA?editA.facture:'')+inpF('attf_comment','Commentaire',editA?editA.comment:'')
+      +'</div><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button id="attf_save" class="lk" style="background:'+V+';color:#fff;border-color:'+V+'">💾 Enregistrer</button><a id="attf_cancel" class="lk">Annuler</a></div></div>'):'';
+    const attendusCard='<div class="bgd-card" style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div class="bgd-h" style="margin:0">📥 Encaissements attendus</div><span class="bgd-badge" style="background:#EEEBFB;color:#4C3BB8">'+openA.length+' en attente · '+eur(sumA(openA.filter(a=>a.certitude!=='potentiel')))+'</span><button id="attf_toggle" class="lk" style="margin-left:auto;background:'+V+';color:#fff;border-color:'+V+'">＋ Ajouter un encaissement prévu</button></div>'
+      +formH+'<div style="margin-top:8px">'+(attRows||'<div class="fs" style="padding:12px 0;text-align:center">Aucun encaissement prévu pour l\'instant. Clique « ＋ Ajouter » pour saisir un acompte, un solde ou une mensualité attendue.</div>')+'</div>'
+      +'<div class="fs" style="margin-top:6px">Confirmé et probable comptent dans la projection · le potentiel est affiché mais exclu des totaux.</div></div>';
+    const prevH=tresoBanner+tresoChart+attendusCard;
     bx.innerHTML=kpis+prevH
       +'<div class="bgd-grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);margin-bottom:14px"><div style="min-width:0;display:flex;flex-direction:column;gap:14px">'+mainH+'</div><div style="min-width:0;display:flex;flex-direction:column;gap:14px">'+chartCard+alertH+'</div></div>'
       +svcCard+'<div class="bgd-grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">'+encH+connH+'</div>';
@@ -1002,8 +1066,21 @@ async function renderFinanceView(){
     const fr=$('finrefresh'); if(fr)fr.onclick=()=>{fr.disabled=true;fr.textContent='🔄 Actualisation…';window.FIN_FRESH=true;renderFinanceView();};
     bx.querySelectorAll('.finedit').forEach(el=>el.onclick=()=>{window.FIN_EDIT=(window.FIN_EDIT===el.dataset.k?null:el.dataset.k);renderFinanceView();});
     const fa=bx.querySelector('.finall'); if(fa)fa.onclick=()=>{window.FIN_ALLCLI=!window.FIN_ALLCLI;renderFinanceView();};
-    const fpe=bx.querySelector('.finprevedit'); if(fpe)fpe.onclick=()=>{window.FIN_PREV_EDIT=!window.FIN_PREV_EDIT;renderFinanceView();};
-    const fps=$('finprevsave'); if(fps)fps.onclick=async()=>{const inp=$('finprevin');const m=inp?(Number(inp.value)||0):0;fps.disabled=true;fps.textContent='…';const r2=await api('/api/finance/prev',{method:'POST',body:JSON.stringify({montant:m,annee:yr})});if(!r2.ok){const dd=await r2.json().catch(()=>({}));alert(dd.error||'Erreur');fps.disabled=false;fps.textContent='💾 Enregistrer';return;}window.FIN_PREV_EDIT=false;renderFinanceView();};
+    const at_tog=$('attf_toggle'); if(at_tog)at_tog.onclick=()=>{window.ATT_ADD=!window.ATT_ADD;window.ATT_EDIT=null;renderFinanceView();};
+    const at_can=$('attf_cancel'); if(at_can)at_can.onclick=()=>{window.ATT_ADD=false;window.ATT_EDIT=null;renderFinanceView();};
+    const at_sav=$('attf_save'); if(at_sav)at_sav.onclick=async()=>{
+      const gv=(id)=>{const e2=$(id);return e2?e2.value:'';};
+      const body={client:gv('attf_client'),projet:gv('attf_projet'),montant:Number(gv('attf_montant')||0),date:gv('attf_date'),type:gv('attf_type')||'autre',certitude:gv('attf_cert')||'confirme',facture:gv('attf_facture'),comment:gv('attf_comment')};
+      if(window.ATT_EDIT)body.id=window.ATT_EDIT;
+      if(!body.client||!body.montant){alert('Client et montant obligatoires');return;}
+      at_sav.disabled=true;at_sav.textContent='…';
+      const r2=await api('/api/finance/attendu',{method:'POST',body:JSON.stringify(body)});
+      if(!r2.ok){const dd=await r2.json().catch(()=>({}));alert(dd.error||'Erreur');at_sav.disabled=false;at_sav.textContent='💾 Enregistrer';return;}
+      window.ATT_ADD=false;window.ATT_EDIT=null;renderFinanceView();
+    };
+    bx.querySelectorAll('.attedit').forEach(el=>el.onclick=()=>{window.ATT_EDIT=el.dataset.id;window.ATT_ADD=false;renderFinanceView();});
+    bx.querySelectorAll('.attenc,.attconf').forEach(el=>el.onclick=async()=>{el.style.pointerEvents='none';await api('/api/finance/attendu/encaisse',{method:'POST',body:JSON.stringify({id:el.dataset.id})});renderFinanceView();});
+    bx.querySelectorAll('.attdel').forEach(el=>el.onclick=async()=>{if(!confirm('Supprimer cet encaissement prévu ?'))return;await api('/api/finance/attendu/del',{method:'POST',body:JSON.stringify({id:el.dataset.id})});renderFinanceView();});
     bx.querySelectorAll('.finsave').forEach(el=>el.onclick=async()=>{
       const wrap=el.parentElement; const svc=wrap.querySelector('.finsvc')?wrap.querySelector('.finsvc').value:''; const pk=wrap.querySelector('.finpk')?Number(wrap.querySelector('.finpk').value):0;
       el.disabled=true;el.textContent='…';

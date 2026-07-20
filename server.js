@@ -749,7 +749,7 @@ async function pennylaneSnapshot(force) {
     // 2) CA ENCAISSÉ (HT, factures clients réellement payées) : 12 derniers mois + derniers encaissements
     const lim = new Date(); lim.setMonth(lim.getMonth() - 12); const l0 = lim.toISOString().slice(0, 10);
     const y0 = new Date().getFullYear() + "-01-01";
-    const mensuel = {}; const factMensuel = {}; const lastPaid = []; const clients = {};
+    const mensuel = {}; const factMensuel = {}; const lastPaid = []; const clients = {}; const paidRecent = [];
     const curM = new Date().toISOString().slice(0, 7);
     let lateN = 0, lateSum = 0, upcomN = 0, upcomSum = 0;
     let enc = 0; cursor = ""; let pages = 0, stop = false;
@@ -782,6 +782,7 @@ async function pennylaneSnapshot(force) {
           if (mk2) mensuel[mk2] = (mensuel[mk2] || 0) + ht;
           if (iv.date && iv.date >= y0) enc += ht;
           if (lastPaid.length < 4 && ht > 0) lastPaid.push({ nom: (iv.customer && iv.customer.name) || iv.label || iv.invoice_number || "Facture", date: iv.date || "", montant: Math.round(ht) });
+          if (iv.date && iv.date >= y0 && ht > 0 && paidRecent.length < 250) paidRecent.push({ num: String(iv.invoice_number || ""), montant: Math.round(ht), date: iv.date || "", client: cn });
         }
       }
       cursor = (!stop && d.has_more) ? (d.next_cursor || "") : "";
@@ -792,7 +793,7 @@ async function pennylaneSnapshot(force) {
     const moisK = new Date().toISOString().slice(0, 7);
     const prevD = new Date(); prevD.setMonth(prevD.getMonth() - 1); const prevK = prevD.toISOString().slice(0, 7);
     PL_CACHE = { at: Date.now(), treso: Math.round(treso * 100) / 100, ca: Math.round(enc * 100) / 100,
-      caMois: mensuel[moisK] || 0, caPrevMois: mensuel[prevK] || 0, mensuel, lastPaid,
+      caMois: mensuel[moisK] || 0, caPrevMois: mensuel[prevK] || 0, mensuel, lastPaid, paidRecent,
       factureMois: factMensuel[moisK] || 0, facturePrevMois: factMensuel[prevK] || 0, factMensuel,
       lateN, lateSum: Math.round(lateSum), upcomN, upcomSum: Math.round(upcomSum), clients, error: null };
     Object.values(clients).forEach((c) => { if (c.caPaye) c.caPaye = Math.round(c.caPaye); });
@@ -817,8 +818,8 @@ app.get("/api/ceo", auth, async (req, res) => {
       else if (last.v !== cur) { last.v = cur; saveCeo(o); }
     }
   } catch (e) {}
-  res.json({ ok: true, treso: o.treso || null, ca: o.ca || null, tresoHist: o.tresoHist || [], financeAttr: o.encAttr || {}, finPrev: o.finPrev || null,
-    pennylane: pl2 ? { connected: true, at: pl2.at, treso: pl2.treso, ca: pl2.ca, caMois: pl2.caMois, caPrevMois: pl2.caPrevMois, mensuel: pl2.mensuel || {}, lastPaid: pl2.lastPaid || [], factureMois: pl2.factureMois || 0, facturePrevMois: pl2.facturePrevMois || 0, factMensuel: pl2.factMensuel || {}, lateN: pl2.lateN || 0, lateSum: pl2.lateSum || 0, upcomN: pl2.upcomN || 0, upcomSum: pl2.upcomSum || 0, clients: pl2.clients || {}, error: pl2.error, annee: new Date().getFullYear() } : { connected: false },
+  res.json({ ok: true, treso: o.treso || null, ca: o.ca || null, tresoHist: o.tresoHist || [], financeAttr: o.encAttr || {}, finPrev: o.finPrev || null, attendus: o.attendus || [],
+    pennylane: pl2 ? { connected: true, at: pl2.at, treso: pl2.treso, ca: pl2.ca, caMois: pl2.caMois, caPrevMois: pl2.caPrevMois, mensuel: pl2.mensuel || {}, lastPaid: pl2.lastPaid || [], factureMois: pl2.factureMois || 0, facturePrevMois: pl2.facturePrevMois || 0, factMensuel: pl2.factMensuel || {}, lateN: pl2.lateN || 0, lateSum: pl2.lateSum || 0, upcomN: pl2.upcomN || 0, upcomSum: pl2.upcomSum || 0, clients: pl2.clients || {}, paidRecent: pl2.paidRecent || [], error: pl2.error, annee: new Date().getFullYear() } : { connected: false },
     roadmap: o.roadmap || [], axes: RM_AXES, rmStatuts: RM_STATUTS, arbTypes: ARB_TYPES,
     arbitrages: (o.arbitrages || []).filter((a) => a.statut === "en attente").sort((a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999")) });
 });
@@ -844,6 +845,48 @@ app.post("/api/finance/prev", auth, (req, res) => {
   if (!montant) { o.finPrev = null; }
   else { o.finPrev = { montant: Math.round(montant), annee, at: Date.now(), by: req.user.name }; }
   saveCeo(o); res.json({ ok: true, finPrev: o.finPrev });
+});
+// Encaissements attendus (prévisionnel de trésorerie) saisis à la main par la direction.
+app.post("/api/finance/attendu", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  const o = loadCeo(); o.attendus = o.attendus || [];
+  const b = req.body || {};
+  const montant = Math.max(0, Math.min(100000000, Number(b.montant) || 0));
+  const client = String(b.client || "").slice(0, 90).trim();
+  if (!client || !montant) return res.status(400).json({ error: "client et montant obligatoires" });
+  const TYPES = ["acompte", "mensualite", "solde", "autre"];
+  const CERT = ["confirme", "probable", "potentiel"];
+  const rec = {
+    client,
+    projet: String(b.projet || "").slice(0, 120),
+    montant: Math.round(montant),
+    date: String(b.date || "").slice(0, 10),
+    type: TYPES.includes(b.type) ? b.type : "autre",
+    certitude: CERT.includes(b.certitude) ? b.certitude : "confirme",
+    facture: String(b.facture || "").slice(0, 40),
+    comment: String(b.comment || "").slice(0, 200),
+  };
+  if (b.id) {
+    const it = o.attendus.find((x) => x.id === b.id);
+    if (!it) return res.status(404).json({ error: "introuvable" });
+    Object.assign(it, rec, { updatedAt: Date.now(), by: req.user.name });
+  } else {
+    o.attendus.push({ id: "at" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), ...rec, statut: "attendu", at: Date.now(), by: req.user.name });
+  }
+  saveCeo(o); res.json({ ok: true, attendus: o.attendus });
+});
+app.post("/api/finance/attendu/encaisse", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  const o = loadCeo(); o.attendus = o.attendus || [];
+  const it = o.attendus.find((x) => x.id === req.body?.id); if (!it) return res.status(404).json({ error: "introuvable" });
+  it.statut = (it.statut === "encaisse") ? "attendu" : "encaisse";
+  it.encaisseAt = it.statut === "encaisse" ? Date.now() : null;
+  saveCeo(o); res.json({ ok: true, attendus: o.attendus });
+});
+app.post("/api/finance/attendu/del", auth, (req, res) => {
+  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  const o = loadCeo(); o.attendus = (o.attendus || []).filter((x) => x.id !== req.body?.id);
+  saveCeo(o); res.json({ ok: true, attendus: o.attendus });
 });
 app.post("/api/ceo/config", auth, (req, res) => {
   if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
