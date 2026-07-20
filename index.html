@@ -1566,16 +1566,23 @@ function bgdCol(s){let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))>>>0
 function bgdIni(s){return String(s||'?').split(/\s+/).map(w=>w[0]||'').join('').slice(0,3).toUpperCase();}
 function bgdDelta(cur,old2){ if(!(old2>0))return ''; const p=Math.round(1000*(cur-old2)/old2)/10; if(!p)return '<span class="bgd-ksub">vs mois dernier · stable</span>';
   return '<span class="bgd-ksub">vs mois dernier '+(p>0?'<b style="color:#16A34A">↑ '+p.toLocaleString('fr-FR')+' %</b>':'<b style="color:#DC2626">↓ '+Math.abs(p).toLocaleString('fr-FR')+' %</b>')+'</span>'; }
-async function renderBudgetView(){
+async function renderBudgetView(fromCache){
   const box=$('budgetallbox'); if(!box)return;
   const month=BG_MONTH||new Date().toISOString().slice(0,7);
-  box.innerHTML='<div class="state">Chargement des budgets…</div>';
+  // fromCache : replier/déplier une liste ne refait AUCUN appel réseau (données en mémoire, rendu instantané)
+  const useCache=fromCache&&window.BG_CACHE&&window.BG_CACHE.month===month&&(Date.now()-window.BG_CACHE.at<120000);
+  if(!useCache)box.innerHTML='<div class="state">Chargement des budgets…</div>';
   try{
-    const fi=await getFiches();
-    const brands=[...new Set(['In Haircare','Doucéa','Curls Matter',...Object.keys((fi&&fi.brands)||{})])].filter(Boolean);
-    const prev=bgPrevMonth(month);
-    const get=async(b,m)=>{try{const r=await api('/api/budget/'+encodeURIComponent(b)+'?month='+m);return r.ok?{brand:b,...(await r.json())}:null;}catch(e){return null;}};
-    const [cur,old]=await Promise.all([Promise.all(brands.map(b=>get(b,month))),Promise.all(brands.map(b=>get(b,prev)))]);
+    let fi,cur,old;
+    if(useCache){ ({fi,cur,old}=window.BG_CACHE); }
+    else {
+      fi=await getFiches();
+      const brands=[...new Set(['In Haircare','Doucéa','Curls Matter',...Object.keys((fi&&fi.brands)||{})])].filter(Boolean);
+      const prev=bgPrevMonth(month);
+      const get=async(b,m)=>{try{const r=await api('/api/budget/'+encodeURIComponent(b)+'?month='+m);return r.ok?{brand:b,...(await r.json())}:null;}catch(e){return null;}};
+      [cur,old]=await Promise.all([Promise.all(brands.map(b=>get(b,month))),Promise.all(brands.map(b=>get(b,prev)))]);
+      window.BG_CACHE={month,at:Date.now(),fi,cur,old};
+    }
     const ds=cur.filter(Boolean); // toutes les marques, même à zéro (maquette Mélany)
     ds.sort((a,b)=>((b.budgetMensuel||0)-(a.budgetMensuel||0))||((b.total||0)-(a.total||0))||((b.entries||[]).length-(a.entries||[]).length));
     const eur=n=>Number(n||0).toLocaleString('fr-FR')+' €';
@@ -1712,14 +1719,14 @@ async function renderBudgetView(){
     const mi=$('bgallmonth'); if(mi)mi.onchange=()=>{BG_MONTH=mi.value;renderBudgetView();};
     const selectBrand=(b)=>{BG_BRAND=b;try{localStorage.setItem('hc_bgbrand',b);}catch(e){}renderBudgetView();};
     box.querySelectorAll('.bgchip').forEach(c=>c.onclick=()=>selectBrand(c.dataset.b));
-    const sa=box.querySelector('.bgshowall'); if(sa)sa.onclick=()=>{BG_ALL=!BG_ALL;renderBudgetView();};
-    box.querySelectorAll('.bgpedit').forEach(el=>el.onclick=()=>{window.BG_EDIT=(window.BG_EDIT===el.dataset.n?null:el.dataset.n);renderBudgetView();});
+    const sa=box.querySelector('.bgshowall'); if(sa)sa.onclick=()=>{BG_ALL=!BG_ALL;renderBudgetView(true);};
+    box.querySelectorAll('.bgpedit').forEach(el=>el.onclick=()=>{window.BG_EDIT=(window.BG_EDIT===el.dataset.n?null:el.dataset.n);renderBudgetView(true);});
     box.querySelectorAll('.bgpsave').forEach(el=>el.onclick=async()=>{
       const inp=box.querySelector('.bgpin[data-id="'+el.dataset.id+'"]'); if(!inp||!el.dataset.id)return;
       el.disabled=true;el.textContent='…';
       const r3=await api('/api/budget/entry',{method:'POST',body:JSON.stringify({id:el.dataset.id,montant:Number(inp.value)})});
       if(!r3.ok){const dd=await r3.json().catch(()=>({}));alert(dd.error||'Erreur');el.disabled=false;el.textContent='💾';return;}
-      window.BG_EDIT=null; // enregistré : on replie la ligne
+      window.BG_EDIT=null; window.BG_CACHE=null; // enregistré : on replie et on recharge les vrais totaux
       renderBudgetView();
     });
     box.querySelectorAll('.bgmini').forEach(el=>el.onclick=()=>selectBrand(el.dataset.b));
