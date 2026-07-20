@@ -886,6 +886,7 @@ app.post("/api/finance/attendu", auth, (req, res) => {
   if (!client || !montant) return res.status(400).json({ error: "client et montant obligatoires" });
   const TYPES = ["acompte", "mensualite", "solde", "autre"];
   const CERT = ["confirme", "probable", "potentiel"];
+  const SVC = ["Influence", "Storytelling de marque", "Storytelling", "Social Media", "360°", "Autre"];
   const rec = {
     client,
     projet: String(b.projet || "").slice(0, 120),
@@ -893,6 +894,7 @@ app.post("/api/finance/attendu", auth, (req, res) => {
     date: String(b.date || "").slice(0, 10),
     type: TYPES.includes(b.type) ? b.type : "autre",
     certitude: CERT.includes(b.certitude) ? b.certitude : "confirme",
+    service: SVC.includes(b.service) ? b.service : "",
     facture: String(b.facture || "").slice(0, 40),
     comment: String(b.comment || "").slice(0, 200),
   };
