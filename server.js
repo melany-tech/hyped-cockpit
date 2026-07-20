@@ -1064,7 +1064,7 @@ app.get("/api/rh/fiches", auth, (req, res) => {
       const today = new Date().toISOString().slice(0, 10);
       const absNow = (o.absences || []).find((a) => a.statut === "validée" && normName(a.who) === normName(u.name) && a.du <= today && today <= a.au) || null;
       return { name: u.name, role: u.role === "supervisor" ? "direction" : (u.role === "team" ? "social média" : "cheffe de projet"),
-        email: u.email, tel: pr.tel || "", iban: pr.iban || "", notes: pr.notes || "", arrivee: pr.arrivee || "", contrat: pr.contrat || "",
+        email: u.email, tel: pr.tel || "", iban: pr.iban || "", notes: pr.notes || "", arrivee: pr.arrivee || "", contrat: pr.contrat || "", nomComplet: pr.nomComplet || "", adresse: pr.adresse || "",
         conges: lv, docs: (o.docs || []).filter((x) => normName(x.who) === normName(u.name)).length,
         absence: absNow ? { type: absNow.type, au: absNow.au } : null };
     });
@@ -1081,6 +1081,8 @@ app.post("/api/rh/profil", auth, (req, res) => {
   if (req.body?.notes !== undefined) pr.notes = String(req.body.notes).slice(0, 500);
   if (req.body?.arrivee !== undefined) pr.arrivee = String(req.body.arrivee).slice(0, 20);
   if (req.body?.contrat !== undefined) pr.contrat = String(req.body.contrat).slice(0, 20);
+  if (req.body?.nomComplet !== undefined) pr.nomComplet = String(req.body.nomComplet).slice(0, 80);
+  if (req.body?.adresse !== undefined) pr.adresse = String(req.body.adresse).slice(0, 200);
   saveRh(o); res.json({ ok: true });
 });
 app.get("/api/alerts", auth, async (req, res) => {

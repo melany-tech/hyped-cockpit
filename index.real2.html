@@ -1378,26 +1378,29 @@ async function renderRhView(){
       fdetH='<div style="min-width:0">'
         +'<div style="display:flex;align-items:center;gap:11px;margin-bottom:11px">'+avatar(fsel.name,i0)+'<b style="font-size:16px">✎ Fiche de '+esc(fsel.name)+'</b></div>'
         +'<div style="width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px">'
+        +fldR('🪪 NOM COMPLET','rhf_nom',fsel.nomComplet,'ex : Prunelle Bosangi Mouna')
         +fldR('📞 TÉLÉPHONE','rhf_tel',fsel.tel,'ex : 06 12 34 56 78')
         +fldR('🏦 RIB / IBAN','rhf_iban',fsel.iban,'FR76 …')
         +fldR('📅 ARRIVÉE CHEZ HYPED','rhf_arr',fsel.arrivee,'','date')
         +'<div style="min-width:0"><div class="fs" style="font-size:11px;margin-bottom:4px">📑 CONTRAT</div><select id="rhf_ct" class="rhin" style="width:100%;box-sizing:border-box;border-radius:11px;padding:11px 12px">'+['','CDI','CDD','Alternance','Stage','Freelance'].map(o2=>'<option'+(o2===(fsel.contrat||'')?' selected':'')+' value="'+o2+'">'+(o2||'à définir')+'</option>').join('')+'</select></div>'
         +'</div>'
+        +'<div class="fs" style="font-size:11px;margin:10px 0 4px">🏠 ADRESSE POSTALE</div>'
+        +'<textarea id="rhf_adr" class="rhin" style="width:100%;box-sizing:border-box;min-height:56px;resize:vertical;font-family:inherit;border-radius:11px;padding:10px" placeholder="numéro, rue, code postal, ville">'+esc(fsel.adresse||'')+'</textarea>'
         +'<div class="fs" style="font-size:11px;margin:10px 0 4px">📝 NOTES RH</div>'
         +'<textarea id="rhf_notes" class="rhin" style="width:100%;box-sizing:border-box;min-height:90px;resize:vertical;font-family:inherit;border-radius:11px;padding:12px" placeholder="contrat, particularités, points d&#39;attention…">'+esc(fsel.notes||'')+'</textarea>'
         +'<div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap"><button class="lk" id="rhfsave" style="flex:1;min-width:180px;background:#6D5AE0;color:#fff;border-color:#6D5AE0;padding:12px;border-radius:12px;font-weight:700">Enregistrer la fiche</button><button class="lk" id="rhfcancel" style="padding:12px 20px;border-radius:12px">Annuler</button></div>'
         +'</div>';
     }
     else fdetH='<div style="min-width:0">'
-      +'<div style="display:flex;align-items:center;gap:11px;margin-bottom:11px;flex-wrap:wrap">'+avatar(fsel.name,i0)+'<div style="min-width:0"><b style="font-size:16px">'+esc(fsel.name)+'</b><div class="fs">'+esc(fsel.role)+(fsel.arrivee?(' · chez Hyped depuis '+dmy(fsel.arrivee)):'')+'</div></div>'
+      +'<div style="display:flex;align-items:center;gap:11px;margin-bottom:11px;flex-wrap:wrap">'+avatar(fsel.name,i0)+'<div style="min-width:0"><b style="font-size:16px">'+esc(fsel.nomComplet||fsel.name)+'</b><div class="fs">'+esc(fsel.role)+(fsel.arrivee?(' · chez Hyped depuis '+dmy(fsel.arrivee)):'')+'</div></div>'
       +(fsel.absence?('<span class="bgd-badge" style="background:#F5EFE2;color:#B98A12">🏖️ absente → '+dmy(fsel.absence.au)+'</span>'):'')
       +'<button class="lk" data-rhfedit="'+esc(fsel.name)+'" style="margin-left:auto;background:#6D5AE0;color:#fff;border-color:#6D5AE0">✎ Modifier la fiche</button></div>'
       +'<div style="width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:10px">'
-      +infoCard('✉️','EMAIL',esc(fsel.email))
+      +infoCard('🪪','NOM COMPLET',fsel.nomComplet?esc(fsel.nomComplet):'<span style="opacity:.5">à renseigner</span>')+infoCard('✉️','EMAIL',esc(fsel.email))
       +infoCard('📞','TÉLÉPHONE',fsel.tel?esc(fsel.tel):'<span style="opacity:.5">à renseigner</span>')
       +infoCard('🏦','RIB / IBAN',fsel.iban?esc(fsel.iban):'<span style="opacity:.5">à renseigner</span>','stocké sur le disque sécurisé du cockpit')
       +infoCard('📅','CHEZ HYPED DEPUIS',fsel.arrivee?dmy(fsel.arrivee):'<span style="opacity:.5">à renseigner</span>',fsel.arrivee?dureeTxt(fsel.arrivee):'')
-      +infoCard('📑','CONTRAT',fsel.contrat?esc(fsel.contrat):'<span style="opacity:.5">à renseigner</span>')
+      +infoCard('📑','CONTRAT',fsel.contrat?esc(fsel.contrat):'<span style="opacity:.5">à renseigner</span>')+infoCard('🏠','ADRESSE',fsel.adresse?esc(fsel.adresse):'<span style="opacity:.5">à renseigner</span>')
       +infoCard('🏖️','CONGÉS',fsel.conges.left+' / '+fsel.conges.quota+' jour(s)','restants cette année')
       +infoCard('📄','DOCUMENTS',String(fsel.docs)+' déposé(s)','paie / factures · carte Documents ci-dessus')
       +'</div>'
@@ -1558,7 +1561,7 @@ async function renderRhView(){
   const rfs=$('rhfsave'); if(rfs)rfs.onclick=async()=>{
     rfs.disabled=true;
     const gv2=(id2)=>{const e2=$(id2);return e2?e2.value.trim():'';};
-    const r2=await api('/api/rh/profil',{method:'POST',body:JSON.stringify({who:window.RH_FICHE_SEL,tel:gv2('rhf_tel'),iban:gv2('rhf_iban'),arrivee:gv2('rhf_arr'),contrat:gv2('rhf_ct'),notes:($('rhf_notes')?$('rhf_notes').value:'')})});
+    const r2=await api('/api/rh/profil',{method:'POST',body:JSON.stringify({who:window.RH_FICHE_SEL,nomComplet:gv2('rhf_nom'),adresse:($('rhf_adr')?$('rhf_adr').value:''),tel:gv2('rhf_tel'),iban:gv2('rhf_iban'),arrivee:gv2('rhf_arr'),contrat:gv2('rhf_ct'),notes:($('rhf_notes')?$('rhf_notes').value:'')})});
     if(!r2.ok){const dd=await r2.json().catch(()=>({}));alert(dd.error||'Erreur');rfs.disabled=false;return;}
     window.RH_FICHE_EDIT=false; renderRhView();
   };
