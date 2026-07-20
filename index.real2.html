@@ -906,7 +906,7 @@ async function renderFinanceView(){
       const clients=(pl&&pl.clients)||{};
       const norm=(x)=>String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
       const offreMission=(clientNom)=>{const cn=norm(clientNom);let best=null;missions.forEach(m=>{const mc=norm(m.client);if(mc&&(cn.includes(mc)||mc.includes(cn)))best=m.offre;});return best;};
-      const OFC={'Influence':'#16BAC5','Storytelling de marque':'#2E9E6B','Storytelling':'#2E9E6B','Social Media':'#E8933A','360°':'#3F5E8C','Autre':'#8A929C','Pocket reversée aux influenceuses':'#C9CED4','Non attribué':'#C9CED4'};
+      const OFC={'Influence':'#16BAC5','Storytelling de marque':'#E5679E','Storytelling':'#E5679E','Social Media':'#E8933A','360°':'#3F5E8C','Autre':'#8A929C','Pocket reversée aux influenceuses':'#C9CED4','Non attribué':'#C9CED4'};
       const canon=(s)=>String(s||'')==='Storytelling'?'Storytelling de marque':String(s||'');
       const rows=Object.values(clients).map(c=>({nom:c.nom,ca:Math.round(c.caPaye||0)})).filter(x=>x.ca>0).sort((a2,b2)=>b2.ca-a2.ca);
       const parSvc={};let totNet=0;
