@@ -1519,7 +1519,9 @@ async function renderRhView(){
   box.querySelectorAll('[data-rhdec]').forEach(b=>b.onclick=async()=>{
     let comment=''; if(b.dataset.rhdec==='refusee'){ comment=prompt('Un petit mot pour expliquer (optionnel) :')||''; }
     b.disabled=true;
-    await api('/api/rh/absence/'+encodeURIComponent(b.dataset.id)+'/decide',{method:'POST',body:JSON.stringify({decision:b.dataset.rhdec,comment})});
+    const rr=await api('/api/rh/absence/'+encodeURIComponent(b.dataset.id)+'/decide',{method:'POST',body:JSON.stringify({decision:b.dataset.rhdec,comment})});
+    const dd=await rr.json().catch(()=>({}));
+    if(b.dataset.rhdec==='validee'&&dd&&dd.gcal==='google_perso_non_connecte'){ alert('Absence validée ✅\n\nNote : la personne n\'a pas encore connecté son Google avec la permission agenda, donc l\'événement OFF a été ajouté à TON agenda seulement. Dès qu\'elle reconnecte son Gmail (bouton dans Messages), les prochaines absences iront aussi dans le sien.'); }
     renderRhView();
   });
   box.querySelectorAll('[data-rhdel]').forEach(b=>b.onclick=async()=>{ b.disabled=true; await api('/api/rh/absence/'+encodeURIComponent(b.dataset.rhdel)+'/del',{method:'POST'}); renderRhView(); });

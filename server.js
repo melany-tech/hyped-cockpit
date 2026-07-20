@@ -618,9 +618,40 @@ app.post("/api/rh/absence/:id/decide", auth, async (req, res) => {
   if (!a) return res.status(404).json({ error: "demande introuvable" });
   a.statut = ok2 ? "validée" : "refusée"; a.decidedBy = req.user.name; a.decidedAt = Date.now();
   if (req.body?.comment) a.comment = String(req.body.comment).slice(0, 300);
+  // Google Agenda : à la validation, on crée un jour OFF dans l'agenda de la personne
+  // (et on invite la direction pour qu'il apparaisse aussi dans le sien). Nécessite que
+  // la personne ait reconnecté son Google avec la permission calendrier. Silencieux sinon.
+  a.gcalWarn = null;
+  if (ok2 && gm.ENABLED) {
+    try {
+      const sups = USERS.filter((x) => x.role === "supervisor").map((x) => x.email);
+      const title = "🌴 " + a.who + " · " + a.type;
+      const desc = "Absence validée par " + req.user.name + (a.comment ? (" — " + a.comment) : "") + " · via le cockpit Hyped.";
+      // 1) agenda de la personne (si connectée) + invitation direction
+      let done = false;
+      if (gm.isConnected(a.email) && typeof gm.createOffEvent === "function") {
+        const r = await gm.createOffEvent(a.email, { title, du: a.du, au: a.au, description: desc, attendees: sups.filter((e) => String(e).toLowerCase() !== String(a.email).toLowerCase()) });
+        if (r && r.ok) { a.gcalId = r.id; a.gcalEmail = a.email; done = true; }
+      }
+      // 2) sinon (personne non connectée), on crée au moins dans l'agenda de la direction
+      if (!done) {
+        for (const se of sups) {
+          if (gm.isConnected(se) && typeof gm.createOffEvent === "function") {
+            const r2 = await gm.createOffEvent(se, { title, du: a.du, au: a.au, description: desc });
+            if (r2 && r2.ok) { a.gcalId = r2.id; a.gcalEmail = se; done = true; break; }
+          }
+        }
+        if (!gm.isConnected(a.email)) a.gcalWarn = "google_perso_non_connecte";
+      }
+    } catch (e) {}
+  }
+  // Absence refusée/annulée après coup : on retire l'évènement s'il existait
+  if (!ok2 && a.gcalId && a.gcalEmail && typeof gm.deleteOffEvent === "function") {
+    try { await gm.deleteOffEvent(a.gcalEmail, a.gcalId); a.gcalId = null; a.gcalEmail = null; } catch (e) {}
+  }
   saveRh(o);
   try { const su = rhSlackTo(a.email); if (su) await copilotNotify({ slackUser: su, text: (ok2 ? "✅ Absence validée" : "❌ Absence refusée") + " par " + req.user.name + " : " + a.type + " du " + dmyFr(a.du) + " au " + dmyFr(a.au) + (a.comment ? " · « " + a.comment + " »" : "") + "." }); } catch (e) {}
-  res.json({ ok: true, statut: a.statut });
+  res.json({ ok: true, statut: a.statut, gcal: a.gcalId ? "ok" : (a.gcalWarn || null) });
 });
 app.post("/api/rh/absence/:id/del", auth, (req, res) => {
   // annuler : la direction toujours, la personne seulement tant que c'est en attente

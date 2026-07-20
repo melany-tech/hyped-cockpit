@@ -13,6 +13,7 @@ const ENABLED = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SEC
 const SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/calendar.readonly", // visios du jour (lecture seule)
+  "https://www.googleapis.com/auth/calendar.events",   // créer les jours OFF dans l'agenda (absences validées)
   "https://www.googleapis.com/auth/gmail.compose",     // créer des brouillons (jamais d'envoi auto)
   "https://www.googleapis.com/auth/gmail.settings.basic", // lire la signature Gmail de la personne
 ];
@@ -468,4 +469,26 @@ async function draftsToValidate(email) {
   return { count: keep.length };
 }
 
-module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, disconnect, analyzeFor, calendarToday, createDraft, sendEmail, draftsToValidate, fetchThreadText, lastReplyFromMe, threadHasExternal, threadExternalContact, getSignature, getAttachment, fetchMessagesByQuery, SCOPES };
+// Crée un évènement "journée" (OFF) dans l'agenda principal de la personne.
+// du/au au format YYYY-MM-DD. En all-day, la fin Google est EXCLUSIVE : on ajoute 1 jour.
+async function createOffEvent(email, { title, du, au, description, attendees }) {
+  const tok = getToken(email); if (!tok) return { ok: false, error: "non connecté" };
+  const c = client(); c.setCredentials(tok);
+  const cal = google.calendar({ version: "v3", auth: c });
+  const end = new Date(au + "T00:00:00"); end.setDate(end.getDate() + 1);
+  const body = {
+    summary: title || "Absence", description: description || "",
+    start: { date: du }, end: { date: end.toISOString().slice(0, 10) },
+    transparency: "opaque", reminders: { useDefault: false },
+  };
+  if (attendees && attendees.length) body.attendees = attendees.map((e) => ({ email: e }));
+  try { const r = await cal.events.insert({ calendarId: "primary", requestBody: body, sendUpdates: "none" }); return { ok: true, id: r.data.id }; }
+  catch (e) { return { ok: false, error: String((e && e.message) || e).slice(0, 160) }; }
+}
+async function deleteOffEvent(email, eventId) {
+  const tok = getToken(email); if (!tok || !eventId) return { ok: false };
+  const c = client(); c.setCredentials(tok);
+  const cal = google.calendar({ version: "v3", auth: c });
+  try { await cal.events.delete({ calendarId: "primary", eventId }); return { ok: true }; } catch (e) { return { ok: false }; }
+}
+module.exports = { ENABLED, isConnected, connectedEmails, getAuthUrl, handleCallback, disconnect, analyzeFor, calendarToday, createDraft, sendEmail, draftsToValidate, fetchThreadText, lastReplyFromMe, threadHasExternal, threadExternalContact, getSignature, getAttachment, fetchMessagesByQuery, createOffEvent, deleteOffEvent, SCOPES };
