@@ -2991,7 +2991,10 @@ async function loadCopilotBox(who){
         const lab=p.status==='ready'?('Réponse rédigée selon ta décision ('+(p.decision==='accept'?'oui ✅':'non ❌')+') : relis et envoie'):'Réponse prête (voix Hyped) : relis et envoie';
         // 🪄 barre de reformulation : la CP dit comment réécrire, l'IA repart du brouillon
         const rew=p.reply?('<div class="cprew"><input class="cprewin" placeholder="🪄 Pas comme tu l\'aurais dit ? Dis-moi quoi changer : « plus court », « moins d\'emojis », « propose un appel »…"><button class="lk" data-id="'+p.id+'" data-cpact="rework">Reformuler</button></div>'):'';
-        return '<div class="cpcard" id="cpc-'+esc(p.id)+'">'+head+'<div class="cpq">'+esc(p.resume||'')+'</div><div class="cplab">'+lab+'</div>'+rep+rew
+        const pjH=p.reply?('<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:7px">'
+          +((p.pj||[]).map(a2=>'<span class="bgd-badge" style="background:#EDE9FC;color:#4C3BB8;font-size:11px">📎 '+esc(a2.filename)+' <a class="lk cppjdel" data-id="'+p.id+'" data-fid="'+esc(a2.fid)+'" style="border:none;background:none;padding:0 2px;color:#C2553B;cursor:pointer">✕</a></span>').join(''))
+          +'<label class="lk" style="cursor:pointer;font-size:12px">📎 Joindre un fichier<input type="file" class="cppjin" data-id="'+p.id+'" style="display:none"></label></div>'):'';
+        return '<div class="cpcard" id="cpc-'+esc(p.id)+'">'+head+'<div class="cpq">'+esc(p.resume||'')+'</div><div class="cplab">'+lab+'</div>'+rep+rew+pjH
           +'<div class="cpbtns">'+(p.reply?('<button class="lk" data-id="'+p.id+'" data-cpact="send">📤 Envoyer</button>'):'')+'<button class="lk" data-id="'+p.id+'" data-cpact="self">✍️ Je gère moi-même</button><button class="lk" data-id="'+p.id+'" data-cpact="seen">👁️ Vu, rien à répondre</button></div></div>';
       };
     box.innerHTML='<div class="cphead">🤖 Zone copilote · '+ps.length+' fil(s) où il te demande ou te propose quelque chose<div class="cplegende"><span class="lg lgsable">encadré sable = le message reçu</span><span class="lg lggris">bloc gris = notre brouillon, à relire avant envoi</span><span class="lg">mêmes choix que sur Slack</span></div></div>'
@@ -3000,6 +3003,21 @@ async function loadCopilotBox(who){
     show(box,true);
     box.querySelectorAll('a.cpqui:not(.cpthread)').forEach(a=>a.onclick=()=>quiEstCe(a.dataset.qui));
     box.querySelectorAll('.cprewin').forEach(i=>i.onkeydown=(e)=>{ if(e.key==='Enter'){ e.preventDefault(); const btn=i.closest('.cpcard').querySelector('button[data-cpact="rework"]'); if(btn)btn.click(); } });
+    box.querySelectorAll('.cppjin').forEach(inp=>inp.onchange=()=>{
+      const f=inp.files&&inp.files[0]; if(!f)return;
+      if(f.size>10*1024*1024){alert('10 Mo max 🙂');inp.value='';return;}
+      const fr=new FileReader();
+      fr.onload=async()=>{
+        const r2=await api('/api/copilot/pj/'+encodeURIComponent(inp.dataset.id),{method:'POST',body:JSON.stringify({filename:f.name,data:fr.result})});
+        if(!r2.ok){const dd=await r2.json().catch(()=>({}));alert(dd.error||'Erreur');}
+        loadCopilotBox();
+      };
+      fr.readAsDataURL(f);
+    });
+    box.querySelectorAll('.cppjdel').forEach(el=>el.onclick=async()=>{
+      await api('/api/copilot/pj/'+encodeURIComponent(el.dataset.id)+'/del',{method:'POST',body:JSON.stringify({fid:el.dataset.fid})});
+      loadCopilotBox();
+    });
     // Anciennes cartes (créées avant l'ajout) : on va chercher le dernier message du créateur dans le fil
     box.querySelectorAll('.cplastload').forEach(async el=>{
       try{

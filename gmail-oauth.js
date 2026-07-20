@@ -408,13 +408,41 @@ async function createDraft(email, { to, cc, bcc, subject, body }) {
   const gmail = gmailFor(email);
   if (!gmail) return { ok: false, error: "non connecté" };
   const sigHtml = await getSignature(email);
-  const raw = b64url(mime({ to, cc, bcc, subject, body, sigHtml }));
+  const raw = b64url((attachments && attachments.length) ? mimeMixed({ to, cc, bcc, subject, body, sigHtml, atts: attachments }) : mime({ to, cc, bcc, subject, body, sigHtml }));
   const r = await gmail.users.drafts.create({ userId: "me", requestBody: { message: { raw } } });
   const s = loadDrafts(); (s[email] = s[email] || []).push(r.data.id); saveDrafts(s);
   return { ok: true, id: r.data.id };
 }
 /** Envoie un mail (sur clic explicite de la CP). Nécessite un destinataire. */
-async function sendEmail(email, { to, cc, bcc, subject, body }) {
+function mimeMixed({ to, cc, bcc, subject, body, sigHtml, atts }) {
+  const headers = ["To: " + (to || "")];
+  if (cc) headers.push("Cc: " + cc);
+  if (bcc) headers.push("Bcc: " + bcc);
+  headers.push("Subject: " + encSubject(subject || ""), "MIME-Version: 1.0");
+  const bm = "hypedmix_" + Date.now().toString(36);
+  const ba = "hypedalt_" + Date.now().toString(36);
+  const textPart = (body || "") + (sigHtml ? ("\r\n\r\n" + htmlToText(sigHtml)) : "");
+  const htmlPart = htmlEsc(body || "").replace(/\r?\n/g, "<br>") + (sigHtml ? ("<br><br>" + sigHtml) : "");
+  const safe = (s) => String(s || "piece-jointe").replace(/"/g, "");
+  const lines = headers.concat([
+    'Content-Type: multipart/mixed; boundary="' + bm + '"', "",
+    "--" + bm,
+    'Content-Type: multipart/alternative; boundary="' + ba + '"', "",
+    "--" + ba, "Content-Type: text/plain; charset=UTF-8", "", textPart, "",
+    "--" + ba, "Content-Type: text/html; charset=UTF-8", "", htmlPart, "",
+    "--" + ba + "--", "",
+  ]);
+  for (const a of (atts || [])) {
+    lines.push("--" + bm,
+      "Content-Type: " + (a.mimeType || "application/octet-stream") + '; name="' + safe(a.filename) + '"',
+      'Content-Disposition: attachment; filename="' + safe(a.filename) + '"',
+      "Content-Transfer-Encoding: base64", "",
+      a.dataB64 || "", "");
+  }
+  lines.push("--" + bm + "--", "");
+  return lines.join("\r\n");
+}
+async function sendEmail(email, { to, cc, bcc, subject, body, attachments }) {
   const gmail = gmailFor(email);
   if (!gmail) return { ok: false, error: "non connecté" };
   if (!to) return { ok: false, error: "destinataire manquant" };

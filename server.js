@@ -540,6 +540,8 @@ app.get("/api/weekly/file/:fid", auth, (req, res) => {
 // Chacune ne voit que ses demandes et ses documents ; la direction voit tout.
 const RH_STORE = path.join(DATA_DIR, "rh.json");
 const RH_DIR = path.join(DATA_DIR, "rh_docs");
+const PJ_DIR = path.join(DATA_DIR, "copilot_pj");
+try { fs.mkdirSync(PJ_DIR, { recursive: true }); } catch (e) {}
 try { fs.mkdirSync(RH_DIR, { recursive: true }); } catch (e) {}
 function loadRh() { try { return JSON.parse(fs.readFileSync(RH_STORE, "utf8")); } catch (e) { return { absences: [], docs: [] }; } }
 function saveRh(o) { try { fs.writeFileSync(RH_STORE, JSON.stringify(o, null, 2)); } catch (e) {} }
@@ -2568,6 +2570,34 @@ async function calFixParse(texte) {
     return JSON.parse(String(out.body).replace(/^[^{]*/, "").replace(/[^}]*$/, ""));
   } catch (e) { return null; }
 }
+// Pièces jointes des réponses copilote : stockées sur le disque persistant, envoyées avec le mail
+app.post("/api/copilot/pj/:id", auth, (req, res) => {
+  const store = loadCopilot(); const p = (store.proposals || []).find((x) => x.id === String(req.params.id));
+  if (!p) return res.status(404).json({ error: "proposition introuvable" });
+  const owner = String(p.cpEmail || "").toLowerCase() === String(req.user.email || "").toLowerCase();
+  if (!owner && req.user.role !== "supervisor") return res.status(403).json({ error: "pas ta carte" });
+  if ((p.pj || []).length >= 3) return res.status(400).json({ error: "3 pièces jointes maximum" });
+  const m = /^data:([^;]+);base64,(.+)$/.exec(String(req.body?.data || ""));
+  if (!m) return res.status(400).json({ error: "fichier illisible" });
+  const buf = Buffer.from(m[2], "base64");
+  if (buf.length > 10 * 1024 * 1024) return res.status(400).json({ error: "fichier trop lourd (10 Mo max)" });
+  const fid = crypto.randomBytes(8).toString("hex");
+  try { fs.writeFileSync(path.join(PJ_DIR, fid), buf); } catch (e) { return res.status(500).json({ error: "impossible d'enregistrer" }); }
+  p.pj = p.pj || []; p.pj.push({ fid, filename: String(req.body?.filename || "piece-jointe").slice(0, 100), mime: m[1], size: buf.length });
+  saveCopilot(store);
+  res.json({ ok: true, pj: p.pj });
+});
+app.post("/api/copilot/pj/:id/del", auth, (req, res) => {
+  const store = loadCopilot(); const p = (store.proposals || []).find((x) => x.id === String(req.params.id));
+  if (!p) return res.status(404).json({ error: "proposition introuvable" });
+  const owner = String(p.cpEmail || "").toLowerCase() === String(req.user.email || "").toLowerCase();
+  if (!owner && req.user.role !== "supervisor") return res.status(403).json({ error: "pas ta carte" });
+  const fid = String(req.body?.fid || "");
+  p.pj = (p.pj || []).filter((a) => a.fid !== fid);
+  try { if (/^[a-f0-9]{16}$/.test(fid)) fs.unlinkSync(path.join(PJ_DIR, fid)); } catch (e) {}
+  saveCopilot(store);
+  res.json({ ok: true, pj: p.pj });
+});
 async function copilotExecute(id, action, text) {
   // ✏️ Correction d'une fiche calendrier depuis Slack (id = page Notion)
   if (action === "fixcal") {
@@ -2603,7 +2633,9 @@ async function copilotExecute(id, action, text) {
     if (action === "send") {
       if (!p.reply) return { code: 200, title: "Pas de réponse prête", msg: "L'IA n'a pas pu rédiger. Ouvre le cockpit pour répondre." };
       if (!p.to) return { code: 200, title: "Destinataire introuvable", msg: "Impossible d'extraire l'email du créateur. Ouvre le cockpit pour répondre." };
-      const r = await gm.sendEmail(p.cpEmail, { to: p.to, subject: p.subject ? (/^re\s*:/i.test(p.subject) ? p.subject : "Re: " + p.subject) : "Re:", body: p.reply });
+      let atts = [];
+      try { atts = (p.pj || []).map((a2) => ({ filename: a2.filename, mimeType: a2.mime, dataB64: fs.readFileSync(path.join(PJ_DIR, a2.fid)).toString("base64") })); } catch (e) { atts = []; }
+      const r = await gm.sendEmail(p.cpEmail, { to: p.to, subject: p.subject ? (/^re\s*:/i.test(p.subject) ? p.subject : "Re: " + p.subject) : "Re:", body: p.reply, attachments: atts });
       if (!r || !r.ok) return { code: 500, title: "Échec de l'envoi 😖", msg: "Gmail n'a pas voulu. Réessaie ou passe par le cockpit." };
       markTreated(p.cpEmail, p.threadId, { by: p.cpName + " (copilote)", action: "répondu" });
       logActivity({ type: "email", creator: p.to, cp: p.cpName });
