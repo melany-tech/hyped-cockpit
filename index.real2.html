@@ -1626,7 +1626,7 @@ async function renderBudgetView(fromCache){
         const share=tot>0?Math.round(100*v/tot):0;
         const open2=window.BG_EDIT===k;
         let row=`<div class="bgd-prow"><span class="bgd-pav" style="background:${bgdCol(k)}">${esc(bgdIni(clean(k)))}</span><span style="flex:1;min-width:80px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(clean(k))}</span><b style="flex:0 0 82px;text-align:right;white-space:nowrap">${esc(eur(v))}</b><span style="flex:0 0 44px;text-align:right;color:#5D6D74">${share} %</span><div class="bgd-bar" style="flex:0 0 30%"><div style="width:${Math.round(100*v/mx)}%"></div></div><a class="lk bgpedit" data-n="${esc(k)}" title="Modifier les montants" style="border:none;background:${open2?'#EEEBFB':'none'};padding:3px 8px;border-radius:8px">✎</a></div>`;
-        if(open2)row+=(list||[]).map(en=>`<div class="bgd-prow" style="background:#FAFAFE;border-radius:10px;padding-left:36px"><span class="fs" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${en.date?dmy2(en.date):'date à confirmer'}${en.statut?(' · '+esc(en.statut)):''}</span><input type="number" class="rhin bgpin" data-id="${esc(en.id||'')}" value="${Number(en.budget)||0}" style="width:110px;padding:7px 9px;border-radius:9px"><button class="lk bgpsave" data-id="${esc(en.id||'')}" style="background:#6D5AE0;color:#fff;border-color:#6D5AE0">💾</button></div>`).join('');
+        if(open2)row+=(list||[]).map(en=>`<div class="bgd-prow" style="background:#FAFAFE;border-radius:10px;padding-left:36px"><span class="fs" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${en.date?dmy2(en.date):'date à confirmer'}${en.statut?(' · '+esc(en.statut)):''}</span><input type="number" class="rhin bgpin" data-id="${esc(en.id||'')}" value="${Number(en.budget)||0}" style="width:110px;padding:7px 9px;border-radius:9px"><button class="lk bgpsave" data-id="${esc(en.id||'')}" style="background:#6D5AE0;color:#fff;border-color:#6D5AE0">💾</button><button class="lk bgpdel" data-id="${esc(en.id||'')}" data-nom="${esc(k)}" title="Retirer cette collab du budget" style="color:#C2553B;border-color:#F1D5CE">✕</button></div>`).join('');
         return row;
       }).join('')+(infs.length>7?('<div class="bgd-prow bgshowall" style="cursor:pointer;color:#6D5AE0;font-weight:700">'+(BG_ALL?'▲ Réduire la liste':('▼ Tout dérouler · + '+(infs.length-7)+' autre(s) créatrice(s)'))+'</div>'):'');
       featured=`<div class="bgd-card">
@@ -1734,6 +1734,15 @@ async function renderBudgetView(fromCache){
       const r3=await api('/api/budget/entry',{method:'POST',body:JSON.stringify({id:el.dataset.id,montant:Number(inp.value)})});
       if(!r3.ok){const dd=await r3.json().catch(()=>({}));alert(dd.error||'Erreur');el.disabled=false;el.textContent='💾';return;}
       window.BG_EDIT=null; window.BG_CACHE=null; // enregistré : on replie et on recharge les vrais totaux
+      renderBudgetView();
+    });
+    box.querySelectorAll('.bgpdel').forEach(el=>el.onclick=async()=>{
+      if(!el.dataset.id)return;
+      if(!confirm('Retirer « '+(el.dataset.nom||'cette collab')+' » du budget ?\n\nSa fiche part à la corbeille du calendrier Notion (récupérable 30 jours).'))return;
+      el.disabled=true;el.textContent='…';
+      const rd=await api('/api/budget/entry/del',{method:'POST',body:JSON.stringify({id:el.dataset.id})});
+      if(!rd.ok){const dd=await rd.json().catch(()=>({}));alert(dd.error||'Erreur');el.disabled=false;el.textContent='✕';return;}
+      window.BG_EDIT=null; window.BG_CACHE=null;
       renderBudgetView();
     });
     box.querySelectorAll('.bgmini').forEach(el=>el.onclick=()=>selectBrand(el.dataset.b));

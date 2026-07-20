@@ -1842,6 +1842,14 @@ app.post("/api/budget/entry", auth, async (req, res) => {
   try { await notion.pages.update({ page_id: id, properties: { "Budget": { number: v } } }); res.json({ ok: true }); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
+// Retirer une collab du budget = archiver sa fiche dans le calendrier Notion (corbeille récupérable 30 j)
+app.post("/api/budget/entry/del", auth, async (req, res) => {
+  if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
+  const id = String(req.body?.id || "");
+  if (!id) return res.status(400).json({ error: "id manquant" });
+  try { await notion.pages.update({ page_id: id, archived: true }); res.json({ ok: true }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
 app.get("/api/budget/:brand", auth, async (req, res) => {
   try {
     const brand = String(req.params.brand || "").trim();
