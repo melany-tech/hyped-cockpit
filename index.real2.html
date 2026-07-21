@@ -2204,8 +2204,8 @@ async function load(){
     // Kendia a quitté l'agence : on l'exclut du filtre même si d'anciennes collabs portent encore son nom
     CP_OTHERS=[...new Set([...(d.team||[]),...present])].filter(n=>n&&nlow(n)!==nlow(VIEWER.name)&&nlow(n)!=='kendia').sort();
     if(!CPFILTER_INIT){
-      let saved=''; try{saved=localStorage.getItem('hc_cpsel')||'';}catch(e){}
-      $('cpfilter').value=saved||VIEWER.name; // par défaut : sa vue à elle
+      let saved=''; try{saved=localStorage.getItem('hc_cpsel_'+nlow(VIEWER.name))||'';}catch(e){}
+      $('cpfilter').value=saved||VIEWER.name; // par défaut : sa vue à elle (clé par utilisateur, pas partagée entre comptes)
       CPFILTER_INIT=true;
     }
     renderCpChips();
@@ -2356,7 +2356,7 @@ function renderCpChips(){
       if(!parts.length) parts=[me]; // plus rien de coché : retour à Moi
     }
     $('cpfilter').value=parts.length?parts.join('||'):'ALL';
-    try{localStorage.setItem('hc_cpsel',$('cpfilter').value);}catch(e){}
+    try{localStorage.setItem('hc_cpsel_'+nlow(VIEWER.name),$('cpfilter').value);}catch(e){}
     renderCpChips();
     if(CURRENT_VIEW==='cockpit')showView('cockpit'); // ré-applique la vue épurée ou complète selon la pastille
     render();loadTodo();loadOverview();loadMail();loadVisios();
@@ -2385,7 +2385,7 @@ async function loadDirigeant(){
         +'</div>';
     }).join('')||'<div class="state2" style="padding:10px">Personne dans l\'équipe pour l\'instant.</div>';
     $('dirbox').querySelectorAll('.dirrow').forEach(el=>el.onclick=()=>{
-      $('cpfilter').value=el.dataset.n; try{localStorage.setItem('hc_cpsel',el.dataset.n);}catch(e){}
+      $('cpfilter').value=el.dataset.n; try{localStorage.setItem('hc_cpsel_'+nlow(VIEWER.name),el.dataset.n);}catch(e){}
       renderCpChips(); showView('cockpit'); render();loadTodo();loadOverview();loadMail();loadVisios();
     });
     show(p,true);
