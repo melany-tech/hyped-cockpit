@@ -768,7 +768,7 @@ body.ceomode .nav.on{background:#EEEBFB;color:#6D5AE0}
     <section id="projetsview" style="display:none"><p class="pt"><span class="pi">📁</span> Suivi de projets</p><div class="panelhint">Où en est chaque marque et chaque personne : budgets, collabs du mois, retards. Visible uniquement par la direction.</div><div id="projetsbox"><div class="state">Chargement…</div></div></section>
     <section id="rapportsview" style="display:none"><p class="pt"><span class="pi">📊</span> Rapports</p><div id="rapportsbox"><div class="state">Chargement…</div></div></section>
     <section id="calendrierview" style="display:none"><p class="pt"><span class="pi">📅</span> Calendrier</p><div id="calendrierbox"><div class="state">Chargement…</div></div></section>
-    <section id="todoview" style="display:none"><p class="pt"><span class="pi">✅</span> To-do</p><div class="panelhint">Tes tâches à faire, marque par marque. Une case cochée = statut « Fait » dans Notion, tout est synchronisé.</div><div id="todowrap"><div class="state">Chargement…</div></div></section>
+    <section id="todoview" style="display:none"><p class="pt"><span class="pi">✅</span> To-do</p><div class="panelhint">« Ma to-do » : ton kanban perso par thématique (100% cockpit). « Tâches agence » : tes tâches marque par marque, synchronisées avec Notion.</div><div id="todowrap"><div class="state">Chargement…</div></div></section>
     <section id="marquesview" style="display:none"><p class="pt"><span class="pi">🏷️</span> Marques</p><div class="panelhint">La fiche d'identité de chaque marque : contexte, période, contacts, docs & liens, et la progression du pôle. Clique une marque à gauche.</div><div class="mqlayout"><div id="mqlist" class="mqlist"></div><div id="mqdetail" class="mqdetail"><div class="state">Chargement…</div></div></div></section>
     <section id="historiqueview" style="display:none"><button class="lk backbtn" onclick="showView('cockpit')">← Retour au cockpit</button><p class="pt"><span class="pi">📜</span> Historique &amp; traçabilité</p><div class="panelhint">Chaque collab et son fil d'étapes : qui a fait quoi, quand, avec les liens vers les mails et la fiche Notion.</div><div class="ctsearch"><input id="histsearch" placeholder="🔍 Rechercher un créateur, une marque, une CP…"></div><div id="historiquebox"><div class="state">Chargement…</div></div></section>
     <div id="activitybar" class="actbar hidden"></div>
@@ -3064,6 +3064,64 @@ try{ TODO_QUI=localStorage.getItem('hc_todoqui')||''; }catch(e){}
 // écrasait la première et l'onglet restait bloqué sur « Chargement… ».
 async function renderTodoTab(){
   const w=$('todowrap'); if(!w)return;
+  window.TODO_MODE=window.TODO_MODE||'perso';
+  const on='background:var(--teal);color:#fff;border-color:var(--teal)';
+  const tabs='<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">'
+    +'<button class="lk todomode" data-m="perso" style="'+(window.TODO_MODE==='perso'?on:'')+'">🗂️ Ma to-do</button>'
+    +'<button class="lk todomode" data-m="agence" style="'+(window.TODO_MODE==='agence'?on:'')+'">🏷️ Tâches agence</button></div>';
+  w.innerHTML=tabs+'<div id="todobody"><div class="state">Chargement…</div></div>';
+  w.querySelectorAll('.todomode').forEach(b=>b.onclick=()=>{window.TODO_MODE=b.dataset.m;renderTodoTab();});
+  const body=$('todobody');
+  if(window.TODO_MODE==='perso')return renderPersoTodo(body);
+  return renderAgenceTodo(body);
+}
+// To-do perso par thématique (kanban + liste), 100% cockpit
+async function renderPersoTodo(w){
+  if(!w)return;
+  window.PERSO_VIEW=window.PERSO_VIEW||'kanban';
+  w.innerHTML='<div class="state">Chargement…</div>';
+  let d; try{ const r=await api('/api/perso/todo'); d=await r.json(); }catch(e){ w.innerHTML='<div class="state">Erreur de chargement.</div>'; return; }
+  const themes=d.themes||[]; const tasks=d.tasks||[]; const byId={}; tasks.forEach(t=>byId[t.id]=t);
+  const reload=()=>renderPersoTodo(w);
+  const vk=window.PERSO_VIEW==='kanban';
+  const viewToggle='<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap"><span style="display:inline-flex;gap:3px;background:#EEF0F2;border-radius:9px;padding:3px">'
+    +'<a class="lk persoview" data-v="kanban" style="border:none;font-size:12.5px;padding:4px 11px;border-radius:7px;background:'+(vk?'#fff':'transparent')+';font-weight:'+(vk?'700':'400')+'">🗂️ Kanban</a>'
+    +'<a class="lk persoview" data-v="liste" style="border:none;font-size:12.5px;padding:4px 11px;border-radius:7px;background:'+(vk?'transparent':'#fff')+';font-weight:'+(vk?'400':'700')+'">📋 Liste</a>'
+    +'</span><button class="lk persoaddtheme" style="margin-left:auto">＋ Thématique</button></div>';
+  const chkBox=(t)=>'<span class="persochk" data-id="'+esc(t.id)+'" style="width:18px;height:18px;flex:0 0 18px;border:2px solid '+(t.done?'#2C9087':'#CFDADA')+';border-radius:6px;background:'+(t.done?'#2C9087':'#fff')+';cursor:pointer;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:12px;margin-top:1px">'+(t.done?'✓':'')+'</span>';
+  let bodyH='';
+  if(vk){
+    bodyH='<div style="display:flex;gap:14px;overflow-x:auto;padding-bottom:8px;align-items:flex-start">'
+      +themes.map(th=>{const its=tasks.filter(t=>t.theme===th).sort((a,b)=>(a.done?1:0)-(b.done?1:0));
+        return '<div style="flex:0 0 262px;background:#F6F7F9;border-radius:14px;padding:12px">'
+          +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:9px"><b style="font-size:13.5px;flex:1">'+esc(th)+'</b><span class="todocount">'+its.length+'</span><a class="lk persothmenu" data-th="'+esc(th)+'" style="border:none;background:none;padding:2px 5px">⋯</a></div>'
+          +its.map(t=>'<div style="background:#fff;border:1px solid #ECEEF1;border-radius:10px;padding:9px 10px;margin-bottom:8px'+(t.done?';opacity:.55':'')+'"><div style="display:flex;align-items:flex-start;gap:8px">'+chkBox(t)+'<span style="flex:1;font-size:13px;'+(t.done?'text-decoration:line-through':'')+'">'+esc(t.text)+'</span></div>'
+            +'<div style="display:flex;gap:6px;margin-top:6px;align-items:center"><select class="persomove" data-id="'+esc(t.id)+'" style="font-size:11px;border:1px solid #ECEEF1;border-radius:7px;padding:2px 5px;color:#56666D">'+themes.map(x=>'<option'+(x===th?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select><a class="lk persodel" data-id="'+esc(t.id)+'" style="border:none;background:none;padding:0;font-size:12px;color:#D4483B;margin-left:auto">🗑</a></div></div>').join('')
+          +'<input class="persoadd rhin" data-th="'+esc(th)+'" placeholder="+ tâche…" style="width:100%;font-size:12.5px;padding:7px 9px;box-sizing:border-box">'
+          +'</div>';}).join('')
+      +'</div>';
+  } else {
+    bodyH=themes.map(th=>{const its=tasks.filter(t=>t.theme===th);if(!its.length)return '';return '<div class="todobrand"><div class="todobt">'+esc(th)+' <span class="todocount">'+its.length+'</span></div>'
+      +its.map(t=>'<label class="todoitem'+(t.done?' done':'')+'"><input type="checkbox" class="persochkb" data-id="'+esc(t.id)+'"'+(t.done?' checked':'')+'><span class="todotxt">'+esc(t.text)+'</span><a class="lk persodel" data-id="'+esc(t.id)+'" style="border:none;background:none;font-size:12px;color:#D4483B">🗑</a></label>').join('')+'</div>';}).join('')
+      +'<div class="todoadd" style="margin-top:12px"><input id="persolisteadd" placeholder="Ajouter une tâche… puis Entrée" style="flex:1"><select id="persolistetheme" class="rhin">'+themes.map(t=>'<option>'+esc(t)+'</option>').join('')+'</select><button class="lk" id="persolistebtn">+ Ajouter</button></div>';
+    if(!themes.some(th=>tasks.some(t=>t.theme===th)))bodyH='<div class="state">Aucune tâche. Ajoute-en une ci-dessous 👇</div>'+bodyH;
+  }
+  w.innerHTML=viewToggle+bodyH;
+  w.querySelectorAll('.persoview').forEach(b=>b.onclick=()=>{window.PERSO_VIEW=b.dataset.v;reload();});
+  const at=w.querySelector('.persoaddtheme'); if(at)at.onclick=async()=>{const n=prompt('Nom de la nouvelle thématique :');if(!n||!n.trim())return;await api('/api/perso/theme',{method:'POST',body:JSON.stringify({op:'add',name:n.trim()})});reload();};
+  w.querySelectorAll('.persothmenu').forEach(b=>b.onclick=async()=>{const th=b.dataset.th;const nn=prompt('Renommer « '+th+' » (laisse vide pour la supprimer) :',th);if(nn===null)return;if(nn.trim()===''){if(!confirm('Supprimer la thématique « '+th+' » et ses tâches ?'))return;await api('/api/perso/theme',{method:'POST',body:JSON.stringify({op:'del',name:th})});}else{await api('/api/perso/theme',{method:'POST',body:JSON.stringify({op:'rename',name:th,newName:nn.trim()})});}reload();});
+  const toggleDone=async(id)=>{const t=byId[id];if(!t)return;await api('/api/perso/todo',{method:'POST',body:JSON.stringify({id,done:!t.done})});reload();};
+  w.querySelectorAll('.persochk').forEach(b=>b.onclick=()=>toggleDone(b.dataset.id));
+  w.querySelectorAll('.persochkb').forEach(b=>b.onchange=()=>toggleDone(b.dataset.id));
+  w.querySelectorAll('.persomove').forEach(s=>s.onchange=async()=>{await api('/api/perso/todo',{method:'POST',body:JSON.stringify({id:s.dataset.id,theme:s.value})});reload();});
+  w.querySelectorAll('.persodel').forEach(b=>b.onclick=async()=>{await api('/api/perso/todo/del',{method:'POST',body:JSON.stringify({id:b.dataset.id})});reload();});
+  const addTask=async(text,theme)=>{if(!text||!text.trim())return;await api('/api/perso/todo',{method:'POST',body:JSON.stringify({text:text.trim(),theme})});reload();};
+  w.querySelectorAll('.persoadd').forEach(inp=>inp.onkeydown=(e)=>{if(e.key==='Enter'){e.preventDefault();addTask(inp.value,inp.dataset.th);}});
+  const plb=$('persolistebtn'); if(plb)plb.onclick=()=>{const i=$('persolisteadd');addTask(i?i.value:'',$('persolistetheme')?$('persolistetheme').value:'');};
+  const pla=$('persolisteadd'); if(pla)pla.onkeydown=(e)=>{if(e.key==='Enter'){e.preventDefault();addTask(pla.value,$('persolistetheme')?$('persolistetheme').value:'');}};
+}
+async function renderAgenceTodo(w){
+  if(!w)return;
   w.innerHTML='<div class="state">Chargement…</div>';
   try{
     const q=(VIEWER&&VIEWER.role==='supervisor'&&TODO_QUI)?('?qui='+encodeURIComponent(TODO_QUI)):'';
