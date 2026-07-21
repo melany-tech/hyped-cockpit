@@ -725,6 +725,7 @@ function ptodoFor(email) {
   const k = String(email || "").toLowerCase();
   if (!o.persoTodo[k]) o.persoTodo[k] = { themes: PTODO_THEMES.slice(), tasks: [] };
   if (!o.persoTodo[k].themes || !o.persoTodo[k].themes.length) o.persoTodo[k].themes = PTODO_THEMES.slice();
+  if (!o.persoTodo[k].themeColors) o.persoTodo[k].themeColors = {};
   return { o, k, data: o.persoTodo[k] };
 }
 const ARB_TYPES = ["Validation", "Budget", "Prestataire", "Recrutement", "Client sensible", "Autre"];
@@ -947,10 +948,34 @@ app.post("/api/finance/attendu/reconcile", auth, (req, res) => {
   }
   saveCeo(o); res.json({ ok: true, attendus: o.attendus });
 });
+// ===== Recovery Engine : humeur quotidienne + log de blocages (ADHD-friendly) =====
+function moodFor(email) {
+  const o = loadCeo(); o.mood = o.mood || {}; const k = String(email || "").toLowerCase();
+  o.mood[k] = o.mood[k] || []; return { o, k, arr: o.mood[k] };
+}
+app.get("/api/mood", auth, (req, res) => {
+  const { arr } = moodFor(req.user.email); const today = new Date().toISOString().slice(0, 10);
+  const t = arr.find((x) => x.date === today);
+  res.json({ ok: true, today: t ? t.mood : null, history: arr.slice(-30) });
+});
+app.post("/api/mood", auth, (req, res) => {
+  const { o, k, arr } = moodFor(req.user.email); const mood = String(req.body?.mood || "").slice(0, 40);
+  if (!mood) return res.status(400).json({ error: "mood requis" });
+  const today = new Date().toISOString().slice(0, 10); const ex = arr.find((x) => x.date === today);
+  if (ex) { ex.mood = mood; ex.at = Date.now(); } else arr.push({ date: today, mood, at: Date.now() });
+  o.mood[k] = arr; saveCeo(o); res.json({ ok: true, today: mood, history: arr.slice(-30) });
+});
+app.post("/api/recovery/log", auth, (req, res) => {
+  const o = loadCeo(); o.recoveryLog = o.recoveryLog || {}; const k = String(req.user.email || "").toLowerCase();
+  o.recoveryLog[k] = o.recoveryLog[k] || [];
+  o.recoveryLog[k].push({ date: new Date().toISOString().slice(0, 10), blockage: String(req.body?.blockage || "").slice(0, 60), at: Date.now() });
+  if (o.recoveryLog[k].length > 300) o.recoveryLog[k] = o.recoveryLog[k].slice(-300);
+  saveCeo(o); res.json({ ok: true });
+});
 // ===== To-do perso par thématique (kanban + liste) =====
 app.get("/api/perso/todo", auth, (req, res) => {
   const { data } = ptodoFor(req.user.email);
-  res.json({ ok: true, themes: data.themes, tasks: data.tasks });
+  res.json({ ok: true, themes: data.themes, tasks: data.tasks, themeColors: data.themeColors || {} });
 });
 app.post("/api/perso/todo", auth, (req, res) => {
   const { o, k, data } = ptodoFor(req.user.email);
@@ -984,10 +1009,13 @@ app.post("/api/perso/theme", auth, (req, res) => {
   const op = String(req.body?.op || "");
   const name = String(req.body?.name || "").trim().slice(0, 60);
   const newName = String(req.body?.newName || "").trim().slice(0, 60);
+  data.themeColors = data.themeColors || {};
   if (op === "add") { if (name && !data.themes.includes(name)) data.themes.push(name); }
-  else if (op === "rename") { const i = data.themes.indexOf(name); if (i >= 0 && newName) { data.themes[i] = newName; data.tasks.forEach((t) => { if (t.theme === name) t.theme = newName; }); } }
-  else if (op === "del") { data.themes = data.themes.filter((t) => t !== name); data.tasks = data.tasks.filter((t) => t.theme !== name); }
-  o.persoTodo[k] = data; saveCeo(o); res.json({ ok: true, themes: data.themes, tasks: data.tasks });
+  else if (op === "rename") { const i = data.themes.indexOf(name); if (i >= 0 && newName) { data.themes[i] = newName; data.tasks.forEach((t) => { if (t.theme === name) t.theme = newName; }); if (data.themeColors[name]) { data.themeColors[newName] = data.themeColors[name]; delete data.themeColors[name]; } } }
+  else if (op === "del") { data.themes = data.themes.filter((t) => t !== name); data.tasks = data.tasks.filter((t) => t.theme !== name); delete data.themeColors[name]; }
+  else if (op === "color") { const c = String(req.body?.color || "").slice(0, 12); if (c) data.themeColors[name] = c; else delete data.themeColors[name]; }
+  else if (op === "move") { const i = data.themes.indexOf(name); const dir = Number(req.body?.dir) || 0; const j = i + dir; if (i >= 0 && j >= 0 && j < data.themes.length) { const tmp = data.themes[i]; data.themes[i] = data.themes[j]; data.themes[j] = tmp; } }
+  o.persoTodo[k] = data; saveCeo(o); res.json({ ok: true, themes: data.themes, tasks: data.tasks, themeColors: data.themeColors });
 });
 app.post("/api/ceo/config", auth, (req, res) => {
   if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });

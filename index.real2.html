@@ -10,7 +10,7 @@
  --line:#E6ECEC; --red:#C2553B;}
 @font-face{font-family:'Montserrat';src:url(data:font/woff2;base64,__FONT_B64__) format('woff2');font-weight:100 900;font-style:normal;font-display:swap;}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Montserrat',-apple-system,Helvetica,Arial,sans-serif;background:var(--soft);color:var(--navy);line-height:1.5;-webkit-font-smoothing:antialiased}
+body{font-family:'Montserrat',-apple-system,Helvetica,Arial,sans-serif;font-size:13.5px;background:var(--soft);color:var(--navy);line-height:1.5;-webkit-font-smoothing:antialiased}
 .wrap{max-width:1060px;margin:0 auto;padding:26px 24px 48px}
 .eyebrow{color:var(--teal);font-weight:600;font-size:11px;letter-spacing:2px;text-transform:uppercase}
 h1{font-size:23px;font-weight:700;margin-top:2px}
@@ -375,18 +375,18 @@ a.attchip:hover{background:#e3e8e7;border-color:#c7d0ce}
 /* --- Dashboard « Suivi des budgets » (maquette Mélany) --- */
 .bgd-card{background:#fff;border:1px solid #EDF1F1;border-radius:18px;box-shadow:0 2px 10px rgba(28,58,68,.05);padding:18px}
 .bgd-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin-bottom:14px}
-.bgd-kic{width:54px;height:54px;flex:0 0 54px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px}
-.bgd-klbl{font-size:13px;color:#5D6D74;font-weight:600}
-.bgd-kval{font-size:25px;font-weight:800;color:#17252B;line-height:1.15}
-.bgd-ksub{font-size:12px;color:#8A9AA0;margin-top:2px}
+.bgd-kic{width:46px;height:46px;flex:0 0 46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px}
+.bgd-klbl{font-size:12px;color:#5D6D74;font-weight:600}
+.bgd-kval{font-size:20px;font-weight:800;color:#17252B;line-height:1.15}
+.bgd-ksub{font-size:11.5px;color:#8A9AA0;margin-top:2px}
 .bgd-grid{display:grid;grid-template-columns:1fr 1.05fr;gap:14px;align-items:start}
 @media(max-width:1150px){.bgd-grid{grid-template-columns:1fr}}
-.bgd-h{font-weight:800;font-size:16.5px;color:#17252B}
+.bgd-h{font-weight:800;font-size:14.5px;color:#17252B}
 .bgd-badge{display:inline-block;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:12px;vertical-align:1px}
 .bgd-logo{width:54px;height:54px;flex:0 0 54px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:16px;letter-spacing:.5px}
 .bgd-leg{display:flex;align-items:center;gap:8px;font-size:13px;color:#5D6D74;margin-top:10px}
 .bgd-leg .dot{width:9px;height:9px;border-radius:50%;flex:0 0 9px}
-.bgd-legval{font-size:19px;font-weight:800;color:#17252B;margin:1px 0 0 17px}
+.bgd-legval{font-size:16px;font-weight:800;color:#17252B;margin:1px 0 0 17px}
 .bgd-prow{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid #F2F5F5;font-size:13px}
 .bgd-pav{width:30px;height:30px;flex:0 0 30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;color:#fff}
 .bgd-bar{flex:1;height:7px;background:#EEF1F6;border-radius:4px;min-width:56px}
@@ -2462,7 +2462,7 @@ async function loadCeoPanel(){
     const absP=((rh&&rh.absences)||[]).filter(a=>a.statut==='en attente');
     const surcharge=nBusy;
     // ---------- ligne 1 : 5 KPIs avec sparklines ----------
-    const kpi=(ic,bgc,lbl,val,sub,extra,link,go,lc)=>'<div class="bgd-card" style="min-width:0;display:flex;flex-direction:column;gap:2px"><div style="display:flex;gap:12px;align-items:flex-start"><div style="width:48px;height:48px;flex:0 0 48px;border-radius:50%;background:'+bgc+';display:flex;align-items:center;justify-content:center;font-size:20px">'+ic+'</div><div style="min-width:0;flex:1"><div class="bgd-klbl">'+lbl+'</div><div class="bgd-kval" style="font-size:23px">'+val+'</div><div class="bgd-ksub">'+sub+'</div></div></div>'+(extra||'')+'<a class="lk ceogo" data-go="'+go+'" style="border:none;background:none;padding:4px 0 0;color:'+lc+';font-weight:700;font-size:12.5px">'+link+' →</a></div>';
+    const kpi=(ic,bgc,lbl,val,sub,extra,link,go,lc)=>'<div class="bgd-card" style="min-width:0;display:flex;flex-direction:column;gap:2px"><div style="display:flex;gap:12px;align-items:flex-start"><div style="width:44px;height:44px;flex:0 0 44px;border-radius:50%;background:'+bgc+';display:flex;align-items:center;justify-content:center;font-size:18px">'+ic+'</div><div style="min-width:0;flex:1"><div class="bgd-klbl">'+lbl+'</div><div class="bgd-kval" style="font-size:19px">'+val+'</div><div class="bgd-ksub">'+sub+'</div></div></div>'+(extra||'')+'<a class="lk ceogo" data-go="'+go+'" style="border:none;background:none;padding:4px 0 0;color:'+lc+';font-weight:700;font-size:12.5px">'+link+' →</a></div>';
     const kpis='<div class="bgd-kpis" style="grid-template-columns:repeat(auto-fit,minmax(225px,1fr));margin-bottom:14px">'
       +kpi('📄','#E7F5EC','Facturé ce mois',factM!==null?eur(factM):'<span style="font-size:15px">à venir</span>',factM!==null?('vs mois dernier '+(factPct!==null?pctTxt(factPct):'· n/d')+' · 🟢 Pennylane'):'branche Pennylane pour le réel',spark(factSerie.some(v=>v!==0)?factSerie:null,'#2E9E6B'),'Voir le détail finance','finance','#2E9E6B')
       +kpi('💰','#EEEBFB','Encaissé ce mois',caMois!==null?eur(caMois):'à venir',caMois!==null?('vs mois dernier '+(caPct!==null?pctTxt(caPct):'· n/d')):'branche Pennylane pour le réel',spark(caSerie.some(v=>v>0)?caSerie:null,'#7C5CFA'),'Voir le détail finance','finance','#7C5CFA')
@@ -2482,7 +2482,7 @@ async function loadCeoPanel(){
     const nNego=deals.filter(x=>x.statut==='Négociation').length;
     const nClose=crmStats.gagnesMoisN||0;
     const nRel=deals.filter(x=>!['Gagné','Perdu'].includes(x.statut)&&x.next).length;
-    const fcol=(lbl,n,c)=>'<div style="flex:1;min-width:0;text-align:center;padding:9px 4px;border-right:1px solid #F0F1F6"><div class="fs" style="font-size:10.5px">'+lbl+'</div><div style="font-weight:800;font-size:21px;color:'+c+'">'+n+'</div></div>';
+    const fcol=(lbl,n,c)=>'<div style="flex:1;min-width:0;text-align:center;padding:9px 4px;border-right:1px solid #F0F1F6"><div class="fs" style="font-size:10.5px">'+lbl+'</div><div style="font-weight:800;font-size:18px;color:'+c+'">'+n+'</div></div>';
     const crmH='<div class="bgd-card" style="height:100%"><div class="bgd-h">🧭 Suivi commercial <span class="cpsub" style="float:right">ce mois</span></div>'
       +'<div style="display:flex;border:1px solid #F0F1F6;border-radius:12px;margin:8px 0;overflow:hidden">'+fcol('Leads entrants',nLead,'#2E9E6B')+fcol('Propositions',nProp,'#4C3BB8')+fcol('Négociation',nNego,'#C77F2A')+fcol('Closing',nClose,'#2E9E6B').replace('border-right:1px solid #F0F1F6','')+'</div>'
       +'<div style="width:100%;display:grid;grid-template-columns:1fr 1fr;gap:9px">'
@@ -3082,6 +3082,8 @@ async function renderPersoTodo(w){
   w.innerHTML='<div class="state">Chargement…</div>';
   let d; try{ const r=await api('/api/perso/todo'); d=await r.json(); }catch(e){ w.innerHTML='<div class="state">Erreur de chargement.</div>'; return; }
   const themes=d.themes||[]; const tasks=d.tasks||[]; const byId={}; tasks.forEach(t=>byId[t.id]=t);
+  const themeColors=d.themeColors||{}; const PALETTE=['#16BAC5','#E5679E','#7C5CFA','#2E9E6B','#E8933A','#4A7FB5','#B98A12','#8A929C'];
+  const thCol=(th)=>themeColors[th]||'#C9CED4';
   const reload=()=>renderPersoTodo(w);
   const pv=window.PERSO_VIEW;const _fd=(d)=>{const p=String(d||'').split('-');return p.length===3?(p[2]+'/'+p[1]):d;};
   const vbtn=(v,lbl)=>'<a class="lk persoview" data-v="'+v+'" style="border:none;font-size:12.5px;padding:4px 11px;border-radius:7px;background:'+(pv===v?'#fff':'transparent')+';font-weight:'+(pv===v?'700':'400')+'">'+lbl+'</a>';
@@ -3104,8 +3106,10 @@ async function renderPersoTodo(w){
   } else if(pv==='kanban'){
     bodyH='<div style="display:flex;gap:14px;overflow-x:auto;padding-bottom:8px;align-items:flex-start">'
       +themes.map(th=>{const its=tasks.filter(t=>t.theme===th).sort((a,b)=>(a.done?1:0)-(b.done?1:0));
-        return '<div style="flex:0 0 262px;background:#F6F7F9;border-radius:14px;padding:12px">'
-          +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:9px"><b style="font-size:13.5px;flex:1">'+esc(th)+'</b><span class="todocount">'+its.length+'</span><a class="lk persothmenu" data-th="'+esc(th)+'" style="border:none;background:none;padding:2px 5px">⋯</a></div>'
+        const menuOpen=window.PERSO_THMENU===th;
+        return '<div style="flex:0 0 262px;background:#F6F7F9;border-radius:14px;padding:12px;border-top:3px solid '+thCol(th)+'">'
+          +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:9px"><span style="width:9px;height:9px;border-radius:50%;background:'+thCol(th)+';flex:0 0 9px"></span><b style="font-size:13.5px;flex:1">'+esc(th)+'</b><span class="todocount">'+its.length+'</span><a class="lk persothmenu" data-th="'+esc(th)+'" style="border:none;background:'+(menuOpen?'#EAEDF0':'none')+';padding:2px 6px;border-radius:6px">⋯</a></div>'
+          +(menuOpen?('<div style="background:#fff;border:1px solid #ECEEF1;border-radius:10px;padding:8px;margin-bottom:9px;font-size:12px"><a class="lk thmrename" data-th="'+esc(th)+'" style="display:block;padding:4px 2px;border:none;background:none">✎ Renommer</a><div style="display:flex;gap:6px;padding:6px 2px;flex-wrap:wrap;align-items:center">'+PALETTE.map(c=>'<span class="thmcolor" data-th="'+esc(th)+'" data-c="'+c+'" style="width:19px;height:19px;border-radius:50%;background:'+c+';cursor:pointer;border:2px solid '+(themeColors[th]===c?'#1F2430':'#fff')+';box-shadow:0 0 0 1px #E5E9EC"></span>').join('')+'<span class="thmcolor" data-th="'+esc(th)+'" data-c="" title="Aucune couleur" style="width:19px;height:19px;border-radius:50%;background:#fff;border:2px dashed #C9CED4;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:11px;color:#8A9AA0">✕</span></div><div style="display:flex;gap:10px;padding:4px 2px"><a class="lk thmmove" data-th="'+esc(th)+'" data-d="-1" style="border:none;background:none">◀ Gauche</a><a class="lk thmmove" data-th="'+esc(th)+'" data-d="1" style="border:none;background:none">Droite ▶</a></div><a class="lk thmdel" data-th="'+esc(th)+'" style="display:block;padding:4px 2px;border:none;background:none;color:#D4483B">🗑 Supprimer la colonne</a></div>'):'')
           +its.map(t=>'<div style="background:#fff;border:1px solid #ECEEF1;border-radius:10px;padding:9px 10px;margin-bottom:8px'+(t.done?';opacity:.55':'')+'"><div style="display:flex;align-items:flex-start;gap:8px">'+chkBox(t)+'<span style="flex:1;font-size:13px;'+(t.done?'text-decoration:line-through':'')+'">'+esc(t.text)+'</span></div>'
             +'<div style="display:flex;gap:6px;margin-top:6px;align-items:center"><select class="persomove" data-id="'+esc(t.id)+'" style="font-size:11px;border:1px solid #ECEEF1;border-radius:7px;padding:2px 5px;color:#56666D">'+themes.map(x=>'<option'+(x===th?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select><a class="lk persodel" data-id="'+esc(t.id)+'" style="border:none;background:none;padding:0;font-size:12px;color:#D4483B;margin-left:auto">🗑</a></div></div>').join('')
           +'<input class="persoadd rhin" data-th="'+esc(th)+'" placeholder="+ tâche…" style="width:100%;font-size:12.5px;padding:7px 9px;box-sizing:border-box">'
@@ -3120,7 +3124,11 @@ async function renderPersoTodo(w){
   w.innerHTML=viewToggle+bodyH;
   w.querySelectorAll('.persoview').forEach(b=>b.onclick=()=>{window.PERSO_VIEW=b.dataset.v;reload();});
   const at=w.querySelector('.persoaddtheme'); if(at)at.onclick=async()=>{const n=prompt('Nom de la nouvelle thématique :');if(!n||!n.trim())return;await api('/api/perso/theme',{method:'POST',body:JSON.stringify({op:'add',name:n.trim()})});reload();};
-  w.querySelectorAll('.persothmenu').forEach(b=>b.onclick=async()=>{const th=b.dataset.th;const nn=prompt('Renommer « '+th+' » (laisse vide pour la supprimer) :',th);if(nn===null)return;if(nn.trim()===''){if(!confirm('Supprimer la thématique « '+th+' » et ses tâches ?'))return;await api('/api/perso/theme',{method:'POST',body:JSON.stringify({op:'del',name:th})});}else{await api('/api/perso/theme',{method:'POST',body:JSON.stringify({op:'rename',name:th,newName:nn.trim()})});}reload();});
+  w.querySelectorAll('.persothmenu').forEach(b=>b.onclick=()=>{window.PERSO_THMENU=(window.PERSO_THMENU===b.dataset.th?null:b.dataset.th);reload();});
+  w.querySelectorAll('.thmrename').forEach(b=>b.onclick=async()=>{const th=b.dataset.th;const nn=prompt('Renommer la thématique :',th);if(!nn||!nn.trim()||nn.trim()===th)return;await api('/api/perso/theme',{method:'POST',body:JSON.stringify({op:'rename',name:th,newName:nn.trim()})});window.PERSO_THMENU=null;reload();});
+  w.querySelectorAll('.thmcolor').forEach(b=>b.onclick=async()=>{await api('/api/perso/theme',{method:'POST',body:JSON.stringify({op:'color',name:b.dataset.th,color:b.dataset.c})});reload();});
+  w.querySelectorAll('.thmmove').forEach(b=>b.onclick=async()=>{await api('/api/perso/theme',{method:'POST',body:JSON.stringify({op:'move',name:b.dataset.th,dir:Number(b.dataset.d)})});reload();});
+  w.querySelectorAll('.thmdel').forEach(b=>b.onclick=async()=>{if(!confirm('Supprimer la colonne « '+b.dataset.th+' » et ses tâches ?'))return;await api('/api/perso/theme',{method:'POST',body:JSON.stringify({op:'del',name:b.dataset.th})});window.PERSO_THMENU=null;reload();});
   const toggleDone=async(id)=>{const t=byId[id];if(!t)return;await api('/api/perso/todo',{method:'POST',body:JSON.stringify({id,done:!t.done})});reload();};
   w.querySelectorAll('.persochk').forEach(b=>b.onclick=()=>toggleDone(b.dataset.id));
   w.querySelectorAll('.persochkb').forEach(b=>b.onchange=()=>toggleDone(b.dataset.id));
