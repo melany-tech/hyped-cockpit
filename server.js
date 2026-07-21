@@ -1105,11 +1105,11 @@ app.get("/api/ceo/pennylane/raw", auth, async (req, res) => {
 });
 // Missions (Suivi projets v2, brief UX de Mélany) : une mission = une prestation vendue, pas une liste de tâches
 app.get("/api/missions", auth, (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé à la propriétaire (suivi de projets)" });
   const o = loadCeo(); res.json({ ok: true, missions: o.missions || [] });
 });
 app.post("/api/missions", auth, (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé à la propriétaire (suivi de projets)" });
   const S = (v, n) => String(v == null ? "" : v).slice(0, n);
   const o = loadCeo(); o.missions = o.missions || [];
   const b = req.body || {};

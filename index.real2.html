@@ -2023,8 +2023,8 @@ async function renderProcess(){
   }catch(e){box.innerHTML='<div class="state">Erreur de chargement.</div>';}
 }
 function showView(v){
-  // Garde-fou : finance, budget et commercial sont réservés à la propriétaire. Toute tentative d'accès est renvoyée au cockpit.
-  if((v==='finance'||v==='budget'||v==='commercial')&&!(VIEWER&&VIEWER.owner))v='cockpit';
+  // Garde-fou : finance, budget, commercial et projets sont réservés à la propriétaire. Toute tentative d'accès est renvoyée au cockpit.
+  if((v==='finance'||v==='budget'||v==='commercial'||v==='projets')&&!(VIEWER&&VIEWER.owner))v='cockpit';
   (function(){let bk=$('ceohomebk');if(!bk){bk=document.createElement('button');bk.id='ceohomebk';bk.innerHTML='← Retour à l\u2019accueil';bk.onclick=()=>navToView('cockpit');document.body.appendChild(bk);}bk.style.display=(document.body.classList.contains('ceomode')&&v!=='cockpit')?'inline-flex':'none';})();
   if(v!=='contacts')QUI_BACK=null; // on quitte Contacts par la barre latérale : plus besoin du bouton Retour
   CURRENT_VIEW=v;
@@ -2226,8 +2226,8 @@ async function load(){
     ['profils','campagnes','contenus','marques','contacts','messages','rapports','budget'].forEach(g=>{const a=document.querySelector('.sb-nav .nav[data-go="'+g+'"]');if(a)a.style.display='none';});
     ['srcpanel','mailpanel','pipelinepanel','brandpanel','fillpanel','listpanel','statcards'].forEach(id=>{const e=$(id);if(e){e.classList.add('hidden');e.style.display='none';}});
   }
-  // Finance, Budget & Commercial = réservés à la propriétaire (Mélany). Masqués pour tout le monde d'autre, y compris les autres superviseures.
-  if(!(VIEWER&&VIEWER.owner)){['finance','budget','commercial'].forEach(g=>{const a=document.querySelector('.sb-nav .nav[data-go="'+g+'"]');if(a)a.style.display='none';});}
+  // Finance, Budget, Commercial & Projets (suivi de projets/vue CEO) = réservés à la propriétaire (Mélany). Masqués pour tout le monde d'autre, y compris les autres superviseures.
+  if(!(VIEWER&&VIEWER.owner)){['finance','budget','commercial','projets'].forEach(g=>{const a=document.querySelector('.sb-nav .nav[data-go="'+g+'"]');if(a)a.style.display='none';});}
   loadAlerts();          // remplissage des calendriers : visible par toutes les CP
   render();
   renderCalbar();
