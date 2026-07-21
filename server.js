@@ -318,6 +318,8 @@ app.get("/api/collabs", auth, async (req, res) => {
     // superviseures (Rozenn chez Mélany, et inversement). Les départs restent exclus.
     const team = USERS
       .filter((u) => normName(u.name) !== normName(req.user.name) && normName(u.name) !== "kendia" && !COPILOT.departed.includes(String(u.email).toLowerCase()))
+      // La propriétaire (Mélany) n'apparaît pas dans l'équipe vue par les autres (ni filtre, ni oversight, ni agenda).
+      .filter((u) => isOwner(req) || String(u.email).toLowerCase() !== OWNER_EMAIL)
       .map((u) => u.name);
     res.json({ rows, demo: DEMO, viewer: { name: req.user.name, role: req.user.role, owner: isOwner(req) }, team });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -405,6 +407,8 @@ app.get("/api/dirigeant", auth, async (req, res) => {
     const members = USERS
       // tout le monde sauf la personne qui regarde (Rozenn superviseure incluse) et les départs
       .filter((u) => normName(u.name) !== normName(req.user.name) && !COPILOT.departed.includes(String(u.email).toLowerCase()) && normName(u.name) !== "kendia")
+      // La propriétaire (Mélany) n'est pas supervisée par les autres : invisible dans « Mon équipe » sauf pour elle-même.
+      .filter((u) => isOwner(req) || String(u.email).toLowerCase() !== OWNER_EMAIL)
       .map((u) => {
         const mine = tasks.filter((t) => t.statut !== "Fait" && normName(t.responsable) === normName(u.name));
         const late = mine.filter((t) => t.echeance && t.echeance < today).length;
@@ -1380,6 +1384,8 @@ function inboxTarget(req) {
   const as = String(req.query.as || "").trim();
   if (as && req.user.role === "supervisor") {
     const email = as.includes("@") ? as.toLowerCase() : emailOf(as);
+    // Le compte de la propriétaire (Mélany) n'est jamais consultable par un autre superviseur (boîte mail, agenda…).
+    if (email && email === OWNER_EMAIL && !isOwner(req)) return { email: req.user.email, viewing: null };
     if (email) return { email, viewing: as };
   }
   return { email: req.user.email, viewing: null };
