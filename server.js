@@ -719,14 +719,22 @@ const CEO_STORE = path.join(DATA_DIR, "ceo.json");
 function loadCeo() { try { return JSON.parse(fs.readFileSync(CEO_STORE, "utf8")); } catch (e) { return { treso: null, ca: null, roadmap: [], arbitrages: [] }; } }
 function saveCeo(o) { try { fs.writeFileSync(CEO_STORE, JSON.stringify(o, null, 2)); } catch (e) {} }
 // To-do perso par thématique (kanban + liste), stockée DANS ceo.json (persistance éprouvée), par utilisateur.
-const PTODO_THEMES = ["Dev entreprise", "HA 2.0", "Tâche clients", "Personal branding", "Site"];
+const PTODO_THEMES = ["Dev entreprise", "HA 2.0", "Tâche clients", "Personal branding", "Site"]; // Mélany (direction) : ses dossiers perso
+const PTODO_THEMES_TEAM = ["In Haircare", "Doucéa", "Curls Matter", "LIVA", "Interne"]; // équipe : par marque + interne (personnalisable)
+const PTODO_OWNER = "melany@hyped-agency.fr";
 function ptodoFor(email) {
   const o = loadCeo(); o.persoTodo = o.persoTodo || {};
   const k = String(email || "").toLowerCase();
-  if (!o.persoTodo[k]) o.persoTodo[k] = { themes: PTODO_THEMES.slice(), tasks: [] };
-  if (!o.persoTodo[k].themes || !o.persoTodo[k].themes.length) o.persoTodo[k].themes = PTODO_THEMES.slice();
-  if (!o.persoTodo[k].themeColors) o.persoTodo[k].themeColors = {};
-  return { o, k, data: o.persoTodo[k] };
+  const isOwner = k === PTODO_OWNER;
+  const def = isOwner ? PTODO_THEMES : PTODO_THEMES_TEAM;
+  let rec = o.persoTodo[k];
+  if (!rec) rec = { themes: def.slice(), tasks: [], themeColors: {} };
+  if (!rec.themes || !rec.themes.length) rec.themes = def.slice();
+  if (!rec.themeColors) rec.themeColors = {};
+  // Migration : un membre de l'équipe seedé par erreur avec les thématiques perso de Mélany (et sans tâche) repasse sur les thématiques agence.
+  if (!isOwner && (!rec.tasks || !rec.tasks.length) && JSON.stringify(rec.themes) === JSON.stringify(PTODO_THEMES)) rec.themes = PTODO_THEMES_TEAM.slice();
+  o.persoTodo[k] = rec;
+  return { o, k, data: rec };
 }
 const ARB_TYPES = ["Validation", "Budget", "Prestataire", "Recrutement", "Client sensible", "Autre"];
 const RM_AXES = ["Offre & positionnement", "Croissance & acquisition", "Excellence opérationnelle", "Équipe & recrutement", "Rentabilité & finance", "Marque & contenu"];

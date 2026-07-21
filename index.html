@@ -2476,7 +2476,7 @@ async function loadCeoPanel(){
     const chip=(txt,i)=>{const c=chipC[i%chipC.length].split('|');return '<span class="bgd-badge" style="background:'+c[0]+';color:'+c[1]+';font-size:10.5px">'+esc(txt)+'</span>';};
     const todoH='<div class="bgd-card" style="height:100%"><div class="bgd-h">✅ My personal to-do</div>'
       +(tasks.length?tasks.slice(0,6).map((x,i)=>'<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #F0F1F6"><input type="checkbox" class="ceodone" data-id="'+esc(x.id)+'" style="width:15px;height:15px;flex:0 0 15px"><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(x.task)+'</span>'+chip(x.projet||x.type||'Tâche',i)+'<span class="fs" style="white-space:nowrap">'+(x.echeance?dmy(x.echeance).slice(0,5):'')+'</span></div>').join(''):'<div style="text-align:center;padding:18px 8px"><div style="font-size:36px">📋✨</div><div class="fs" style="margin-top:6px">To-do à jour, bravo !</div></div>')
-      +'<a class="lk ceogo" data-go="todo" style="border:none;background:none;padding:8px 0 0;color:'+V+';font-weight:700;font-size:12.5px">Voir toutes mes tâches →</a></div>';
+      +'<a class="lk ceotodolink" style="border:none;background:none;padding:8px 0 0;color:'+V+';font-weight:700;font-size:12.5px">Voir toutes mes tâches →</a></div>';
     const nLead=deals.filter(x=>['Lead','Contacté'].includes(x.statut)).length;
     const nProp=deals.filter(x=>x.statut==='Proposition').length;
     const nNego=deals.filter(x=>x.statut==='Négociation').length;
@@ -2589,6 +2589,7 @@ async function loadCeoPanel(){
     // ---------- interactions ----------
     const goDec=()=>{const e2=document.getElementById('ceocard-dec');if(e2){e2.scrollIntoView({behavior:'smooth',block:'center'});e2.style.boxShadow='0 0 0 3px '+V;setTimeout(()=>{e2.style.boxShadow='';},1500);}};
     p.querySelectorAll('.ceogo').forEach(el=>el.onclick=(ev)=>{ev.stopPropagation();if(el.dataset.go==='__dec'){goDec();return;}navToView(el.dataset.go);});
+    const ctl=p.querySelector('.ceotodolink'); if(ctl)ctl.onclick=(ev)=>{ev.stopPropagation();window.TODO_MODE='agence';navToView('todo');};
     p.querySelectorAll('.ceodone').forEach(c=>c.onchange=async()=>{await api('/api/todos/'+encodeURIComponent(c.dataset.id)+'/done',{method:'POST'});loadCeoPanel();});
     p.querySelectorAll('[data-ceoarb]').forEach(b=>b.onclick=async(ev)=>{ev.stopPropagation();
       let comment='';
