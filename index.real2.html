@@ -2693,7 +2693,9 @@ async function loadPersoPanel(){
 // --- Pense-bête weekly : vider sa tête entre deux réunions ------------------
 let WK_EDIT=null; // note en cours de modification (bouton ✎)
 async function loadWeeklyPanel(){
-  const p=$('weeklypanel'); if(!p||!VIEWER||VIEWER.role!=='supervisor')return;
+  const p=$('weeklypanel'); if(!p||!VIEWER)return;
+  // "À dire à la weekly" (extraction des tâches de tes visios) = propriétaire uniquement. Masqué pour les autres.
+  if(!VIEWER.owner){ p.classList.add('hidden'); p.style.display='none'; return; }
   try{
     const r=await api('/api/weekly'); if(!r.ok)return;
     const d=await r.json();

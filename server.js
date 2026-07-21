@@ -447,13 +447,13 @@ function purgeWeekly(w) {
   return w;
 }
 app.get("/api/weekly", auth, (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé à la propriétaire (weekly)" });
   const w = purgeWeekly(loadWeekly());
   const notes = (w.notes || []).sort((a, b) => (a.done === b.done ? (b.at || 0) - (a.at || 0) : (a.done ? 1 : -1)));
   res.json({ notes });
 });
 app.post("/api/weekly", auth, (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé à la propriétaire (weekly)" });
   const text = String(req.body?.text || "").trim().slice(0, 500);
   if (!text) return res.status(400).json({ error: "note vide" });
   const w = loadWeekly(); w.notes = w.notes || [];
@@ -461,14 +461,14 @@ app.post("/api/weekly", auth, (req, res) => {
   saveWeekly(w); res.json({ ok: true });
 });
 app.post("/api/weekly/:id/done", auth, (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé à la propriétaire (weekly)" });
   const w = loadWeekly(); const n = (w.notes || []).find((x) => x.id === req.params.id);
   if (!n) return res.status(404).json({ error: "note introuvable" });
   n.done = !n.done; n.doneAt = n.done ? Date.now() : null; // top départ des 7 jours avant auto-nettoyage
   saveWeekly(w); res.json({ ok: true, done: n.done });
 });
 app.post("/api/weekly/:id/edit", auth, (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé à la propriétaire (weekly)" });
   const w = loadWeekly(); const n = (w.notes || []).find((x) => x.id === req.params.id);
   if (!n) return res.status(404).json({ error: "note introuvable" });
   const text = String(req.body?.text || "").trim().slice(0, 500);
@@ -480,7 +480,7 @@ app.post("/api/weekly/:id/edit", auth, (req, res) => {
 // personnes du « Pour qui ? » (« Rozenn et Najem » = une tâche chacun), puis marque
 // la note comme faite + « tasked » (le kickoff du lundi saura ne pas la recréer).
 app.post("/api/weekly/:id/totask", auth, async (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé à la propriétaire (weekly)" });
   if (!notion || DEMO) return res.status(400).json({ error: "Notion non branché" });
   const w = loadWeekly(); const n = (w.notes || []).find((x) => x.id === req.params.id);
   if (!n) return res.status(404).json({ error: "note introuvable" });
@@ -506,7 +506,7 @@ app.post("/api/weekly/:id/totask", auth, async (req, res) => {
   res.json({ ok: true, made });
 });
 app.post("/api/weekly/:id/del", auth, (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé à la propriétaire (weekly)" });
   const w = loadWeekly(); w.notes = (w.notes || []).filter((x) => x.id !== req.params.id);
   saveWeekly(w); res.json({ ok: true });
 });
@@ -515,7 +515,7 @@ app.post("/api/weekly/:id/del", auth, (req, res) => {
 const WEEKLY_FILES_DIR = path.join(DATA_DIR, "weekly_files");
 try { fs.mkdirSync(WEEKLY_FILES_DIR, { recursive: true }); } catch (e) {}
 app.post("/api/weekly/:id/file", auth, (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé à la propriétaire (weekly)" });
   const w = loadWeekly(); const n = (w.notes || []).find((x) => x.id === req.params.id);
   if (!n) return res.status(404).json({ error: "note introuvable" });
   const m = /^data:([^;]+);base64,(.+)$/.exec(String(req.body?.data || ""));
@@ -531,7 +531,7 @@ app.post("/api/weekly/:id/file", auth, (req, res) => {
 });
 // Lien attaché à une note weekly (drive, Notion, TikTok… tout ce qui se projette)
 app.post("/api/weekly/:id/link", auth, (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé aux superviseures" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé à la propriétaire (weekly)" });
   const w = loadWeekly(); const n = (w.notes || []).find((x) => x.id === req.params.id);
   if (!n) return res.status(404).json({ error: "note introuvable" });
   let url = String(req.body?.url || "").trim();
@@ -542,7 +542,7 @@ app.post("/api/weekly/:id/link", auth, (req, res) => {
   saveWeekly(w); res.json({ ok: true });
 });
 app.get("/api/weekly/file/:fid", auth, (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).send("réservé aux superviseures");
+  if (!isOwner(req)) return res.status(403).send("réservé à la propriétaire (weekly)");
   const w = loadWeekly(); let f = null;
   (w.notes || []).forEach((n) => (n.files || []).forEach((x) => { if (x.id === req.params.fid) f = x; }));
   const p = path.join(WEEKLY_FILES_DIR, String(req.params.fid).replace(/[^a-f0-9]/g, ""));
