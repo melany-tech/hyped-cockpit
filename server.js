@@ -583,7 +583,9 @@ function rhLeave(o, name) { // congés payés VALIDÉS de l'année en cours (cli
   return { quota, taken, left: quota - taken };
 }
 app.get("/api/rh", auth, (req, res) => {
-  const o = loadRh(); const sup = req.user.role === "supervisor";
+  // Admin RH (fiches de toute l'équipe, quotas, RIB, congés de chacun) = propriétaire (Mélany) uniquement.
+  // Tout le monde d'autre, y compris les autres superviseures, ne voit QUE ses propres infos RH.
+  const o = loadRh(); const sup = isOwner(req);
   const me = normName(req.user.name);
   const abs = (o.absences || []).filter((a) => sup || normName(a.who) === me);
   const docs = (o.docs || []).filter((x) => sup || normName(x.who) === me);
@@ -595,8 +597,8 @@ app.get("/api/rh", auth, (req, res) => {
     docs: docs.slice().sort((a, b) => (b.at || 0) - (a.at || 0)),
     leave, year: new Date().getFullYear(),
     quotaDefault: Number((o.quotas || {}).__default) || RH_DEFAULT_QUOTA,
-    teamCount: USERS.filter((u) => !COPILOT.departed.includes(String(u.email).toLowerCase()) && normName(u.name) !== "kendia").length,
-    members: USERS.filter((u) => !COPILOT.departed.includes(String(u.email).toLowerCase()) && normName(u.name) !== "kendia").map((u) => u.name),
+    teamCount: sup ? USERS.filter((u) => !COPILOT.departed.includes(String(u.email).toLowerCase()) && normName(u.name) !== "kendia").length : 1,
+    members: sup ? USERS.filter((u) => !COPILOT.departed.includes(String(u.email).toLowerCase()) && normName(u.name) !== "kendia").map((u) => u.name) : [req.user.name],
     team: sup ? USERS.filter((u) => u.role !== "supervisor").map((u) => u.name) : [] });
 });
 // Absences validées d'une date donnée, pour l'agenda du cockpit
@@ -625,7 +627,7 @@ app.post("/api/rh/absence", auth, async (req, res) => {
   res.json({ ok: true, id: a.id });
 });
 app.post("/api/rh/absence/:id/decide", auth, async (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé à la direction (propriétaire)" });
   const ok2 = req.body?.decision === "validee";
   const o = loadRh(); const a = (o.absences || []).find((x) => x.id === req.params.id);
   if (!a) return res.status(404).json({ error: "demande introuvable" });
@@ -670,20 +672,20 @@ app.post("/api/rh/absence/:id/del", auth, (req, res) => {
   // annuler : la direction toujours, la personne seulement tant que c'est en attente
   const o = loadRh(); const a = (o.absences || []).find((x) => x.id === req.params.id);
   if (!a) return res.status(404).json({ error: "introuvable" });
-  if (req.user.role !== "supervisor" && (normName(a.who) !== normName(req.user.name) || a.statut !== "en attente")) return res.status(403).json({ error: "plus modifiable" });
+  if (!isOwner(req) && (normName(a.who) !== normName(req.user.name) || a.statut !== "en attente")) return res.status(403).json({ error: "plus modifiable" });
   o.absences = (o.absences || []).filter((x) => x.id !== a.id); saveRh(o);
   res.json({ ok: true });
 });
 app.post("/api/rh/quota", auth, (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé à la direction (propriétaire)" });
   const who = String(req.body?.who || ""); const days = Number(req.body?.days);
   if (!who || !(days >= 0 && days <= 60)) return res.status(400).json({ error: "quota invalide (0 à 60 jours)" });
   const o = loadRh(); o.quotas = o.quotas || {}; o.quotas[who === "__default" ? "__default" : normName(who)] = days; saveRh(o);
   res.json({ ok: true });
 });
 app.post("/api/rh/doc", auth, async (req, res) => {
-  // dépôt : la direction pour n'importe qui, chacune pour elle-même (ex. sa facture)
-  const who = (req.user.role === "supervisor" && req.body?.who) ? String(req.body.who) : req.user.name;
+  // dépôt : la propriétaire pour n'importe qui, chacune pour elle-même (ex. sa facture)
+  const who = (isOwner(req) && req.body?.who) ? String(req.body.who) : req.user.name;
   const m = /^data:([^;]+);base64,(.+)$/.exec(String(req.body?.data || ""));
   if (!m) return res.status(400).json({ error: "fichier illisible" });
   const buf = Buffer.from(m[2], "base64");
@@ -706,13 +708,13 @@ app.get("/api/rh/doc/:fid", auth, (req, res) => {
   const o = loadRh(); const f = (o.docs || []).find((x) => x.id === req.params.fid);
   const p = path.join(RH_DIR, String(req.params.fid).replace(/[^a-f0-9]/g, ""));
   if (!f || !fs.existsSync(p)) return res.status(404).send("document introuvable");
-  if (req.user.role !== "supervisor" && normName(f.who) !== normName(req.user.name)) return res.status(403).send("pas ton document");
+  if (!isOwner(req) && normName(f.who) !== normName(req.user.name)) return res.status(403).send("pas ton document");
   res.setHeader("Content-Type", f.mime || "application/octet-stream");
   res.setHeader("Content-Disposition", (req.query.dl ? "attachment" : "inline") + "; filename=\"" + encodeURIComponent(f.filename) + "\"");
   res.send(fs.readFileSync(p));
 });
 app.post("/api/rh/doc/:fid/del", auth, (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé à la direction (propriétaire)" });
   const o = loadRh(); const f = (o.docs || []).find((x) => x.id === req.params.fid);
   if (!f) return res.status(404).json({ error: "introuvable" });
   o.docs = (o.docs || []).filter((x) => x.id !== f.id); saveRh(o);
@@ -1330,7 +1332,8 @@ app.post("/api/crm", auth, (req, res) => {
 });
 // --- Fiches équipe (RH) : coordonnées, RIB, notes, stockées sur le disque persistant ---
 app.get("/api/rh/fiches", auth, (req, res) => {
-  const sup = req.user.role === "supervisor";
+  // Fiches équipe (RIB, contrats, adresses) = propriétaire uniquement. Les autres ne reçoivent que leur propre fiche.
+  const sup = isOwner(req);
   const o = loadRh(); const profils = o.profils || {};
   const list = USERS.filter((u) => !COPILOT.departed.includes(String(u.email).toLowerCase()) && normName(u.name) !== "kendia")
     .filter((u) => sup || normName(u.name) === normName(req.user.name))
@@ -1347,7 +1350,7 @@ app.get("/api/rh/fiches", auth, (req, res) => {
   res.json({ ok: true, supervisor: sup, fiches: list });
 });
 app.post("/api/rh/profil", auth, (req, res) => {
-  const sup = req.user.role === "supervisor";
+  const sup = isOwner(req); // seule la propriétaire édite les fiches des autres ; chacune peut éditer la sienne
   const who = (sup && req.body?.who) ? String(req.body.who) : req.user.name;
   if (!sup && normName(who) !== normName(req.user.name)) return res.status(403).json({ error: "pas ta fiche" });
   const o = loadRh(); o.profils = o.profils || {};
