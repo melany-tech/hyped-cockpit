@@ -1158,7 +1158,7 @@ async function renderRoadmapView(){
     const qi=items.filter(x=>x.q===q);
     return '<div class="bgd-card" style="min-width:0"><div class="bgd-h" style="display:flex;align-items:center">'+q+' <span class="fs" style="margin-left:6px">'+qi.length+'</span>'+(own?'<a class="lk" data-rmaddq="'+q+'" style="margin-left:auto">＋</a>':'')+'</div>'
       +(qi.length?qi.map(x=>{const c=stC[x.statut]||stC['À venir'];return '<div style="padding:8px 0;border-bottom:1px solid #F0F3F3">'
-        +'<div style="display:flex;align-items:center;gap:7px"><b style="flex:1;min-width:0">'+esc(x.nom)+'</b>'+(own?'<a class="lk" data-rmedit="'+esc(x.id)+'">✎</a><a class="lk" data-rmdel2="'+esc(x.id)+'">✕</a>':'')+'</div>'
+        +'<div style="display:flex;align-items:center;gap:7px"><b style="flex:1;min-width:0">'+(x.private?'🔒 ':'')+esc(x.nom)+'</b>'+(own?'<a class="lk" data-rmlock="'+esc(x.id)+'" data-priv="'+(x.private?'1':'0')+'" title="'+(x.private?'Privé · masqué aux autres. Clique pour rendre visible':'Visible par les autres. Clique pour rendre privé')+'">'+(x.private?'🔒':'🔓')+'</a><a class="lk" data-rmedit="'+esc(x.id)+'">✎</a><a class="lk" data-rmdel2="'+esc(x.id)+'">✕</a>':'')+'</div>'
         +'<div style="display:flex;align-items:center;gap:7px;margin-top:4px"><span class="bgd-badge"'+(own?' data-rmst2="'+esc(x.id)+'" title="clique pour faire évoluer le statut" style="cursor:pointer;background:'+c[0]+';color:'+c[1]+'"':' style="background:'+c[0]+';color:'+c[1]+'"')+'>'+esc(x.statut)+'</span>'
         +(x.progression?('<div class="ceobar" style="flex:1"><div style="width:'+x.progression+'%;background:#2C9087"></div></div><span class="fs">'+x.progression+' %</span>'):'')
         +'</div>'
@@ -1192,6 +1192,7 @@ async function renderRoadmapView(){
     await api('/api/ceo/roadmap',{method:'POST',body:JSON.stringify({id:it.id,nom:nom||it.nom,next,progression:Number(prog)||0})}); renderRoadmapView();
   });
   box.querySelectorAll('[data-rmdel2]').forEach(el=>el.onclick=async()=>{ if(!confirm('Supprimer cette initiative ?'))return; await api('/api/ceo/roadmap',{method:'POST',body:JSON.stringify({del:el.dataset.rmdel2})}); renderRoadmapView(); });
+  box.querySelectorAll('[data-rmlock]').forEach(el=>el.onclick=async()=>{ await api('/api/ceo/roadmap',{method:'POST',body:JSON.stringify({id:el.dataset.rmlock,private:el.dataset.priv!=='1'})}); renderRoadmapView(); });
 }
 // ===== Suivi commercial (CRM léger, direction) ==============================
 async function renderCommercialView(){

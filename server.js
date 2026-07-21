@@ -882,7 +882,7 @@ app.get("/api/ceo", auth, async (req, res) => {
   res.json({ ok: true, owner: own,
     treso: own ? (o.treso || null) : null, ca: own ? (o.ca || null) : null, tresoHist: own ? (o.tresoHist || []) : [], financeAttr: own ? (o.encAttr || {}) : {}, finPrev: own ? (o.finPrev || null) : null, attendus: own ? (o.attendus || []) : [],
     pennylane: (own && pl2) ? { connected: true, at: pl2.at, treso: pl2.treso, ca: pl2.ca, caMois: pl2.caMois, caPrevMois: pl2.caPrevMois, mensuel: pl2.mensuel || {}, lastPaid: pl2.lastPaid || [], factureMois: pl2.factureMois || 0, facturePrevMois: pl2.facturePrevMois || 0, factMensuel: pl2.factMensuel || {}, lateN: pl2.lateN || 0, lateSum: pl2.lateSum || 0, upcomN: pl2.upcomN || 0, upcomSum: pl2.upcomSum || 0, clients: pl2.clients || {}, paidRecent: pl2.paidRecent || [], bankTx: pl2.bankTx || [], txError: pl2.txError || null, error: pl2.error, annee: new Date().getFullYear() } : { connected: false },
-    roadmap: o.roadmap || [], axes: RM_AXES, rmStatuts: RM_STATUTS, arbTypes: ARB_TYPES,
+    roadmap: (o.roadmap || []).filter((x) => own || !x.private), axes: RM_AXES, rmStatuts: RM_STATUTS, arbTypes: ARB_TYPES,
     arbitrages: (o.arbitrages || []).filter((a) => a.statut === "en attente").sort((a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999")) });
 });
 // Répartition manuelle des encaissements par service + part reversée aux influenceuses (pocket).
@@ -1145,6 +1145,7 @@ app.post("/api/ceo/roadmap", auth, (req, res) => {
     if (b.progression !== undefined) it.progression = Math.max(0, Math.min(100, Number(b.progression) || 0));
     if (b.nom) it.nom = String(b.nom).slice(0, 140);
     if (b.next !== undefined) it.next = String(b.next || "").slice(0, 200);
+    if (b.private !== undefined) it.private = !!b.private; // 🔒 masque l'initiative aux autres superviseures
     saveCeo(o); return res.json({ ok: true });
   }
   const nom = String(b.nom || "").trim();
