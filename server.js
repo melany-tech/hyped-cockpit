@@ -1015,6 +1015,7 @@ app.post("/api/perso/theme", auth, (req, res) => {
   else if (op === "del") { data.themes = data.themes.filter((t) => t !== name); data.tasks = data.tasks.filter((t) => t.theme !== name); delete data.themeColors[name]; }
   else if (op === "color") { const c = String(req.body?.color || "").slice(0, 12); if (c) data.themeColors[name] = c; else delete data.themeColors[name]; }
   else if (op === "move") { const i = data.themes.indexOf(name); const dir = Number(req.body?.dir) || 0; const j = i + dir; if (i >= 0 && j >= 0 && j < data.themes.length) { const tmp = data.themes[i]; data.themes[i] = data.themes[j]; data.themes[j] = tmp; } }
+  else if (op === "order") { const ord = Array.isArray(req.body?.order) ? req.body.order.map(String) : []; const kept = ord.filter((t) => data.themes.includes(t)); const rest = data.themes.filter((t) => !kept.includes(t)); if (kept.length) data.themes = kept.concat(rest); }
   o.persoTodo[k] = data; saveCeo(o); res.json({ ok: true, themes: data.themes, tasks: data.tasks, themeColors: data.themeColors });
 });
 app.post("/api/ceo/config", auth, (req, res) => {
