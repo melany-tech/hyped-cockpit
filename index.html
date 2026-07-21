@@ -3095,7 +3095,8 @@ async function renderPersoTodo(w){
     +'</span><button class="lk persoaddtheme" style="margin-left:auto">＋ Thématique</button></div>';
   const chkBox=(t)=>'<span class="persochk" data-id="'+esc(t.id)+'" style="width:18px;height:18px;flex:0 0 18px;border:2px solid '+(t.done?'#2C9087':'#CFDADA')+';border-radius:6px;background:'+(t.done?'#2C9087':'#fff')+';cursor:pointer;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:12px;margin-top:1px">'+(t.done?'✓':'')+'</span>';
   // ---- Tâches agence (Notion) fusionnées dans le tableau, rangées dans tes colonnes ----
-  let ag=[]; try{ const ra=await api('/api/todo'); const da=await ra.json(); ag=(da.taches||[]); }catch(e){}
+  // Tableau perso = uniquement MES tâches agence (celles dont je suis responsable), pas celles de toute l'équipe.
+  let ag=[]; try{ const ra=await api('/api/todo?qui='+encodeURIComponent((VIEWER&&VIEWER.name)||'')); const da=await ra.json(); ag=(da.taches||[]).filter(t=>!VIEWER||!t.responsable||nlow(t.responsable)===nlow(VIEWER.name)); }catch(e){}
   const agTheme=d.agencyTheme||{};
   const _n=(s)=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
   const themeForAg=(t)=>{ if(agTheme[t.id]&&themes.includes(agTheme[t.id]))return agTheme[t.id]; const pn=_n(t.projet); if(pn){const m=themes.find(th=>{const tn=_n(th);return tn&&(tn===pn||pn.includes(tn)||tn.includes(pn));}); if(m)return m;} return 'À trier'; };
@@ -3617,7 +3618,9 @@ function mailDate(d){
 function deent(s){const t=document.createElement('textarea');t.innerHTML=String(s||'');return t.value;}
 function renderMail(d, who){
   window.MB_LAST={d,who}; window.MB_TAB=window.MB_TAB||'tous';
-  const reps=d.creatorReplies||[];
+  // Détecteur de mails automatiques / signatures (YouSign, DocuSign, formulaires, no-reply…) : ce ne sont PAS des créatrices à traiter ou à relancer.
+  const isAuto=(m)=>{const s=((m&&m.subject||'')+' '+(m&&m.from||'')+' '+(m&&m.snippet||'')).toLowerCase(); return /yousign|docusign|signaturit|hellosign|no[-\s.]?reply|noreply|a sign[eé]|ont sign[eé]|à signer|formulaire|document sign|contrat sign|e-?signature/.test(s);};
+  const reps=(d.creatorReplies||[]).filter(m=>!isAuto(m));
   if(!who){ try{setPipeReponse(reps.length);}catch(e){} }
   // « Autres mails reçus » : tout ce qui n'est pas une réponse créateur mais qui existe quand même
   // (mails internes, mails de marque, mails où on est en copie, divers). Rien n'est invisible.
@@ -3631,8 +3634,8 @@ function renderMail(d, who){
   // Fil de MARQUE dont le dernier message vient de l'agence = on a répondu, on attend le créateur.
   // Ce n'est ni « interne » ni « hors collab » : section dédiée, plus claire.
   const isHA=m=>/@hyped-agency\.fr/i.test(String(m.from||''));
-  const attente=autresTous.filter(m=>m.brand&&isHA(m));
-  const autres=autresTous.filter(m=>!(m.brand&&isHA(m)));
+  const attente=autresTous.filter(m=>m.brand&&isHA(m)&&!isAuto(m)); // relances = vraies créatrices, jamais les mails YouSign/signature
+  const autres=autresTous.filter(m=>!(m.brand&&isHA(m)&&!isAuto(m)));
   const q=(window.MB_Q||'').toLowerCase(); const bsel=window.MB_BRAND||null;
   const match=(m)=>(!bsel||String(m.brand||'')===bsel)&&(!q||((m.subject||'')+' '+(m.from||'')+' '+(m.snippet||'')).toLowerCase().includes(q));
   const repsF=reps.filter(m=>match(m)&&(window.MB_TAB!=='atraiter'||!m.treated));
