@@ -769,7 +769,7 @@ body.ceomode .nav.on{background:#EEEBFB;color:#6D5AE0}
     <section id="projetsview" style="display:none"><p class="pt"><span class="pi">📁</span> Suivi de projets</p><div class="panelhint">Où en est chaque marque et chaque personne : budgets, collabs du mois, retards. Visible uniquement par la direction.</div><div id="projetsbox"><div class="state">Chargement…</div></div></section>
     <section id="rapportsview" style="display:none"><p class="pt"><span class="pi">📊</span> Rapports</p><div id="rapportsbox"><div class="state">Chargement…</div></div></section>
     <section id="calendrierview" style="display:none"><p class="pt"><span class="pi">📅</span> Calendrier</p><div id="calendrierbox"><div class="state">Chargement…</div></div></section>
-    <section id="todoview" style="display:none"><p class="pt"><span class="pi">✅</span> To-do</p><div class="panelhint">« Ma to-do » : ton kanban perso par thématique (100% cockpit). « Tâches agence » : tes tâches marque par marque, synchronisées avec Notion.</div><div id="todowrap"><div class="state">Chargement…</div></div></section>
+    <section id="todoview" style="display:none"><p class="pt"><span class="pi">✅</span> To-do</p><div class="panelhint">Un seul tableau : tes tâches perso + tes tâches agence (synchro Notion), rangées dans tes colonnes. Vues Kanban · Semaine · Liste.</div><div id="todowrap"><div class="state">Chargement…</div></div></section>
     <section id="marquesview" style="display:none"><p class="pt"><span class="pi">🏷️</span> Marques</p><div class="panelhint">La fiche d'identité de chaque marque : contexte, période, contacts, docs & liens, et la progression du pôle. Clique une marque à gauche.</div><div class="mqlayout"><div id="mqlist" class="mqlist"></div><div id="mqdetail" class="mqdetail"><div class="state">Chargement…</div></div></div></section>
     <section id="historiqueview" style="display:none"><button class="lk backbtn" onclick="showView('cockpit')">← Retour au cockpit</button><p class="pt"><span class="pi">📜</span> Historique &amp; traçabilité</p><div class="panelhint">Chaque collab et son fil d'étapes : qui a fait quoi, quand, avec les liens vers les mails et la fiche Notion.</div><div class="ctsearch"><input id="histsearch" placeholder="🔍 Rechercher un créateur, une marque, une CP…"></div><div id="historiquebox"><div class="state">Chargement…</div></div></section>
     <div id="activitybar" class="actbar hidden"></div>
@@ -3676,12 +3676,15 @@ function renderMail(d, who){
       const relAge=rel?Math.floor((Date.now()-rel.at)/86400000):0;
       const alerte=rel&&relAge>=7;
       const stat=rel?(alerte?`<span class="bgd-badge" style="background:#FBE5E0;color:#D4483B;font-size:10.5px">⚠️ relancé IG il y a ${relAge}j · repush / mail</span>`:`<span class="bgd-badge" style="background:#E7F5EC;color:#1F8A5D;font-size:10.5px">📸 relancé IG le ${new Date(rel.at).toLocaleDateString('fr-FR')}${rel.by?(' · '+esc(rel.by)):''}</span>`):`<span class="bgd-badge" style="background:#FDF0E0;color:#C77F2A;font-size:10.5px">⏳ ${x.j}j sans réponse</span>`;
-      return `<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #F0F1F6;flex-wrap:wrap">
+      return `<div class="relitem" style="border-bottom:1px solid #F0F1F6">
+        <div style="display:flex;align-items:center;gap:9px;padding:8px 0;flex-wrap:wrap">
         <span style="width:8px;height:8px;flex:0 0 8px;border-radius:50%;background:${alerte?'#D4483B':(rel?'#2E9E6B':'#E8933A')}"></span>
         <div style="min-width:0;flex:1"><b style="font-size:13px">${pn?esc(pn):esc((m.subject||'créatrice').replace(/^re\s*:\s*/i,''))}</b> <span class="fs">${esc(m.subject||'')}</span></div>
         ${stat}
-        ${m.url?`<a class="lk" href="${esc(m.url)}" target="_blank" rel="noopener" style="font-size:12px">Ouvrir le fil</a>`:''}
+        ${m.threadId?`<a class="lk relthread" data-tid="${esc(m.threadId)}" style="font-size:12px">📖 Ouvrir le fil</a>`:(m.url?`<a class="lk" href="${esc(m.url)}" target="_blank" rel="noopener" style="font-size:12px">Ouvrir le fil ↗</a>`:'')}
         <button class="lk relig" data-tid="${esc(m.threadId||'')}" data-done="${rel?'1':'0'}" style="font-size:12px;${rel?'':'background:#E1306C;color:#fff;border-color:#E1306C'}">${rel?'↩︎ annuler':'📸 Relancé sur IG'}</button>
+        </div>
+        <div class="relthreadbox cpthreadbox" style="display:none;margin:0 0 8px"></div>
       </div>`;};
     window.RELZONE=relZone=`<div class="bgd-card" style="margin-bottom:14px;border-color:#F1D9C0"><div class="bgd-h">📸 Relances Instagram à faire <span class="cpsub">créatrices sans réponse à ton mail depuis 5 j+ · relance-les sur Insta, coche quand c'est fait</span></div>
       <div class="fs" style="margin:2px 0 8px">${nARelancer} à relancer · ${relCand.length-nARelancer} déjà relancée(s) sur IG</div>
@@ -3698,6 +3701,16 @@ function renderMail(d, who){
       const rr=await api('/api/relance',{method:'POST',body:JSON.stringify({threadId:tid,done:done?false:true})});
       const dd=await rr.json().catch(()=>({})); if(dd&&dd.relances)window.RELANCES=dd.relances;
       renderMail(window.MB_LAST.d,window.MB_LAST.who);
+    });
+    document.querySelectorAll('#mailbox .relthread').forEach(a=>a.onclick=async()=>{
+      const item=a.closest('.relitem'); const bx=item&&item.querySelector('.relthreadbox'); if(!bx)return;
+      if(bx.style.display!=='none'){ bx.style.display='none'; a.textContent='📖 Ouvrir le fil'; return; }
+      bx.style.display=''; bx.innerHTML='<div class="state2" style="padding:8px">Chargement du fil…</div>'; a.textContent='📖 Masquer le fil';
+      try{
+        const r=await api('/api/copilot/thread?id='+encodeURIComponent(a.dataset.tid));
+        const dt=await r.json().catch(()=>({}));
+        bx.innerHTML=(dt&&dt.ok&&dt.transcript)?renderTranscript(dt.transcript):'<div class="state2" style="padding:8px">Fil indisponible (boîte déconnectée ?).</div>';
+      }catch(e){ bx.innerHTML='<div class="state2" style="padding:8px">Fil indisponible.</div>'; }
     });
   };
   if(window.MB_TAB==='brouillons'){$('mailbox').innerHTML=mbWrap(sum+'<div class="state">Tes brouillons t\'attendent dans Gmail : <a class="lk" href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noopener">ouvrir les brouillons ↗</a></div>');mbWire();return;}

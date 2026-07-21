@@ -4190,5 +4190,5 @@ $('go').onclick=async()=>{
 boot();
 </script></body></html>`);
 });
-app.get("*", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
+app.get("*", (req, res) => { res.setHeader("Cache-Control", "no-cache, must-revalidate"); res.sendFile(path.join(__dirname, "index.html")); });
 app.listen(PORT, () => console.log(`Cockpit ${DEMO ? "(DÉMO)" : "(Notion live, clients actifs)"} → http://localhost:${PORT}`));
