@@ -516,6 +516,7 @@ body.ceomode #pipelinepanel,body.ceomode #dirpanel,body.ceomode #brandpanel,body
 body.ceomode #persopanel,body.ceomode #fillpanel,body.ceomode #srcpanel,body.ceomode #listpanel,
 body.ceomode #mailpanel{display:none !important}
 body.ceomode #filterbar{display:none !important}
+body.ceomode .sb-filter{display:none !important}
 .cprew{display:flex;gap:6px;margin-top:7px}
 .cprewin{flex:1;font-family:inherit;font-size:12.5px;padding:8px 10px;border:1px solid #E4E0D5;border-radius:8px;background:#fff}
 .cprewin:focus{outline:none;border-color:#2C9087}
@@ -768,7 +769,7 @@ body.ceomode .nav.on{background:#EEEBFB;color:#6D5AE0}
     <section id="projetsview" style="display:none"><p class="pt"><span class="pi">📁</span> Suivi de projets</p><div class="panelhint">Où en est chaque marque et chaque personne : budgets, collabs du mois, retards. Visible uniquement par la direction.</div><div id="projetsbox"><div class="state">Chargement…</div></div></section>
     <section id="rapportsview" style="display:none"><p class="pt"><span class="pi">📊</span> Rapports</p><div id="rapportsbox"><div class="state">Chargement…</div></div></section>
     <section id="calendrierview" style="display:none"><p class="pt"><span class="pi">📅</span> Calendrier</p><div id="calendrierbox"><div class="state">Chargement…</div></div></section>
-    <section id="todoview" style="display:none"><p class="pt"><span class="pi">✅</span> To-do</p><div class="panelhint">« Ma to-do » : ton kanban perso par thématique (100% cockpit). « Tâches agence » : tes tâches marque par marque, synchronisées avec Notion.</div><div id="todowrap"><div class="state">Chargement…</div></div></section>
+    <section id="todoview" style="display:none"><p class="pt"><span class="pi">✅</span> To-do</p><div class="panelhint">Un seul tableau : tes tâches perso + tes tâches agence (synchro Notion), rangées dans tes colonnes. Vues Kanban · Semaine · Liste.</div><div id="todowrap"><div class="state">Chargement…</div></div></section>
     <section id="marquesview" style="display:none"><p class="pt"><span class="pi">🏷️</span> Marques</p><div class="panelhint">La fiche d'identité de chaque marque : contexte, période, contacts, docs & liens, et la progression du pôle. Clique une marque à gauche.</div><div class="mqlayout"><div id="mqlist" class="mqlist"></div><div id="mqdetail" class="mqdetail"><div class="state">Chargement…</div></div></div></section>
     <section id="historiqueview" style="display:none"><button class="lk backbtn" onclick="showView('cockpit')">← Retour au cockpit</button><p class="pt"><span class="pi">📜</span> Historique &amp; traçabilité</p><div class="panelhint">Chaque collab et son fil d'étapes : qui a fait quoi, quand, avec les liens vers les mails et la fiche Notion.</div><div class="ctsearch"><input id="histsearch" placeholder="🔍 Rechercher un créateur, une marque, une CP…"></div><div id="historiquebox"><div class="state">Chargement…</div></div></section>
     <div id="activitybar" class="actbar hidden"></div>
@@ -1689,7 +1690,7 @@ async function renderRhView(){
     +'<div class="bgd-grid" style="grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);margin-top:14px">'+congesH+formH+'</div>')
    :(kpis
     +'<div class="bgd-grid" style="grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);margin-bottom:14px">'+congesH+formH+'</div>'
-    +'<div class="bgd-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">'+demH+docH+rapH+'</div>'
+    +'<div class="bgd-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">'+demH+docH+'</div>'
     +fichesH
     +basH);
   box.querySelectorAll('.rhjump').forEach(el=>el.onclick=(ev)=>{ev.stopPropagation();const e2=document.getElementById(el.dataset.j);if(e2){e2.scrollIntoView({behavior:'smooth',block:'start'});e2.style.boxShadow='0 0 0 3px #6D5AE0';setTimeout(()=>{e2.style.boxShadow='';},1400);}});
@@ -3065,16 +3066,8 @@ try{ TODO_QUI=localStorage.getItem('hc_todoqui')||''; }catch(e){}
 // écrasait la première et l'onglet restait bloqué sur « Chargement… ».
 async function renderTodoTab(){
   const w=$('todowrap'); if(!w)return;
-  window.TODO_MODE=window.TODO_MODE||'perso';
-  const on='background:var(--teal);color:#fff;border-color:var(--teal)';
-  const tabs='<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">'
-    +'<button class="lk todomode" data-m="perso" style="'+(window.TODO_MODE==='perso'?on:'')+'">🗂️ Ma to-do</button>'
-    +'<button class="lk todomode" data-m="agence" style="'+(window.TODO_MODE==='agence'?on:'')+'">🏷️ Tâches agence</button></div>';
-  w.innerHTML=tabs+'<div id="todobody"><div class="state">Chargement…</div></div>';
-  w.querySelectorAll('.todomode').forEach(b=>b.onclick=()=>{window.TODO_MODE=b.dataset.m;renderTodoTab();});
-  const body=$('todobody');
-  if(window.TODO_MODE==='perso')return renderPersoTodo(body);
-  return renderAgenceTodo(body);
+  // Tableau unifié : tes tâches perso + tes tâches agence, dans tes colonnes (Kanban / Semaine / Liste).
+  return renderPersoTodo(w);
 }
 // To-do perso par thématique (kanban + liste), 100% cockpit
 async function renderPersoTodo(w){
@@ -3092,6 +3085,15 @@ async function renderPersoTodo(w){
     +vbtn('kanban','🗂️ Kanban')+vbtn('semaine','📅 Semaine')+vbtn('liste','📋 Liste')
     +'</span><button class="lk persoaddtheme" style="margin-left:auto">＋ Thématique</button></div>';
   const chkBox=(t)=>'<span class="persochk" data-id="'+esc(t.id)+'" style="width:18px;height:18px;flex:0 0 18px;border:2px solid '+(t.done?'#2C9087':'#CFDADA')+';border-radius:6px;background:'+(t.done?'#2C9087':'#fff')+';cursor:pointer;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:12px;margin-top:1px">'+(t.done?'✓':'')+'</span>';
+  // ---- Tâches agence (Notion) fusionnées dans le tableau, rangées dans tes colonnes ----
+  let ag=[]; try{ const ra=await api('/api/todo'); const da=await ra.json(); ag=(da.taches||[]); }catch(e){}
+  const agTheme=d.agencyTheme||{};
+  const _n=(s)=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
+  const themeForAg=(t)=>{ if(agTheme[t.id]&&themes.includes(agTheme[t.id]))return agTheme[t.id]; const pn=_n(t.projet); if(pn){const m=themes.find(th=>{const tn=_n(th);return tn&&(tn===pn||pn.includes(tn)||tn.includes(pn));}); if(m)return m;} return 'À trier'; };
+  const agItems=ag.map(t=>({id:t.id,text:t.task,echeance:t.echeance,projet:t.projet,theme:themeForAg(t)}));
+  const agByTheme={}; agItems.forEach(t=>{(agByTheme[t.theme]=agByTheme[t.theme]||[]).push(t);});
+  const cols=themes.concat((agItems.some(t=>t.theme==='À trier')&&!themes.includes('À trier'))?['À trier']:[]);
+  const agCard=(t)=>'<div class="kacard" draggable="true" data-agid="'+esc(t.id)+'" style="background:#fff;border:1px solid #E7E3F7;border-left:3px solid #6D5AE0;border-radius:10px;padding:9px 10px;margin-bottom:8px;cursor:grab"><div style="display:flex;align-items:flex-start;gap:8px"><input type="checkbox" class="agdone" data-id="'+esc(t.id)+'" style="width:16px;height:16px;flex:0 0 16px;margin-top:2px"><span style="flex:1;font-size:13px">'+esc(t.text)+'</span></div><div style="display:flex;gap:6px;margin-top:5px;align-items:center"><span class="bgd-badge" style="background:#EEEBFB;color:#4C3BB8;font-size:10px">Agence</span>'+(t.projet?('<span class="fs" style="font-size:10.5px">'+esc(t.projet)+'</span>'):'')+(t.echeance?('<span class="fs" style="font-size:10.5px;margin-left:auto">'+esc(_fd(t.echeance))+'</span>'):'')+'</div></div>';
   let bodyH='';
   if(pv==='semaine'){
     const wkOff=window.PERSO_WEEK||0;const base=new Date();const dow=(base.getDay()+6)%7;const monday=new Date(base);monday.setHours(0,0,0,0);monday.setDate(base.getDate()-dow+wkOff*7);
@@ -3105,22 +3107,23 @@ async function renderPersoTodo(w){
       +'</div>'
       +(noDate.length?('<div style="margin-top:14px"><div class="bgd-h" style="font-size:13px">📥 Sans date ('+noDate.length+') · donne-leur un jour ci-dessous</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">'+noDate.map(t=>'<div style="flex:0 0 192px">'+card(t)+'</div>').join('')+'</div></div>'):'');
   } else if(pv==='kanban'){
+    const pcard=(t,th)=>'<div class="kcard" draggable="true" data-id="'+esc(t.id)+'" style="background:#fff;border:1px solid #ECEEF1;border-radius:10px;padding:9px 10px;margin-bottom:8px;cursor:grab'+(t.done?';opacity:.55':'')+'"><div style="display:flex;align-items:flex-start;gap:8px">'+chkBox(t)+'<span style="flex:1;font-size:13px;'+(t.done?'text-decoration:line-through':'')+'">'+esc(t.text)+'</span></div><div style="display:flex;gap:6px;margin-top:6px;align-items:center"><select class="persomove" data-id="'+esc(t.id)+'" style="font-size:11px;border:1px solid #ECEEF1;border-radius:7px;padding:2px 5px;color:#56666D">'+themes.map(x=>'<option'+(x===th?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select><a class="lk persodel" data-id="'+esc(t.id)+'" style="border:none;background:none;padding:0;font-size:12px;color:#D4483B;margin-left:auto">🗑</a></div></div>';
     bodyH='<div style="display:flex;gap:14px;overflow-x:auto;padding-bottom:8px;align-items:flex-start">'
-      +themes.map(th=>{const its=tasks.filter(t=>t.theme===th).sort((a,b)=>(a.done?1:0)-(b.done?1:0));
-        const menuOpen=window.PERSO_THMENU===th;
-        return '<div class="kcol" data-th="'+esc(th)+'" style="flex:0 0 262px;background:#F6F7F9;border-radius:14px;padding:12px;border-top:3px solid '+thCol(th)+'">'
-          +'<div class="kcolhead" draggable="true" data-th="'+esc(th)+'" style="display:flex;align-items:center;gap:6px;margin-bottom:9px;cursor:grab"><span style="color:#B9C0C7;font-size:12px">⠿</span><span style="width:9px;height:9px;border-radius:50%;background:'+thCol(th)+';flex:0 0 9px"></span><b style="font-size:13.5px;flex:1">'+esc(th)+'</b><span class="todocount">'+its.length+'</span><a class="lk persothmenu" data-th="'+esc(th)+'" style="border:none;background:'+(menuOpen?'#EAEDF0':'none')+';padding:2px 6px;border-radius:6px">⋯</a></div>'
+      +cols.map(th=>{const isReal=themes.includes(th);const its=isReal?tasks.filter(t=>t.theme===th).sort((a,b)=>(a.done?1:0)-(b.done?1:0)):[];const agits=agByTheme[th]||[];const menuOpen=isReal&&window.PERSO_THMENU===th;const cc=isReal?thCol(th):'#B98A12';
+        return '<div class="kcol" data-th="'+esc(th)+'" data-real="'+(isReal?'1':'0')+'" style="flex:0 0 262px;background:#F6F7F9;border-radius:14px;padding:12px;border-top:3px solid '+cc+'">'
+          +'<div '+(isReal?('class="kcolhead" draggable="true" data-th="'+esc(th)+'" '):'')+'style="display:flex;align-items:center;gap:6px;margin-bottom:9px'+(isReal?';cursor:grab':'')+'">'+(isReal?'<span style="color:#B9C0C7;font-size:12px">⠿</span>':'')+'<span style="width:9px;height:9px;border-radius:50%;background:'+cc+';flex:0 0 9px"></span><b style="font-size:13.5px;flex:1">'+esc(th)+'</b><span class="todocount">'+(its.length+agits.length)+'</span>'+(isReal?('<a class="lk persothmenu" data-th="'+esc(th)+'" style="border:none;background:'+(menuOpen?'#EAEDF0':'none')+';padding:2px 6px;border-radius:6px">⋯</a>'):'')+'</div>'
           +(menuOpen?('<div style="background:#fff;border:1px solid #ECEEF1;border-radius:10px;padding:8px;margin-bottom:9px;font-size:12px"><a class="lk thmrename" data-th="'+esc(th)+'" style="display:block;padding:4px 2px;border:none;background:none">✎ Renommer</a><div style="display:flex;gap:6px;padding:6px 2px;flex-wrap:wrap;align-items:center">'+PALETTE.map(c=>'<span class="thmcolor" data-th="'+esc(th)+'" data-c="'+c+'" style="width:19px;height:19px;border-radius:50%;background:'+c+';cursor:pointer;border:2px solid '+(themeColors[th]===c?'#1F2430':'#fff')+';box-shadow:0 0 0 1px #E5E9EC"></span>').join('')+'<span class="thmcolor" data-th="'+esc(th)+'" data-c="" title="Aucune couleur" style="width:19px;height:19px;border-radius:50%;background:#fff;border:2px dashed #C9CED4;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:11px;color:#8A9AA0">✕</span></div><div style="display:flex;gap:10px;padding:4px 2px"><a class="lk thmmove" data-th="'+esc(th)+'" data-d="-1" style="border:none;background:none">◀ Gauche</a><a class="lk thmmove" data-th="'+esc(th)+'" data-d="1" style="border:none;background:none">Droite ▶</a></div><a class="lk thmdel" data-th="'+esc(th)+'" style="display:block;padding:4px 2px;border:none;background:none;color:#D4483B">🗑 Supprimer la colonne</a></div>'):'')
-          +its.map(t=>'<div class="kcard" draggable="true" data-id="'+esc(t.id)+'" style="background:#fff;border:1px solid #ECEEF1;border-radius:10px;padding:9px 10px;margin-bottom:8px;cursor:grab'+(t.done?';opacity:.55':'')+'"><div style="display:flex;align-items:flex-start;gap:8px">'+chkBox(t)+'<span style="flex:1;font-size:13px;'+(t.done?'text-decoration:line-through':'')+'">'+esc(t.text)+'</span></div>'
-            +'<div style="display:flex;gap:6px;margin-top:6px;align-items:center"><select class="persomove" data-id="'+esc(t.id)+'" style="font-size:11px;border:1px solid #ECEEF1;border-radius:7px;padding:2px 5px;color:#56666D">'+themes.map(x=>'<option'+(x===th?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select><a class="lk persodel" data-id="'+esc(t.id)+'" style="border:none;background:none;padding:0;font-size:12px;color:#D4483B;margin-left:auto">🗑</a></div></div>').join('')
-          +'<input class="persoadd rhin" data-th="'+esc(th)+'" placeholder="+ tâche…" style="width:100%;font-size:12.5px;padding:7px 9px;box-sizing:border-box">'
+          +its.map(t=>pcard(t,th)).join('')
+          +agits.map(agCard).join('')
+          +(isReal?('<input class="persoadd rhin" data-th="'+esc(th)+'" placeholder="+ tâche…" style="width:100%;font-size:12.5px;padding:7px 9px;box-sizing:border-box">'):'<div class="fs" style="font-size:11px;text-align:center;padding:4px">Glisse ces tâches dans la bonne colonne 👉</div>')
           +'</div>';}).join('')
       +'</div>';
   } else {
-    bodyH=themes.map(th=>{const its=tasks.filter(t=>t.theme===th);if(!its.length)return '';return '<div class="todobrand"><div class="todobt">'+esc(th)+' <span class="todocount">'+its.length+'</span></div>'
-      +its.map(t=>'<label class="todoitem'+(t.done?' done':'')+'"><input type="checkbox" class="persochkb" data-id="'+esc(t.id)+'"'+(t.done?' checked':'')+'><span class="todotxt">'+esc(t.text)+'</span><a class="lk persodel" data-id="'+esc(t.id)+'" style="border:none;background:none;font-size:12px;color:#D4483B">🗑</a></label>').join('')+'</div>';}).join('')
+    bodyH=cols.map(th=>{const isReal=themes.includes(th);const its=isReal?tasks.filter(t=>t.theme===th):[];const agits=agByTheme[th]||[];if(!its.length&&!agits.length)return '';return '<div class="todobrand"><div class="todobt">'+esc(th)+' <span class="todocount">'+(its.length+agits.length)+'</span></div>'
+      +its.map(t=>'<label class="todoitem'+(t.done?' done':'')+'"><input type="checkbox" class="persochkb" data-id="'+esc(t.id)+'"'+(t.done?' checked':'')+'><span class="todotxt">'+esc(t.text)+'</span><a class="lk persodel" data-id="'+esc(t.id)+'" style="border:none;background:none;font-size:12px;color:#D4483B">🗑</a></label>').join('')
+      +agits.map(t=>'<label class="todoitem"><input type="checkbox" class="agdone" data-id="'+esc(t.id)+'"><span class="todotxt">'+esc(t.text)+'</span><span class="todotag" style="background:#EEEBFB;color:#4C3BB8">Agence</span>'+(t.projet?('<span class="fs" style="font-size:10.5px;margin-left:6px">'+esc(t.projet)+'</span>'):'')+'</label>').join('')+'</div>';}).join('')
       +'<div class="todoadd" style="margin-top:12px"><input id="persolisteadd" placeholder="Ajouter une tâche… puis Entrée" style="flex:1"><select id="persolistetheme" class="rhin">'+themes.map(t=>'<option>'+esc(t)+'</option>').join('')+'</select><button class="lk" id="persolistebtn">+ Ajouter</button></div>';
-    if(!themes.some(th=>tasks.some(t=>t.theme===th)))bodyH='<div class="state">Aucune tâche. Ajoute-en une ci-dessous 👇</div>'+bodyH;
+    if(!cols.some(th=>tasks.some(t=>t.theme===th)||(agByTheme[th]||[]).length))bodyH='<div class="state">Aucune tâche. Ajoute-en une ci-dessous 👇</div>'+bodyH;
   }
   w.innerHTML=viewToggle+bodyH;
   w.querySelectorAll('.persoview').forEach(b=>b.onclick=()=>{window.PERSO_VIEW=b.dataset.v;reload();});
@@ -3133,6 +3136,7 @@ async function renderPersoTodo(w){
   const toggleDone=async(id)=>{const t=byId[id];if(!t)return;await api('/api/perso/todo',{method:'POST',body:JSON.stringify({id,done:!t.done})});reload();};
   w.querySelectorAll('.persochk').forEach(b=>b.onclick=()=>toggleDone(b.dataset.id));
   w.querySelectorAll('.persochkb').forEach(b=>b.onchange=()=>toggleDone(b.dataset.id));
+  w.querySelectorAll('.agdone').forEach(cb=>cb.onchange=async()=>{await api('/api/todo/check',{method:'POST',body:JSON.stringify({id:cb.dataset.id,done:cb.checked})});reload();});
   w.querySelectorAll('.persomove').forEach(s=>s.onchange=async()=>{await api('/api/perso/todo',{method:'POST',body:JSON.stringify({id:s.dataset.id,theme:s.value})});reload();});
   w.querySelectorAll('.persodel').forEach(b=>b.onclick=async()=>{await api('/api/perso/todo/del',{method:'POST',body:JSON.stringify({id:b.dataset.id})});reload();});
   w.querySelectorAll('.persodate').forEach(s=>s.onchange=async()=>{await api('/api/perso/todo',{method:'POST',body:JSON.stringify({id:s.dataset.id,date:s.value})});reload();});
@@ -3141,11 +3145,13 @@ async function renderPersoTodo(w){
   let DRAG=null;
   w.querySelectorAll('.kcolhead').forEach(h=>h.addEventListener('dragstart',e=>{DRAG={type:'col',th:h.dataset.th};try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text','col');}catch(x){}}));
   w.querySelectorAll('.kcard').forEach(c=>c.addEventListener('dragstart',e=>{e.stopPropagation();DRAG={type:'task',id:c.dataset.id};try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text','task');}catch(x){}}));
+  w.querySelectorAll('.kacard').forEach(c=>c.addEventListener('dragstart',e=>{e.stopPropagation();DRAG={type:'agtask',id:c.dataset.agid};try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text','agtask');}catch(x){}}));
   w.querySelectorAll('.kcol').forEach(colEl=>{const th=colEl.dataset.th;
     colEl.addEventListener('dragover',e=>{e.preventDefault();colEl.style.boxShadow='inset 0 0 0 2px #2C9087';});
     colEl.addEventListener('dragleave',()=>{colEl.style.boxShadow='';});
     colEl.addEventListener('drop',async e=>{e.preventDefault();colEl.style.boxShadow='';if(!DRAG)return;const dr=DRAG;DRAG=null;
       if(dr.type==='task'){await api('/api/perso/todo',{method:'POST',body:JSON.stringify({id:dr.id,theme:th})});reload();}
+      else if(dr.type==='agtask'){await api('/api/perso/agtheme',{method:'POST',body:JSON.stringify({taskId:dr.id,theme:(th==='À trier'?'':th)})});reload();}
       else if(dr.type==='col'&&dr.th!==th){const order=themes.slice();const from=order.indexOf(dr.th);if(from<0)return;order.splice(from,1);let to=order.indexOf(th);if(to<0)to=order.length;order.splice(to,0,dr.th);await api('/api/perso/theme',{method:'POST',body:JSON.stringify({op:'order',order})});reload();}
     });
   });
@@ -3670,12 +3676,15 @@ function renderMail(d, who){
       const relAge=rel?Math.floor((Date.now()-rel.at)/86400000):0;
       const alerte=rel&&relAge>=7;
       const stat=rel?(alerte?`<span class="bgd-badge" style="background:#FBE5E0;color:#D4483B;font-size:10.5px">⚠️ relancé IG il y a ${relAge}j · repush / mail</span>`:`<span class="bgd-badge" style="background:#E7F5EC;color:#1F8A5D;font-size:10.5px">📸 relancé IG le ${new Date(rel.at).toLocaleDateString('fr-FR')}${rel.by?(' · '+esc(rel.by)):''}</span>`):`<span class="bgd-badge" style="background:#FDF0E0;color:#C77F2A;font-size:10.5px">⏳ ${x.j}j sans réponse</span>`;
-      return `<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #F0F1F6;flex-wrap:wrap">
+      return `<div class="relitem" style="border-bottom:1px solid #F0F1F6">
+        <div style="display:flex;align-items:center;gap:9px;padding:8px 0;flex-wrap:wrap">
         <span style="width:8px;height:8px;flex:0 0 8px;border-radius:50%;background:${alerte?'#D4483B':(rel?'#2E9E6B':'#E8933A')}"></span>
         <div style="min-width:0;flex:1"><b style="font-size:13px">${pn?esc(pn):esc((m.subject||'créatrice').replace(/^re\s*:\s*/i,''))}</b> <span class="fs">${esc(m.subject||'')}</span></div>
         ${stat}
-        ${m.url?`<a class="lk" href="${esc(m.url)}" target="_blank" rel="noopener" style="font-size:12px">Ouvrir le fil</a>`:''}
+        ${m.threadId?`<a class="lk relthread" data-tid="${esc(m.threadId)}" style="font-size:12px">📖 Ouvrir le fil</a>`:(m.url?`<a class="lk" href="${esc(m.url)}" target="_blank" rel="noopener" style="font-size:12px">Ouvrir le fil ↗</a>`:'')}
         <button class="lk relig" data-tid="${esc(m.threadId||'')}" data-done="${rel?'1':'0'}" style="font-size:12px;${rel?'':'background:#E1306C;color:#fff;border-color:#E1306C'}">${rel?'↩︎ annuler':'📸 Relancé sur IG'}</button>
+        </div>
+        <div class="relthreadbox cpthreadbox" style="display:none;margin:0 0 8px"></div>
       </div>`;};
     window.RELZONE=relZone=`<div class="bgd-card" style="margin-bottom:14px;border-color:#F1D9C0"><div class="bgd-h">📸 Relances Instagram à faire <span class="cpsub">créatrices sans réponse à ton mail depuis 5 j+ · relance-les sur Insta, coche quand c'est fait</span></div>
       <div class="fs" style="margin:2px 0 8px">${nARelancer} à relancer · ${relCand.length-nARelancer} déjà relancée(s) sur IG</div>
@@ -3692,6 +3701,16 @@ function renderMail(d, who){
       const rr=await api('/api/relance',{method:'POST',body:JSON.stringify({threadId:tid,done:done?false:true})});
       const dd=await rr.json().catch(()=>({})); if(dd&&dd.relances)window.RELANCES=dd.relances;
       renderMail(window.MB_LAST.d,window.MB_LAST.who);
+    });
+    document.querySelectorAll('#mailbox .relthread').forEach(a=>a.onclick=async()=>{
+      const item=a.closest('.relitem'); const bx=item&&item.querySelector('.relthreadbox'); if(!bx)return;
+      if(bx.style.display!=='none'){ bx.style.display='none'; a.textContent='📖 Ouvrir le fil'; return; }
+      bx.style.display=''; bx.innerHTML='<div class="state2" style="padding:8px">Chargement du fil…</div>'; a.textContent='📖 Masquer le fil';
+      try{
+        const r=await api('/api/copilot/thread?id='+encodeURIComponent(a.dataset.tid));
+        const dt=await r.json().catch(()=>({}));
+        bx.innerHTML=(dt&&dt.ok&&dt.transcript)?renderTranscript(dt.transcript):'<div class="state2" style="padding:8px">Fil indisponible (boîte déconnectée ?).</div>';
+      }catch(e){ bx.innerHTML='<div class="state2" style="padding:8px">Fil indisponible.</div>'; }
     });
   };
   if(window.MB_TAB==='brouillons'){$('mailbox').innerHTML=mbWrap(sum+'<div class="state">Tes brouillons t\'attendent dans Gmail : <a class="lk" href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noopener">ouvrir les brouillons ↗</a></div>');mbWire();return;}
@@ -4042,7 +4061,7 @@ async function doneTask(btn){
 // --- Veille : profils à contacter ---------------------------------------
 const BRANDS=['In Haircare','Curls Matter','Doucéa','LIVA','Toki Bona',"FND'HER",'Hyped Agency','Autres'];
 // Accès rapide aux calendriers Notion par marque (ajoute les liens des autres marques ici)
-const CAL_LINKS=[{brand:'In Haircare',url:'https://app.notion.com/p/380f8ac3c3ae80ceba4ce8e82490edc6'}];
+const CAL_LINKS=[];
 function renderCalbar(){
   if(!CAL_LINKS.length){show($('calbar'),false);return;}
   $('calbar').innerHTML='<span class="lab">📅 Calendriers :</span>'+CAL_LINKS.map(c=>`<a href="${c.url}" target="_blank" rel="noopener">${esc(c.brand)} ↗</a>`).join('');

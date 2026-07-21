@@ -719,8 +719,9 @@ const CEO_STORE = path.join(DATA_DIR, "ceo.json");
 function loadCeo() { try { return JSON.parse(fs.readFileSync(CEO_STORE, "utf8")); } catch (e) { return { treso: null, ca: null, roadmap: [], arbitrages: [] }; } }
 function saveCeo(o) { try { fs.writeFileSync(CEO_STORE, JSON.stringify(o, null, 2)); } catch (e) {} }
 // To-do perso par thématique (kanban + liste), stockée DANS ceo.json (persistance éprouvée), par utilisateur.
-const PTODO_THEMES = ["Dev entreprise", "HA 2.0", "Tâche clients", "Personal branding", "Site"]; // Mélany (direction) : ses dossiers perso
-const PTODO_THEMES_TEAM = ["In Haircare", "Doucéa", "Curls Matter", "LIVA", "Interne"]; // équipe : par marque + interne (personnalisable)
+const PTODO_THEMES_OLD = ["Dev entreprise", "HA 2.0", "Tâche clients", "Personal branding", "Site"]; // ancien seed (migration)
+const PTODO_THEMES = ["In Haircare", "Doucéa", "Curls Matter", "LIVA", "Interne", "Social Media", "Personal branding", "Maintenance"]; // Mélany : marques + transverses
+const PTODO_THEMES_TEAM = ["In Haircare", "Doucéa", "Curls Matter", "LIVA", "Interne"]; // équipe : par marque + interne
 const PTODO_OWNER = "melany@hyped-agency.fr";
 function ptodoFor(email) {
   const o = loadCeo(); o.persoTodo = o.persoTodo || {};
@@ -728,11 +729,12 @@ function ptodoFor(email) {
   const isOwner = k === PTODO_OWNER;
   const def = isOwner ? PTODO_THEMES : PTODO_THEMES_TEAM;
   let rec = o.persoTodo[k];
-  if (!rec) rec = { themes: def.slice(), tasks: [], themeColors: {} };
+  if (!rec) rec = { themes: def.slice(), tasks: [], themeColors: {}, agencyTheme: {} };
   if (!rec.themes || !rec.themes.length) rec.themes = def.slice();
   if (!rec.themeColors) rec.themeColors = {};
-  // Migration : un membre de l'équipe seedé par erreur avec les thématiques perso de Mélany (et sans tâche) repasse sur les thématiques agence.
-  if (!isOwner && (!rec.tasks || !rec.tasks.length) && JSON.stringify(rec.themes) === JSON.stringify(PTODO_THEMES)) rec.themes = PTODO_THEMES_TEAM.slice();
+  if (!rec.agencyTheme) rec.agencyTheme = {};
+  // Migration douce : ceux seedés avec l'ancien set (et sans tâche) repassent sur leur nouveau set par défaut.
+  if ((!rec.tasks || !rec.tasks.length) && JSON.stringify(rec.themes) === JSON.stringify(PTODO_THEMES_OLD)) rec.themes = def.slice();
   o.persoTodo[k] = rec;
   return { o, k, data: rec };
 }
@@ -983,7 +985,17 @@ app.post("/api/recovery/log", auth, (req, res) => {
 // ===== To-do perso par thématique (kanban + liste) =====
 app.get("/api/perso/todo", auth, (req, res) => {
   const { data } = ptodoFor(req.user.email);
-  res.json({ ok: true, themes: data.themes, tasks: data.tasks, themeColors: data.themeColors || {} });
+  res.json({ ok: true, themes: data.themes, tasks: data.tasks, themeColors: data.themeColors || {}, agencyTheme: data.agencyTheme || {} });
+});
+// Mémoriser dans quelle colonne (thématique) ranger une tâche agence (Notion) sur le tableau unifié.
+app.post("/api/perso/agtheme", auth, (req, res) => {
+  const { o, k, data } = ptodoFor(req.user.email);
+  const tid = String(req.body?.taskId || ""); const theme = String(req.body?.theme || "").slice(0, 60);
+  if (!tid) return res.status(400).json({ error: "taskId requis" });
+  data.agencyTheme = data.agencyTheme || {};
+  if (theme && !data.themes.includes(theme)) data.themes.push(theme);
+  if (theme) data.agencyTheme[tid] = theme; else delete data.agencyTheme[tid];
+  o.persoTodo[k] = data; saveCeo(o); res.json({ ok: true, agencyTheme: data.agencyTheme });
 });
 app.post("/api/perso/todo", auth, (req, res) => {
   const { o, k, data } = ptodoFor(req.user.email);
@@ -4178,5 +4190,5 @@ $('go').onclick=async()=>{
 boot();
 </script></body></html>`);
 });
-app.get("*", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
+app.get("*", (req, res) => { res.setHeader("Cache-Control", "no-cache, must-revalidate"); res.sendFile(path.join(__dirname, "index.html")); });
 app.listen(PORT, () => console.log(`Cockpit ${DEMO ? "(DÉMO)" : "(Notion live, clients actifs)"} → http://localhost:${PORT}`));
