@@ -2020,6 +2020,8 @@ async function renderProcess(){
   }catch(e){box.innerHTML='<div class="state">Erreur de chargement.</div>';}
 }
 function showView(v){
+  // Garde-fou : la finance (et le budget) sont réservés à la propriétaire. Toute tentative d'accès est renvoyée au cockpit.
+  if((v==='finance'||v==='budget')&&!(VIEWER&&VIEWER.owner))v='cockpit';
   (function(){let bk=$('ceohomebk');if(!bk){bk=document.createElement('button');bk.id='ceohomebk';bk.innerHTML='← Retour à l\u2019accueil';bk.onclick=()=>navToView('cockpit');document.body.appendChild(bk);}bk.style.display=(document.body.classList.contains('ceomode')&&v!=='cockpit')?'inline-flex':'none';})();
   if(v!=='contacts')QUI_BACK=null; // on quitte Contacts par la barre latérale : plus besoin du bouton Retour
   CURRENT_VIEW=v;
@@ -2034,7 +2036,7 @@ function showView(v){
   }
   if(isCockpit){
     const dm=(typeof dirigeantMode==='function'&&dirigeantMode());
-    const ceo=dm&&(typeof CEO_MODE!=='undefined'?CEO_MODE:false); // vue CEO plein écran (maquette Mélany)
+    const ceo=dm&&(typeof CEO_MODE!=='undefined'?CEO_MODE:false)&&!!(VIEWER&&VIEWER.owner); // vue CEO plein écran : propriétaire (Mélany) uniquement
     document.body.classList.toggle('ceomode',!!ceo); // le CSS masque tout sauf ceopanel, même si un loader ré-affiche son bloc
     ALL_BLOCKS.forEach(id=>{const e=$(id);if(!e)return;
       let hide=false;
@@ -2221,6 +2223,8 @@ async function load(){
     ['profils','campagnes','contenus','marques','contacts','messages','rapports','budget'].forEach(g=>{const a=document.querySelector('.sb-nav .nav[data-go="'+g+'"]');if(a)a.style.display='none';});
     ['srcpanel','mailpanel','pipelinepanel','brandpanel','fillpanel','listpanel','statcards'].forEach(id=>{const e=$(id);if(e){e.classList.add('hidden');e.style.display='none';}});
   }
+  // Finance & Budget = données financières réservées à la propriétaire (Mélany). Masqué pour tout le monde d'autre, y compris les autres superviseures.
+  if(!(VIEWER&&VIEWER.owner)){['finance','budget'].forEach(g=>{const a=document.querySelector('.sb-nav .nav[data-go="'+g+'"]');if(a)a.style.display='none';});}
   loadAlerts();          // remplissage des calendriers : visible par toutes les CP
   render();
   renderCalbar();
@@ -2411,8 +2415,9 @@ let CEO_MODE=true; try{CEO_MODE=localStorage.getItem('hc_ceo')!=='0';}catch(e){}
 function setCeoMode(v){CEO_MODE=!!v;try{localStorage.setItem('hc_ceo',v?'1':'0');}catch(e){}showView('cockpit');loadCeoPanel();window.scrollTo({top:0,behavior:'smooth'});}
 async function loadCeoPanel(){
   const p=$('ceopanel'); if(!p||!VIEWER||VIEWER.role!=='supervisor')return;
-  if(!CEO_MODE){
-    p.innerHTML='<div class="bgd-card" style="display:flex;align-items:center;gap:10px;padding:10px 14px"><span>👑</span><b>Vue détaillée</b><span class="fs">tous les blocs du cockpit</span><button class="lk" id="ceoback" style="margin-left:auto;background:#7C5CFA;color:#fff;border-color:#7C5CFA">👑 Revenir à la vue CEO</button></div>';
+  const own=!!(VIEWER&&VIEWER.owner); // vue CEO (finance incluse) = propriétaire uniquement
+  if(!CEO_MODE||!own){
+    p.innerHTML='<div class="bgd-card" style="display:flex;align-items:center;gap:10px;padding:10px 14px"><span>👑</span><b>Vue détaillée</b><span class="fs">tous les blocs du cockpit</span>'+(own?'<button class="lk" id="ceoback" style="margin-left:auto;background:#7C5CFA;color:#fff;border-color:#7C5CFA">👑 Revenir à la vue CEO</button>':'')+'</div>';
     const b=$('ceoback'); if(b)b.onclick=()=>setCeoMode(true);
     show(p,true); return;
   }
@@ -2464,9 +2469,10 @@ async function loadCeoPanel(){
     const surcharge=nBusy;
     // ---------- ligne 1 : 5 KPIs avec sparklines ----------
     const kpi=(ic,bgc,lbl,val,sub,extra,link,go,lc)=>'<div class="bgd-card" style="min-width:0;display:flex;flex-direction:column;gap:2px"><div style="display:flex;gap:12px;align-items:flex-start"><div style="width:44px;height:44px;flex:0 0 44px;border-radius:50%;background:'+bgc+';display:flex;align-items:center;justify-content:center;font-size:18px">'+ic+'</div><div style="min-width:0;flex:1"><div class="bgd-klbl">'+lbl+'</div><div class="bgd-kval" style="font-size:19px">'+val+'</div><div class="bgd-ksub">'+sub+'</div></div></div>'+(extra||'')+'<a class="lk ceogo" data-go="'+go+'" style="border:none;background:none;padding:4px 0 0;color:'+lc+';font-weight:700;font-size:12.5px">'+link+' →</a></div>';
+    const own=!!(VIEWER&&VIEWER.owner); // finance visible uniquement pour la propriétaire (Mélany)
     const kpis='<div class="bgd-kpis" style="grid-template-columns:repeat(auto-fit,minmax(225px,1fr));margin-bottom:14px">'
-      +kpi('📄','#E7F5EC','Facturé ce mois',factM!==null?eur(factM):'<span style="font-size:15px">à venir</span>',factM!==null?('vs mois dernier '+(factPct!==null?pctTxt(factPct):'· n/d')+' · 🟢 Pennylane'):'branche Pennylane pour le réel',spark(factSerie.some(v=>v!==0)?factSerie:null,'#2E9E6B'),'Voir le détail finance','finance','#2E9E6B')
-      +kpi('💰','#EEEBFB','Encaissé ce mois',caMois!==null?eur(caMois):'à venir',caMois!==null?('vs mois dernier '+(caPct!==null?pctTxt(caPct):'· n/d')):'branche Pennylane pour le réel',spark(caSerie.some(v=>v>0)?caSerie:null,'#7C5CFA'),'Voir le détail finance','finance','#7C5CFA')
+      +(own?kpi('📄','#E7F5EC','Facturé ce mois',factM!==null?eur(factM):'<span style="font-size:15px">à venir</span>',factM!==null?('vs mois dernier '+(factPct!==null?pctTxt(factPct):'· n/d')+' · 🟢 Pennylane'):'branche Pennylane pour le réel',spark(factSerie.some(v=>v!==0)?factSerie:null,'#2E9E6B'),'Voir le détail finance','finance','#2E9E6B'):'')
+      +(own?kpi('💰','#EEEBFB','Encaissé ce mois',caMois!==null?eur(caMois):'à venir',caMois!==null?('vs mois dernier '+(caPct!==null?pctTxt(caPct):'· n/d')):'branche Pennylane pour le réel',spark(caSerie.some(v=>v>0)?caSerie:null,'#7C5CFA'),'Voir le détail finance','finance','#7C5CFA'):'')
       +kpi('🔽','#E7F0FA','Pipeline commercial',eur(crmStats.pipeline),'prévisionnel en cours','<div style="margin-top:6px"><span style="color:'+V+';font-weight:700;font-size:12.5px">'+crmStats.actifs+' opportunité(s) active(s)</span></div>','Voir le pipeline','commercial','#2F6DB5')
       +kpi('🗳️','#FDF0E0','Projets à arbitrer',String(nDec),'décision(s) requise(s)','','Voir les décisions','__dec','#C77F2A')
       +kpi('👥','#FBE5E0','Charge équipe (déclarée)',(nDecl?(nBusy?(nBusy+' 🔴'):'ok 🟢'):'<span style="font-size:15px">à sonder</span>'),(nDecl?(nDecl+'/'+mem.length+' réponses au check-in Slack'):'check-in Slack chaque lundi 🧘'),'','Voir le détail','rh','#D4483B')

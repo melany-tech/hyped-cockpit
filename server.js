@@ -243,6 +243,9 @@ function auth(req, res, next) {
   try { req.user = jwt.verify(req.cookies.hc_token, JWT_SECRET); if (_blockDeparted(req)) return res.status(403).json({ error: "compte désactivé" }); next(); }
   catch (e) { res.status(401).json({ error: "non connecté" }); }
 }
+// Propriétaire (accès finance réservé) : Mélany uniquement, identifiée par email.
+const OWNER_EMAIL = String(process.env.OWNER_EMAIL || "melany@hyped-agency.fr").toLowerCase();
+function isOwner(req) { try { return String(req.user && req.user.email || "").toLowerCase() === OWNER_EMAIL; } catch (e) { return false; } }
 // Anti brute force : 8 échecs par IP+email -> pause de 10 minutes
 const LOGIN_FAILS = {}; // clé -> { n, until }
 function loginKey(req, email) { return String(req.headers["x-forwarded-for"] || req.ip || "?").split(",")[0].trim() + "|" + String(email || "").toLowerCase(); }
@@ -316,7 +319,7 @@ app.get("/api/collabs", auth, async (req, res) => {
     const team = USERS
       .filter((u) => normName(u.name) !== normName(req.user.name) && normName(u.name) !== "kendia" && !COPILOT.departed.includes(String(u.email).toLowerCase()))
       .map((u) => u.name);
-    res.json({ rows, demo: DEMO, viewer: { name: req.user.name, role: req.user.role }, team });
+    res.json({ rows, demo: DEMO, viewer: { name: req.user.name, role: req.user.role, owner: isOwner(req) }, team });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 // --- Vue par marque + pipeline (agrégats réels) -------------------------
@@ -868,15 +871,18 @@ app.get("/api/ceo", auth, async (req, res) => {
       else if (last.v !== cur) { last.v = cur; saveCeo(o); }
     }
   } catch (e) {}
-  res.json({ ok: true, treso: o.treso || null, ca: o.ca || null, tresoHist: o.tresoHist || [], financeAttr: o.encAttr || {}, finPrev: o.finPrev || null, attendus: o.attendus || [],
-    pennylane: pl2 ? { connected: true, at: pl2.at, treso: pl2.treso, ca: pl2.ca, caMois: pl2.caMois, caPrevMois: pl2.caPrevMois, mensuel: pl2.mensuel || {}, lastPaid: pl2.lastPaid || [], factureMois: pl2.factureMois || 0, facturePrevMois: pl2.facturePrevMois || 0, factMensuel: pl2.factMensuel || {}, lateN: pl2.lateN || 0, lateSum: pl2.lateSum || 0, upcomN: pl2.upcomN || 0, upcomSum: pl2.upcomSum || 0, clients: pl2.clients || {}, paidRecent: pl2.paidRecent || [], bankTx: pl2.bankTx || [], txError: pl2.txError || null, error: pl2.error, annee: new Date().getFullYear() } : { connected: false },
+  // Finance = réservé au propriétaire (Mélany). Les autres superviseurs voient la roadmap / arbitrages mais AUCUN chiffre financier.
+  const own = isOwner(req);
+  res.json({ ok: true, owner: own,
+    treso: own ? (o.treso || null) : null, ca: own ? (o.ca || null) : null, tresoHist: own ? (o.tresoHist || []) : [], financeAttr: own ? (o.encAttr || {}) : {}, finPrev: own ? (o.finPrev || null) : null, attendus: own ? (o.attendus || []) : [],
+    pennylane: (own && pl2) ? { connected: true, at: pl2.at, treso: pl2.treso, ca: pl2.ca, caMois: pl2.caMois, caPrevMois: pl2.caPrevMois, mensuel: pl2.mensuel || {}, lastPaid: pl2.lastPaid || [], factureMois: pl2.factureMois || 0, facturePrevMois: pl2.facturePrevMois || 0, factMensuel: pl2.factMensuel || {}, lateN: pl2.lateN || 0, lateSum: pl2.lateSum || 0, upcomN: pl2.upcomN || 0, upcomSum: pl2.upcomSum || 0, clients: pl2.clients || {}, paidRecent: pl2.paidRecent || [], bankTx: pl2.bankTx || [], txError: pl2.txError || null, error: pl2.error, annee: new Date().getFullYear() } : { connected: false },
     roadmap: o.roadmap || [], axes: RM_AXES, rmStatuts: RM_STATUTS, arbTypes: ARB_TYPES,
     arbitrages: (o.arbitrages || []).filter((a) => a.statut === "en attente").sort((a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999")) });
 });
 // Répartition manuelle des encaissements par service + part reversée aux influenceuses (pocket).
 // Mélany ajuste ce que Pennylane ne peut pas deviner (ses fees influence vs la pocket).
 app.post("/api/finance/attr", auth, (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé au propriétaire (finance)" });
   const key = String(req.body?.client || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, ""); if (!key) return res.status(400).json({ error: "client manquant" });
   const o = loadCeo(); o.encAttr = o.encAttr || {};
   const OFF = ["Influence", "Storytelling de marque", "Storytelling", "Social Media", "360°", "Autre"];
@@ -888,7 +894,7 @@ app.post("/api/finance/attr", auth, (req, res) => {
 });
 // Prévisionnel / objectif de CA saisi à la main par la direction (affiché en face de l'encaissé).
 app.post("/api/finance/prev", auth, (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé au propriétaire (finance)" });
   const o = loadCeo();
   const montant = Math.max(0, Math.min(100000000, Number(req.body?.montant) || 0));
   const annee = Number(req.body?.annee) || new Date().getFullYear();
@@ -898,7 +904,7 @@ app.post("/api/finance/prev", auth, (req, res) => {
 });
 // Encaissements attendus (prévisionnel de trésorerie) saisis à la main par la direction.
 app.post("/api/finance/attendu", auth, (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé au propriétaire (finance)" });
   const o = loadCeo(); o.attendus = o.attendus || [];
   const b = req.body || {};
   const montant = Math.max(0, Math.min(100000000, Number(b.montant) || 0));
@@ -928,7 +934,7 @@ app.post("/api/finance/attendu", auth, (req, res) => {
   saveCeo(o); res.json({ ok: true, attendus: o.attendus });
 });
 app.post("/api/finance/attendu/encaisse", auth, (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé au propriétaire (finance)" });
   const o = loadCeo(); o.attendus = o.attendus || [];
   const it = o.attendus.find((x) => x.id === req.body?.id); if (!it) return res.status(404).json({ error: "introuvable" });
   it.statut = (it.statut === "encaisse") ? "attendu" : "encaisse";
@@ -936,13 +942,13 @@ app.post("/api/finance/attendu/encaisse", auth, (req, res) => {
   saveCeo(o); res.json({ ok: true, attendus: o.attendus });
 });
 app.post("/api/finance/attendu/del", auth, (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé au propriétaire (finance)" });
   const o = loadCeo(); o.attendus = (o.attendus || []).filter((x) => x.id !== req.body?.id);
   saveCeo(o); res.json({ ok: true, attendus: o.attendus });
 });
 // Rapprochement d'un encaissement attendu avec un virement Pennylane (plein ou partiel).
 app.post("/api/finance/attendu/reconcile", auth, (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé au propriétaire (finance)" });
   const o = loadCeo(); o.attendus = o.attendus || [];
   const it = o.attendus.find((x) => x.id === req.body?.id); if (!it) return res.status(404).json({ error: "introuvable" });
   const txId = req.body?.txId != null ? String(req.body.txId) : "";
@@ -1057,7 +1063,7 @@ app.post("/api/ceo/config", auth, (req, res) => {
 });
 // Clé API Pennylane saisie par Mélany depuis l'onglet Finance : stockée UNIQUEMENT sur le disque persistant (jamais dans le code, jamais renvoyée au navigateur)
 app.post("/api/ceo/pennylane", auth, async (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé au propriétaire (finance)" });
   const key = String(req.body?.key || "").trim();
   if (!key) {
     try { fs.unlinkSync(PL_KEY_FILE); } catch (e) {}
@@ -1075,7 +1081,7 @@ app.post("/api/ceo/pennylane", auth, async (req, res) => {
 });
 // Diagnostic Pennylane (direction) : champs bruts des dernières factures, pour comprendre facturé vs encaissé
 app.get("/api/ceo/pennylane/raw", auth, async (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé au propriétaire (finance)" });
   if (!PL_KEY()) return res.json({ ok: false, error: "pas de clé" });
   try {
     const d = await plGet("/customer_invoices?limit=6&sort=-date");
