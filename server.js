@@ -959,16 +959,18 @@ app.post("/api/perso/todo", auth, (req, res) => {
   let theme = String(b.theme || "").slice(0, 60);
   if (theme && !data.themes.includes(theme)) data.themes.push(theme);
   if (!theme) theme = data.themes[0] || "Autre";
+  const dateOk = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || "")) ? String(s) : "";
   if (b.id) {
     const it = data.tasks.find((x) => x.id === b.id);
     if (!it) return res.status(404).json({ error: "introuvable" });
     if (b.text !== undefined) it.text = text || it.text;
     if (b.theme !== undefined) it.theme = theme;
     if (b.done !== undefined) it.done = !!b.done;
+    if (b.date !== undefined) it.date = dateOk(b.date);
     it.updatedAt = Date.now();
   } else {
     if (!text) return res.status(400).json({ error: "texte requis" });
-    data.tasks.push({ id: "pt" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text, theme, done: false, at: Date.now() });
+    data.tasks.push({ id: "pt" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text, theme, date: dateOk(b.date), done: false, at: Date.now() });
   }
   o.persoTodo[k] = data; saveCeo(o); res.json({ ok: true, themes: data.themes, tasks: data.tasks });
 });

@@ -3083,14 +3083,25 @@ async function renderPersoTodo(w){
   let d; try{ const r=await api('/api/perso/todo'); d=await r.json(); }catch(e){ w.innerHTML='<div class="state">Erreur de chargement.</div>'; return; }
   const themes=d.themes||[]; const tasks=d.tasks||[]; const byId={}; tasks.forEach(t=>byId[t.id]=t);
   const reload=()=>renderPersoTodo(w);
-  const vk=window.PERSO_VIEW==='kanban';
+  const pv=window.PERSO_VIEW;const _fd=(d)=>{const p=String(d||'').split('-');return p.length===3?(p[2]+'/'+p[1]):d;};
+  const vbtn=(v,lbl)=>'<a class="lk persoview" data-v="'+v+'" style="border:none;font-size:12.5px;padding:4px 11px;border-radius:7px;background:'+(pv===v?'#fff':'transparent')+';font-weight:'+(pv===v?'700':'400')+'">'+lbl+'</a>';
   const viewToggle='<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap"><span style="display:inline-flex;gap:3px;background:#EEF0F2;border-radius:9px;padding:3px">'
-    +'<a class="lk persoview" data-v="kanban" style="border:none;font-size:12.5px;padding:4px 11px;border-radius:7px;background:'+(vk?'#fff':'transparent')+';font-weight:'+(vk?'700':'400')+'">🗂️ Kanban</a>'
-    +'<a class="lk persoview" data-v="liste" style="border:none;font-size:12.5px;padding:4px 11px;border-radius:7px;background:'+(vk?'transparent':'#fff')+';font-weight:'+(vk?'400':'700')+'">📋 Liste</a>'
+    +vbtn('kanban','🗂️ Kanban')+vbtn('semaine','📅 Semaine')+vbtn('liste','📋 Liste')
     +'</span><button class="lk persoaddtheme" style="margin-left:auto">＋ Thématique</button></div>';
   const chkBox=(t)=>'<span class="persochk" data-id="'+esc(t.id)+'" style="width:18px;height:18px;flex:0 0 18px;border:2px solid '+(t.done?'#2C9087':'#CFDADA')+';border-radius:6px;background:'+(t.done?'#2C9087':'#fff')+';cursor:pointer;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:12px;margin-top:1px">'+(t.done?'✓':'')+'</span>';
   let bodyH='';
-  if(vk){
+  if(pv==='semaine'){
+    const wkOff=window.PERSO_WEEK||0;const base=new Date();const dow=(base.getDay()+6)%7;const monday=new Date(base);monday.setHours(0,0,0,0);monday.setDate(base.getDate()-dow+wkOff*7);
+    const days=[];for(let i=0;i<7;i++){const dd=new Date(monday);dd.setDate(monday.getDate()+i);days.push(dd.toISOString().slice(0,10));}
+    const dn=['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];const todayS=new Date().toISOString().slice(0,10);const th0=themes[0]||'Autre';
+    const card=(t)=>'<div style="background:#fff;border:1px solid #ECEEF1;border-radius:9px;padding:7px 9px;margin-bottom:7px'+(t.done?';opacity:.55':'')+'"><div style="display:flex;align-items:flex-start;gap:7px">'+chkBox(t)+'<span style="flex:1;font-size:12.5px;'+(t.done?'text-decoration:line-through':'')+'">'+esc(t.text)+'</span></div><div style="display:flex;align-items:center;gap:6px;margin-top:5px"><span class="todotag">'+esc(t.theme)+'</span><input type="date" class="persodate" data-id="'+esc(t.id)+'" value="'+esc(t.date||'')+'" style="font-size:10.5px;border:1px solid #ECEEF1;border-radius:6px;padding:1px 4px;color:#56666D"><a class="lk persodel" data-id="'+esc(t.id)+'" style="border:none;background:none;font-size:11px;color:#D4483B;margin-left:auto">🗑</a></div></div>';
+    const noDate=tasks.filter(t=>!t.date);
+    bodyH='<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap"><button class="lk persowk" data-d="-1">◀</button><b style="font-size:13.5px">Semaine du '+_fd(days[0])+' au '+_fd(days[6])+'</b><button class="lk persowk" data-d="1">▶</button><button class="lk persowk" data-d="0">Cette semaine</button></div>'
+      +'<div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;align-items:flex-start">'
+      +days.map((ds,i)=>{const its=tasks.filter(t=>t.date===ds);const isT=ds===todayS;return '<div style="flex:0 0 192px;background:'+(isT?'#EAF4F3':'#F6F7F9')+';border-radius:12px;padding:10px'+(isT?';border:1px solid #2C9087':'')+'"><div style="font-size:12.5px;font-weight:700;margin-bottom:8px">'+dn[i]+' <span class="fs" style="font-weight:400">'+_fd(ds)+'</span></div>'+its.map(card).join('')+'<input class="persoadd rhin" data-th="'+esc(th0)+'" data-date="'+ds+'" placeholder="+ tâche…" style="width:100%;font-size:12px;padding:6px 8px;box-sizing:border-box"></div>';}).join('')
+      +'</div>'
+      +(noDate.length?('<div style="margin-top:14px"><div class="bgd-h" style="font-size:13px">📥 Sans date ('+noDate.length+') · donne-leur un jour ci-dessous</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">'+noDate.map(t=>'<div style="flex:0 0 192px">'+card(t)+'</div>').join('')+'</div></div>'):'');
+  } else if(pv==='kanban'){
     bodyH='<div style="display:flex;gap:14px;overflow-x:auto;padding-bottom:8px;align-items:flex-start">'
       +themes.map(th=>{const its=tasks.filter(t=>t.theme===th).sort((a,b)=>(a.done?1:0)-(b.done?1:0));
         return '<div style="flex:0 0 262px;background:#F6F7F9;border-radius:14px;padding:12px">'
@@ -3115,8 +3126,10 @@ async function renderPersoTodo(w){
   w.querySelectorAll('.persochkb').forEach(b=>b.onchange=()=>toggleDone(b.dataset.id));
   w.querySelectorAll('.persomove').forEach(s=>s.onchange=async()=>{await api('/api/perso/todo',{method:'POST',body:JSON.stringify({id:s.dataset.id,theme:s.value})});reload();});
   w.querySelectorAll('.persodel').forEach(b=>b.onclick=async()=>{await api('/api/perso/todo/del',{method:'POST',body:JSON.stringify({id:b.dataset.id})});reload();});
-  const addTask=async(text,theme)=>{if(!text||!text.trim())return;await api('/api/perso/todo',{method:'POST',body:JSON.stringify({text:text.trim(),theme})});reload();};
-  w.querySelectorAll('.persoadd').forEach(inp=>inp.onkeydown=(e)=>{if(e.key==='Enter'){e.preventDefault();addTask(inp.value,inp.dataset.th);}});
+  w.querySelectorAll('.persodate').forEach(s=>s.onchange=async()=>{await api('/api/perso/todo',{method:'POST',body:JSON.stringify({id:s.dataset.id,date:s.value})});reload();});
+  w.querySelectorAll('.persowk').forEach(b=>b.onclick=()=>{const dd=b.dataset.d;window.PERSO_WEEK=(dd==='0')?0:((window.PERSO_WEEK||0)+Number(dd));reload();});
+  const addTask=async(text,theme,date)=>{if(!text||!text.trim())return;await api('/api/perso/todo',{method:'POST',body:JSON.stringify({text:text.trim(),theme,date:date||''})});reload();};
+  w.querySelectorAll('.persoadd').forEach(inp=>inp.onkeydown=(e)=>{if(e.key==='Enter'){e.preventDefault();addTask(inp.value,inp.dataset.th,inp.dataset.date);}});
   const plb=$('persolistebtn'); if(plb)plb.onclick=()=>{const i=$('persolisteadd');addTask(i?i.value:'',$('persolistetheme')?$('persolistetheme').value:'');};
   const pla=$('persolisteadd'); if(pla)pla.onkeydown=(e)=>{if(e.key==='Enter'){e.preventDefault();addTask(pla.value,$('persolistetheme')?$('persolistetheme').value:'');}};
 }
