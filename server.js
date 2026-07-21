@@ -718,16 +718,14 @@ app.post("/api/rh/doc/:fid/del", auth, (req, res) => {
 const CEO_STORE = path.join(DATA_DIR, "ceo.json");
 function loadCeo() { try { return JSON.parse(fs.readFileSync(CEO_STORE, "utf8")); } catch (e) { return { treso: null, ca: null, roadmap: [], arbitrages: [] }; } }
 function saveCeo(o) { try { fs.writeFileSync(CEO_STORE, JSON.stringify(o, null, 2)); } catch (e) {} }
-// To-do perso par thématique (kanban + liste), stockée par utilisateur.
-const PTODO_STORE = path.join(DATA_DIR, "perso_todo.json");
+// To-do perso par thématique (kanban + liste), stockée DANS ceo.json (persistance éprouvée), par utilisateur.
 const PTODO_THEMES = ["Dev entreprise", "HA 2.0", "Tâche clients", "Personal branding", "Site"];
-function loadPtodo() { try { return JSON.parse(fs.readFileSync(PTODO_STORE, "utf8")); } catch (e) { return {}; } }
-function savePtodo(o) { try { fs.writeFileSync(PTODO_STORE, JSON.stringify(o, null, 2)); } catch (e) {} }
 function ptodoFor(email) {
-  const all = loadPtodo(); const k = String(email || "").toLowerCase();
-  if (!all[k]) all[k] = { themes: PTODO_THEMES.slice(), tasks: [] };
-  if (!all[k].themes || !all[k].themes.length) all[k].themes = PTODO_THEMES.slice();
-  return { all, k, data: all[k] };
+  const o = loadCeo(); o.persoTodo = o.persoTodo || {};
+  const k = String(email || "").toLowerCase();
+  if (!o.persoTodo[k]) o.persoTodo[k] = { themes: PTODO_THEMES.slice(), tasks: [] };
+  if (!o.persoTodo[k].themes || !o.persoTodo[k].themes.length) o.persoTodo[k].themes = PTODO_THEMES.slice();
+  return { o, k, data: o.persoTodo[k] };
 }
 const ARB_TYPES = ["Validation", "Budget", "Prestataire", "Recrutement", "Client sensible", "Autre"];
 const RM_AXES = ["Offre & positionnement", "Croissance & acquisition", "Excellence opérationnelle", "Équipe & recrutement", "Rentabilité & finance", "Marque & contenu"];
@@ -955,7 +953,7 @@ app.get("/api/perso/todo", auth, (req, res) => {
   res.json({ ok: true, themes: data.themes, tasks: data.tasks });
 });
 app.post("/api/perso/todo", auth, (req, res) => {
-  const { all, k, data } = ptodoFor(req.user.email);
+  const { o, k, data } = ptodoFor(req.user.email);
   const b = req.body || {};
   const text = String(b.text || "").trim().slice(0, 300);
   let theme = String(b.theme || "").slice(0, 60);
@@ -972,22 +970,22 @@ app.post("/api/perso/todo", auth, (req, res) => {
     if (!text) return res.status(400).json({ error: "texte requis" });
     data.tasks.push({ id: "pt" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text, theme, done: false, at: Date.now() });
   }
-  all[k] = data; savePerso(all); res.json({ ok: true, themes: data.themes, tasks: data.tasks });
+  o.persoTodo[k] = data; saveCeo(o); res.json({ ok: true, themes: data.themes, tasks: data.tasks });
 });
 app.post("/api/perso/todo/del", auth, (req, res) => {
-  const { all, k, data } = ptodoFor(req.user.email);
+  const { o, k, data } = ptodoFor(req.user.email);
   data.tasks = data.tasks.filter((x) => x.id !== req.body?.id);
-  all[k] = data; savePerso(all); res.json({ ok: true, themes: data.themes, tasks: data.tasks });
+  o.persoTodo[k] = data; saveCeo(o); res.json({ ok: true, themes: data.themes, tasks: data.tasks });
 });
 app.post("/api/perso/theme", auth, (req, res) => {
-  const { all, k, data } = ptodoFor(req.user.email);
+  const { o, k, data } = ptodoFor(req.user.email);
   const op = String(req.body?.op || "");
   const name = String(req.body?.name || "").trim().slice(0, 60);
   const newName = String(req.body?.newName || "").trim().slice(0, 60);
   if (op === "add") { if (name && !data.themes.includes(name)) data.themes.push(name); }
   else if (op === "rename") { const i = data.themes.indexOf(name); if (i >= 0 && newName) { data.themes[i] = newName; data.tasks.forEach((t) => { if (t.theme === name) t.theme = newName; }); } }
   else if (op === "del") { data.themes = data.themes.filter((t) => t !== name); data.tasks = data.tasks.filter((t) => t.theme !== name); }
-  all[k] = data; savePerso(all); res.json({ ok: true, themes: data.themes, tasks: data.tasks });
+  o.persoTodo[k] = data; saveCeo(o); res.json({ ok: true, themes: data.themes, tasks: data.tasks });
 });
 app.post("/api/ceo/config", auth, (req, res) => {
   if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
