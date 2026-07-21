@@ -1145,19 +1145,21 @@ async function renderRoadmapView(){
   let d=null; try{const r=await api('/api/ceo'); if(r.ok)d=await r.json();}catch(e){}
   if(!d||!d.ok){box.innerHTML='<div class="state">Roadmap indisponible, réessaie.</div>';return;}
   const rm=d.roadmap||[], axes=d.axes||[], sts=d.rmStatuts||[];
+  const own=!!(VIEWER&&VIEWER.owner); // seule la propriétaire édite ; les autres superviseures voient en lecture seule
   let fAxe=''; try{fAxe=localStorage.getItem('hc_rmaxe')||'';}catch(e){}
   const stC={'À venir':['#EFF4F4','#33475C'],'En cours':['#E7F0F8','#1C3A44'],'À risque':['#FBEBDD','#C77F2A'],'Bloqué':['#F8E3DC','#C2553B'],'Terminé':['#E4F0EA','#2C9087']};
   const items=fAxe?rm.filter(x=>x.axe===fAxe):rm;
   const nDone=rm.filter(x=>x.statut==='Terminé').length;
   const head='<div class="bgd-card" style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">'
     +'<b>'+new Date().getFullYear()+'</b><span class="fs">'+rm.length+' initiative(s) · '+nDone+' terminée(s)</span>'
+    +(own?'':'<span class="bgd-badge" style="background:#EEF0F2;color:#56666D">👁️ lecture seule</span>')
     +'<select id="rmaxef" class="rhin" style="margin-left:auto"><option value="">Tous les axes</option>'+axes.map(x=>'<option'+(x===fAxe?' selected':'')+'>'+esc(x)+'</option>').join('')+'</select></div>';
   const col=(q)=>{
     const qi=items.filter(x=>x.q===q);
-    return '<div class="bgd-card" style="min-width:0"><div class="bgd-h" style="display:flex;align-items:center">'+q+' <span class="fs" style="margin-left:6px">'+qi.length+'</span><a class="lk" data-rmaddq="'+q+'" style="margin-left:auto">＋</a></div>'
+    return '<div class="bgd-card" style="min-width:0"><div class="bgd-h" style="display:flex;align-items:center">'+q+' <span class="fs" style="margin-left:6px">'+qi.length+'</span>'+(own?'<a class="lk" data-rmaddq="'+q+'" style="margin-left:auto">＋</a>':'')+'</div>'
       +(qi.length?qi.map(x=>{const c=stC[x.statut]||stC['À venir'];return '<div style="padding:8px 0;border-bottom:1px solid #F0F3F3">'
-        +'<div style="display:flex;align-items:center;gap:7px"><b style="flex:1;min-width:0">'+esc(x.nom)+'</b><a class="lk" data-rmedit="'+esc(x.id)+'">✎</a><a class="lk" data-rmdel2="'+esc(x.id)+'">✕</a></div>'
-        +'<div style="display:flex;align-items:center;gap:7px;margin-top:4px"><span class="bgd-badge" data-rmst2="'+esc(x.id)+'" title="clique pour faire évoluer le statut" style="cursor:pointer;background:'+c[0]+';color:'+c[1]+'">'+esc(x.statut)+'</span>'
+        +'<div style="display:flex;align-items:center;gap:7px"><b style="flex:1;min-width:0">'+esc(x.nom)+'</b>'+(own?'<a class="lk" data-rmedit="'+esc(x.id)+'">✎</a><a class="lk" data-rmdel2="'+esc(x.id)+'">✕</a>':'')+'</div>'
+        +'<div style="display:flex;align-items:center;gap:7px;margin-top:4px"><span class="bgd-badge"'+(own?' data-rmst2="'+esc(x.id)+'" title="clique pour faire évoluer le statut" style="cursor:pointer;background:'+c[0]+';color:'+c[1]+'"':' style="background:'+c[0]+';color:'+c[1]+'"')+'>'+esc(x.statut)+'</span>'
         +(x.progression?('<div class="ceobar" style="flex:1"><div style="width:'+x.progression+'%;background:#2C9087"></div></div><span class="fs">'+x.progression+' %</span>'):'')
         +'</div>'
         +'<div class="fs" style="margin-top:3px">'+esc(x.axe)+(x.resp?(' · '+esc(x.resp)):'')+(x.cible?(' · cible '+esc(x.cible)):'')+'</div>'
@@ -2020,8 +2022,8 @@ async function renderProcess(){
   }catch(e){box.innerHTML='<div class="state">Erreur de chargement.</div>';}
 }
 function showView(v){
-  // Garde-fou : la finance (et le budget) sont réservés à la propriétaire. Toute tentative d'accès est renvoyée au cockpit.
-  if((v==='finance'||v==='budget')&&!(VIEWER&&VIEWER.owner))v='cockpit';
+  // Garde-fou : finance, budget et commercial sont réservés à la propriétaire. Toute tentative d'accès est renvoyée au cockpit.
+  if((v==='finance'||v==='budget'||v==='commercial')&&!(VIEWER&&VIEWER.owner))v='cockpit';
   (function(){let bk=$('ceohomebk');if(!bk){bk=document.createElement('button');bk.id='ceohomebk';bk.innerHTML='← Retour à l\u2019accueil';bk.onclick=()=>navToView('cockpit');document.body.appendChild(bk);}bk.style.display=(document.body.classList.contains('ceomode')&&v!=='cockpit')?'inline-flex':'none';})();
   if(v!=='contacts')QUI_BACK=null; // on quitte Contacts par la barre latérale : plus besoin du bouton Retour
   CURRENT_VIEW=v;
@@ -2223,8 +2225,8 @@ async function load(){
     ['profils','campagnes','contenus','marques','contacts','messages','rapports','budget'].forEach(g=>{const a=document.querySelector('.sb-nav .nav[data-go="'+g+'"]');if(a)a.style.display='none';});
     ['srcpanel','mailpanel','pipelinepanel','brandpanel','fillpanel','listpanel','statcards'].forEach(id=>{const e=$(id);if(e){e.classList.add('hidden');e.style.display='none';}});
   }
-  // Finance & Budget = données financières réservées à la propriétaire (Mélany). Masqué pour tout le monde d'autre, y compris les autres superviseures.
-  if(!(VIEWER&&VIEWER.owner)){['finance','budget'].forEach(g=>{const a=document.querySelector('.sb-nav .nav[data-go="'+g+'"]');if(a)a.style.display='none';});}
+  // Finance, Budget & Commercial = réservés à la propriétaire (Mélany). Masqués pour tout le monde d'autre, y compris les autres superviseures.
+  if(!(VIEWER&&VIEWER.owner)){['finance','budget','commercial'].forEach(g=>{const a=document.querySelector('.sb-nav .nav[data-go="'+g+'"]');if(a)a.style.display='none';});}
   loadAlerts();          // remplissage des calendriers : visible par toutes les CP
   render();
   renderCalbar();

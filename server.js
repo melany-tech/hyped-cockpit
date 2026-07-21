@@ -1133,7 +1133,8 @@ app.post("/api/missions", auth, (req, res) => {
 });
 // Roadmap annuelle : initiatives par trimestre et par axe, gérées par la direction
 app.post("/api/ceo/roadmap", auth, (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  // Édition de la roadmap = propriétaire uniquement. Les autres superviseures la voient en lecture seule.
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé à la propriétaire (roadmap en lecture seule)" });
   const o = loadCeo(); o.roadmap = o.roadmap || [];
   const b = req.body || {};
   if (b.del) { o.roadmap = o.roadmap.filter((x) => x.id !== String(b.del)); saveCeo(o); return res.json({ ok: true }); }
@@ -1299,7 +1300,7 @@ app.get("/api/ceo/brief", auth, async (req, res) => {
 // Les deals de prospection de Mélany : nouveaux clients potentiels, montants, statuts.
 const CRM_STATUTS = ["Lead", "Contacté", "Proposition", "Négociation", "Gagné", "Perdu"];
 app.get("/api/crm", auth, (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé à la propriétaire (commercial)" });
   const o = loadCeo(); const deals = o.crm || [];
   const actifs = deals.filter((d) => !["Gagné", "Perdu"].includes(d.statut));
   const moisCourant = new Date().toISOString().slice(0, 7);
@@ -1309,7 +1310,7 @@ app.get("/api/crm", auth, (req, res) => {
       gagnesMois: gagnes.reduce((s, d) => s + (Number(d.montant) || 0), 0), gagnesMoisN: gagnes.length } });
 });
 app.post("/api/crm", auth, (req, res) => {
-  if (req.user.role !== "supervisor") return res.status(403).json({ error: "réservé à la direction" });
+  if (!isOwner(req)) return res.status(403).json({ error: "réservé à la propriétaire (commercial)" });
   const o = loadCeo(); o.crm = o.crm || [];
   const b = req.body || {};
   if (b.del) { o.crm = o.crm.filter((x) => x.id !== String(b.del)); saveCeo(o); return res.json({ ok: true }); }
