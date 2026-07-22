@@ -4207,7 +4207,7 @@ function renderSourcing(profils){
   const opts=BRANDS.map(b=>`<option value="${b}">${b}</option>`).join('');
   const cpopts='<option value="">CP : à attribuer</option>'+(TEAM||[]).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
   const cpsel=isSup?('<select id="srccp" title="Chef de projet à allouer">'+cpopts+'</select>'):'';
-  const add='<div class="srcadd"><input id="srcprofil" placeholder="@profil ou lien"><select id="srcmarque">'+opts+'</select>'+cpsel+'<button class="lk" id="srcbtn">+ Ajouter</button><button class="lk" id="srcimport" title="Importer une shortlist de la marque (Excel ou CSV)">📥 Importer</button><a class="lk" href="/modele-shortlist.xlsx" title="Le modèle Excel à envoyer aux marques : leurs shortlists rentreront parfaitement dans l\'import">📄 Modèle marque</a><input type="file" id="srcfile" accept=".xlsx,.xls,.csv" style="display:none"></div><div id="srcimppanel"></div>';
+  const add='<div class="srcadd"><input id="srcprofil" placeholder="@profil ou lien · colle-en plusieurs, un par ligne"><select id="srcmarque">'+opts+'</select>'+cpsel+'<button class="lk" id="srcbtn">+ Ajouter</button><button class="lk" id="srcimport" title="Importer une shortlist de la marque (Excel ou CSV)">📥 Importer</button><a class="lk" href="/modele-shortlist.xlsx" title="Le modèle Excel à envoyer aux marques : leurs shortlists rentreront parfaitement dans l\'import">📄 Modèle marque</a><input type="file" id="srcfile" accept=".xlsx,.xls,.csv" style="display:none"></div><div id="srcimppanel"></div>';
   let rows;
   if(!profils.length) rows='<div class="state" style="padding:14px">Aucun profil à contacter, ajoute-en un, ou ils arriveront via la veille. 🔎</div>';
   else { const LIMIT=8; const shown=window.SRC_ALL?profils:profils.slice(0,LIMIT);
@@ -4224,6 +4224,8 @@ function renderSourcing(profils){
   const sa2=document.querySelector('.srcshowall'); if(sa2)sa2.onclick=()=>{window.SRC_ALL=!window.SRC_ALL;renderSourcing(SRC_PROFILS);};
   $('srcbtn').onclick=addProfil;
   $('srcprofil').onkeydown=(e)=>{if(e.key==='Enter')addProfil();};
+  // Coller un bloc de liens (un par ligne) : on détecte tous les profils et on les ajoute d'un coup.
+  $('srcprofil').addEventListener('paste',(e)=>{ try{ const txt=(e.clipboardData||window.clipboardData).getData('text')||''; const found=(txt.match(/https?:\/\/[^\s,]+|@[A-Za-z0-9._]+/g)||[]); if(found.length>1){ e.preventDefault(); $('srcprofil').value=[...new Set(found)].join(' '); addProfil(); } }catch(x){} });
   document.querySelectorAll('#srcbox .srcdel').forEach(b=>b.onclick=async()=>{
     const row=b.closest('.row');
     if(!confirm('Supprimer ce profil de la liste « à contacter » ?'))return;
@@ -4305,17 +4307,29 @@ async function handleImportFile(){
   };
 }
 async function addProfil(){
-  const profil=$('srcprofil').value.trim(); if(!profil)return;
+  const raw=$('srcprofil').value.trim(); if(!raw)return;
   const marque=$('srcmarque').value;
   const cp=($('srccp')&&$('srccp').value)?$('srccp').value:null;
+  // Ajout en masse : on détecte plusieurs profils collés (liens http… ou @handles), séparés par retours à la ligne, espaces ou virgules.
+  let items=(raw.match(/https?:\/\/[^\s,]+|@[A-Za-z0-9._]+/g)||[]);
+  if(!items.length)items=raw.split(/[\s,]+/).map(s=>s.trim()).filter(Boolean);
+  if(!items.length)items=[raw];
+  items=[...new Set(items)]; // dédoublonne le copier-coller lui-même
   $('srcprofil').value='';
-  const body={profil,marque}; if(cp)body.responsable=cp;
-  const r=await api('/api/sourcing',{method:'POST',body:JSON.stringify(body)});
-  if(!r.ok){const d=await r.json().catch(()=>({}));
-    if(d&&d.error==='doublon'&&d.doublon){alert('🚫 Doublon : ce profil est déjà dans la liste pour '+d.doublon.marque+' (chez '+d.doublon.qui+', statut « '+d.doublon.statut+' »).\n\nLe même profil pour une AUTRE marque reste possible : change la marque et réessaie 😉');}
-    else if(d&&d.error){alert(d.error);}
+  const bulk=items.length>1;
+  let added=0,dup=0,err=0,lastDup=null;
+  for(const profil of items){
+    const body={profil,marque}; if(cp)body.responsable=cp; if(bulk)body.noDraft=true; // en masse : pas de brouillon auto, message généré à la demande
+    try{
+      const r=await api('/api/sourcing',{method:'POST',body:JSON.stringify(body)});
+      if(r.ok){added++;}
+      else{const d=await r.json().catch(()=>({})); if(d&&d.error==='doublon'){dup++;lastDup=d.doublon||null;} else{err++;}}
+    }catch(e){err++;}
   }
-  loadSourcing(); loadDrafts();
+  loadSourcing(); if(!bulk)loadDrafts();
+  if(bulk){ alert('✅ '+added+' profil(s) ajouté(s) pour '+marque+(dup?(' · '+dup+' doublon(s) ignoré(s)'):'')+(err?(' · '+err+' erreur(s)'):'')+'.'); }
+  else if(dup&&lastDup){ alert('🚫 Doublon : ce profil est déjà dans la liste pour '+lastDup.marque+' (chez '+lastDup.qui+', statut « '+lastDup.statut+' »).\n\nLe même profil pour une AUTRE marque reste possible : change la marque et réessaie 😉'); }
+  else if(err){ alert('Erreur lors de l\'ajout.'); }
 }
 async function markContacted(btn){
   btn.textContent='…'; const id=btn.closest('.row').dataset.id;
