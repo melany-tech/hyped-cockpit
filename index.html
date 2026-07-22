@@ -1471,22 +1471,26 @@ async function renderRhView(){
   const kic=(ic,bg)=>'<div style="background:'+bg+';width:46px;height:46px;flex:0 0 46px;border-radius:14px;font-size:20px;display:flex;align-items:center;justify-content:center">'+ic+'</div>';
   const kpi=(ic,bg,lbl,val,sub)=>'<div class="bgd-card" style="min-width:0;display:flex;gap:12px;align-items:center">'+kic(ic,bg)+'<div style="min-width:0"><div class="bgd-klbl">'+lbl+'</div><div class="bgd-kval" style="font-size:22px">'+val+'</div>'+(sub?('<div class="bgd-ksub">'+sub+'</div>'):'')+'</div></div>';
   const kpis='<div class="bgd-kpis" style="grid-template-columns:repeat(auto-fit,minmax(215px,1fr));margin-bottom:14px">'
-    +kpi('🏛️','#E7F5EC','Congés payés validés ('+(d.year||'')+')','<b>'+myLv.left+'</b> / '+myLv.quota,'<span style="color:#1F8A5D;font-weight:700">jours restants</span>')
+    +(myLv.freelance
+        ? kpi('🏛️','#E7F5EC','Congés ('+(d.year||'')+')','<span style="font-size:16px">Freelance</span>','<span class="fs">congés non décomptés</span>')
+        : kpi('🏛️','#E7F5EC','Congés payés validés ('+(d.year||'')+')','<b>'+myLv.left+'</b> / '+myLv.quota,'<span style="color:#1F8A5D;font-weight:700">jours restants</span>'))
     +kpi('🏖️','#EDE9FC','Absences en attente',String(sup?absPend.length:absAll.filter(a=>a.statut==='en attente').length),'demande(s)')
     +kpi('📄','#FDF0E0','Documents à déposer',String(sup?docsMissing:docs.length),sup?'en attente ce mois-ci':'document(s) dans ton espace')
     +kpi('👥','#E7F0FA','Équipe active',String(d.teamCount||members.length),'membres')
     +'</div>';
   // ---------- colonne gauche : congés payés ----------
   const rows=(sup?lv:[myLv]);
-  const congesH='<div class="bgd-card" style="height:100%"><div class="bgd-h" style="display:flex;align-items:center;gap:8px">📆 Congés payés '+(d.year||'')
+  const congesH='<div class="bgd-card" style="height:100%"><div class="bgd-h" style="display:flex;align-items:center;gap:8px">'+((!sup&&myLv.freelance)?'🌴 Congés ':'📆 Congés payés ')+(d.year||'')
     +(sup?('<span style="margin-left:auto;display:flex;align-items:center;gap:6px"><span class="fs">quota par défaut</span><input type="number" min="0" max="60" value="'+(d.quotaDefault||25)+'" class="rhin" style="width:62px;padding:6px 8px" id="rhqdef"><button class="lk" id="rhqdefsave" title="appliquer aux personnes sans quota spécifique">💾</button></span>'):'')+'</div>'
     +rows.map(x=>'<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #F0F3F3">'
       +'<b style="min-width:86px">'+esc(x.who)+'</b>'
-      +'<span class="fs">pris : '+x.taken+' j ouvré(s)</span>'
-      +badge('restant : '+x.left+' / '+x.quota,x.left<=0?'#FBE5E0':'#E7F5EC',x.left<=0?'#C2553B':'#1F8A5D')
-      +(sup?('<span style="margin-left:auto;display:flex;gap:5px;align-items:center"><span class="fs">quota</span><input type="number" min="0" max="60" value="'+x.quota+'" class="rhin" style="width:60px;padding:6px 8px" data-rhquota="'+esc(x.who)+'"><button class="lk" data-rhquotasave="'+esc(x.who)+'">💾</button></span>'):'')
+      +(x.freelance
+         ? '<span class="bgd-badge" style="background:#EEF0F2;color:#56666D">Freelance · congés non décomptés</span>'
+         : ('<span class="fs">pris : '+x.taken+' j ouvré(s)</span>'
+            +badge('restant : '+x.left+' / '+x.quota,x.left<=0?'#FBE5E0':'#E7F5EC',x.left<=0?'#C2553B':'#1F8A5D')
+            +(sup?('<span style="margin-left:auto;display:flex;gap:5px;align-items:center"><span class="fs">quota</span><input type="number" min="0" max="60" value="'+x.quota+'" class="rhin" style="width:60px;padding:6px 8px" data-rhquota="'+esc(x.who)+'"><button class="lk" data-rhquotasave="'+esc(x.who)+'">💾</button></span>'):'')))
       +'</div>').join('')
-    +'<div class="fs" style="margin-top:8px">Seuls les congés payés VALIDÉS comptent, en jours ouvrés (lun-ven), sur l\'année en cours.</div></div>';
+    +'<div class="fs" style="margin-top:8px">'+((!sup&&myLv.freelance)?'En freelance, tes absences ne sont pas décomptées en congés payés. Note-les ici pour info à la direction.':'Seuls les congés payés VALIDÉS comptent, en jours ouvrés (lun-ven), sur l\'année en cours.')+'</div></div>';
   // ---------- colonne droite : demander une absence ----------
   const formH='<div class="bgd-card" style="height:100%"><div class="bgd-h">🏖️ Demander une absence</div>'
     +'<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:10px">'
@@ -1601,7 +1605,7 @@ async function renderRhView(){
       +infoCard('🏦','RIB / IBAN',fsel.iban?esc(fsel.iban):'<span style="opacity:.5">à renseigner</span>','stocké sur le disque sécurisé du cockpit')
       +infoCard('📅','CHEZ HYPED DEPUIS',fsel.arrivee?dmy(fsel.arrivee):'<span style="opacity:.5">à renseigner</span>',fsel.arrivee?dureeTxt(fsel.arrivee):'')
       +infoCard('📑','CONTRAT',fsel.contrat?esc(fsel.contrat):'<span style="opacity:.5">à renseigner</span>')+infoCard('🏠','ADRESSE',fsel.adresse?esc(fsel.adresse):'<span style="opacity:.5">à renseigner</span>')
-      +infoCard('🏖️','CONGÉS',fsel.conges.left+' / '+fsel.conges.quota+' jour(s)','restants cette année')
+      +infoCard('🏖️','CONGÉS',(fsel.conges.freelance||/freelance/i.test(fsel.contrat||''))?'Freelance':(fsel.conges.left+' / '+fsel.conges.quota+' jour(s)'),(fsel.conges.freelance||/freelance/i.test(fsel.contrat||''))?'congés non décomptés':'restants cette année')
       +infoCard('📄','DOCUMENTS',String(fsel.docs)+' déposé(s)','paie / factures · carte Documents ci-dessus')
       +'</div>'
       +'<div style="border:1px solid #EDF0F2;border-radius:14px;padding:12px;margin-top:10px"><div class="fs" style="font-size:11px">📝 NOTES RH</div><div style="margin-top:4px;'+(fsel.notes?'':'opacity:.55')+'">'+(fsel.notes?esc(fsel.notes):'contrat, particularités, points d&#39;attention… (✎ Modifier la fiche pour compléter)')+'</div></div>'

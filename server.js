@@ -580,7 +580,9 @@ function rhLeave(o, name) { // congés payés VALIDÉS de l'année en cours (cli
     if (au >= du) taken += rhWorkDays(du, au);
   });
   const quota = Number(((o.quotas || {})[normName(name)])) || Number((o.quotas || {}).__default) || RH_DEFAULT_QUOTA;
-  return { quota, taken, left: quota - taken };
+  const contrat = (((o.profils || {})[normName(name)]) || {}).contrat || "";
+  const freelance = /freelance/i.test(contrat); // les freelances n'ont pas de congés payés : pas de décompte
+  return { quota, taken, left: quota - taken, contrat, freelance };
 }
 app.get("/api/rh", auth, (req, res) => {
   // Admin RH (fiches de toute l'équipe, quotas, RIB, congés de chacun) = propriétaire (Mélany) uniquement.
