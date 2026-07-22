@@ -3459,6 +3459,17 @@ app.post("/api/sourcing/:id/contacted", auth, async (req, res) => {
     res.json({ ok: true, brand: t.projet });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// Changer la marque (Projet) d'un profil à contacter, après coup.
+app.post("/api/sourcing/:id/marque", auth, async (req, res) => {
+  if (DEMO || !notion) return res.status(400).json({ error: "indisponible" });
+  const marque = String(req.body?.marque || "").trim().slice(0, 60);
+  if (!marque) return res.status(400).json({ error: "marque manquante" });
+  try {
+    await notion.pages.update({ page_id: req.params.id, properties: { "Projet": { select: { name: marque } } } });
+    invalidateTasksCache();
+    res.json({ ok: true, marque });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // --- Rappel preview J-72h : crée "Valider la preview de X" dans la to-do --
 async function ensurePreviewTasks() {

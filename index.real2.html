@@ -4216,8 +4216,8 @@ function renderSourcing(profils){
     const who=p.responsable?`<span class="owner">${esc(p.responsable)}</span>`:'<span class="owner none">à attribuer</span>';
     const sub=p.commentaire?esc(p.commentaire):'à contacter';
     return `<div class="row" data-id="${p.id}"><span class="rdot" style="background:#C77F2A"></span>
-      <div class="info"><div class="t">${linkify(p.task)}</div><div class="s">${sub}</div></div>
-      ${p.projet?`<span class="brand">${esc(p.projet)}</span>`:''}${who}${link}
+      <div class="info" style="min-width:0"><div class="t" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">${linkify(p.task)}</div><div class="s">${sub}</div></div>
+      <select class="srcmarquesel" data-id="${p.id}" title="Changer la marque de ce profil" style="font-family:inherit;font-size:12px;color:var(--navy);background:var(--bg);border:1px solid #CFDADA;border-radius:8px;padding:5px 8px;max-width:130px">${BRANDS.map(b=>`<option${b===p.projet?' selected':''}>${esc(b)}</option>`).join('')}</select>${who}${link}
       <button class="lk primary srcmsg">✍️ Message</button><button class="lk srcdone">Marquer comme contacté</button><button class="lk srcdel" title="Supprimer ce profil de la liste (corbeille Notion)" style="color:#C2553B">✕</button></div>`;
   }).join('')+(profils.length>LIMIT?('<div class="state srcshowall" style="padding:10px;cursor:pointer;color:#6D5AE0;font-weight:700;text-align:center">'+(window.SRC_ALL?'▲ Réduire la liste':('▼ Tout dérouler · + '+(profils.length-LIMIT)+' autre(s) profil(s)'))+'</div>'):''); };
   $('srcbox').innerHTML=add+rows;
@@ -4235,6 +4235,13 @@ function renderSourcing(profils){
   });
   document.querySelectorAll('#srcbox .srcdone').forEach(b=>b.onclick=()=>markContacted(b));
   document.querySelectorAll('#srcbox .srcmsg').forEach(b=>b.onclick=()=>openMessage(b));
+  document.querySelectorAll('#srcbox .srcmarquesel').forEach(s=>s.onchange=async()=>{
+    const id=s.dataset.id, marque=s.value, prev=s.title; s.disabled=true;
+    const r=await api('/api/sourcing/'+encodeURIComponent(id)+'/marque',{method:'POST',body:JSON.stringify({marque})});
+    s.disabled=false;
+    if(!r.ok){alert('Changement de marque impossible, réessaie.');}
+    loadSourcing();
+  });
   const si2=$('srcimport'); if(si2)si2.onclick=()=>$('srcfile').click();
   const sf=$('srcfile'); if(sf)sf.onchange=handleImportFile;
 }
