@@ -594,7 +594,10 @@ app.get("/api/rh", auth, (req, res) => {
   const leave = sup
     ? USERS.filter((u) => !COPILOT.departed.includes(String(u.email).toLowerCase()) && normName(u.name) !== "kendia").map((u) => ({ who: u.name, ...rhLeave(o, u.name) }))
     : [{ who: req.user.name, ...rhLeave(o, req.user.name) }];
-  res.json({ ok: true, supervisor: sup, types: RH_TYPES,
+  // Freelance : le type d'absence s'appelle "Congés" (pas "Congés payés").
+  const meFree = rhLeave(o, req.user.name).freelance;
+  const types = meFree ? RH_TYPES.map((t) => (t === "Congés payés" ? "Congés" : t)) : RH_TYPES;
+  res.json({ ok: true, supervisor: sup, types,
     absences: abs.slice().sort((a, b) => String(b.du).localeCompare(String(a.du))),
     docs: docs.slice().sort((a, b) => (b.at || 0) - (a.at || 0)),
     leave, year: new Date().getFullYear(),
@@ -616,7 +619,7 @@ app.post("/api/rh/absence", auth, async (req, res) => {
   const du = String(req.body?.du || ""), au = String(req.body?.au || du);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(du) || !/^\d{4}-\d{2}-\d{2}$/.test(au)) return res.status(400).json({ error: "dates invalides" });
   if (au < du) return res.status(400).json({ error: "la fin est avant le début" });
-  const type = RH_TYPES.includes(req.body?.type) ? req.body.type : "Autre";
+  const type = [...RH_TYPES, "Congés"].includes(req.body?.type) ? req.body.type : "Autre";
   const o = loadRh();
   const a = { id: crypto.randomBytes(6).toString("hex"), who: req.user.name, email: req.user.email, type, du, au, note: String(req.body?.note || "").slice(0, 400), statut: "en attente", at: Date.now() };
   o.absences = o.absences || []; o.absences.push(a); saveRh(o);
